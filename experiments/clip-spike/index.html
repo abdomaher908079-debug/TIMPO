@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Podcast Clip Test</title>
+<style>
+  :root {
+    --bg: #0d0f12; --surface: #161a1f; --surface-2: #1e232a; --border: #2a3038;
+    --text: #e9edf1; --muted: #8b95a3; --white: #ffffff;
+    --orange: #ff6a13; --phosphor: #9dff3c; --red: #ff5c5c; --amber: #ffb020;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif; line-height: 1.6; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { color: var(--white); font-size: 1.5rem; margin: 0 0 6px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin: 16px 0; }
+  .step { font-weight: 700; color: var(--white); margin: 0 0 8px; }
+  input[type=file] { width: 100%; padding: 12px; background: var(--surface-2); border: 1px dashed var(--orange); border-radius: 12px; color: var(--text); }
+  button { width: 100%; margin-top: 14px; padding: 14px; border: 0; border-radius: 12px; background: var(--orange); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .bar { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 12px; }
+  .bar > div { height: 100%; width: 0; background: var(--phosphor); transition: width .2s; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  td { padding: 7px 4px; border-top: 1px solid var(--border); vertical-align: top; }
+  td:last-child { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; color: var(--white); }
+  .ok { color: var(--phosphor); font-weight: 700; }
+  .warn { color: var(--amber); font-weight: 700; }
+  .bad { color: var(--red); font-weight: 700; }
+  video { width: 100%; max-height: 520px; border-radius: 12px; background: #000; margin-top: 12px; }
+  a { color: var(--orange); }
+  #log { white-space: pre-wrap; direction: ltr; text-align: left; font-family: ui-monospace, monospace; font-size: .78rem; color: var(--muted); max-height: 200px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>تجربة: قص بودكاست جوه المتصفح</h1>
+  <p class="muted">اختار فيديو حلقة طويلة من جهازك (يُفضّل ساعة أو أكتر). الفيديو <strong>مش بيترفع على أي سيرفر</strong>، كل حاجة بتحصل على جهازك.</p>
+
+  <div class="card">
+    <p class="step">1. اختار فيديو الحلقة</p>
+    <input id="file" type="file" accept="video/*,audio/*" />
+    <table id="info"></table>
+  </div>
+
+  <div class="card">
+    <p class="step">2. طلّع الصوت (اللي هيتبعت للذكاء الاصطناعي)</p>
+    <button id="audioBtn" disabled>ابدأ استخراج الصوت</button>
+    <div class="bar"><div id="audioBar"></div></div>
+    <table id="audioResult"></table>
+  </div>
+
+  <div class="card">
+    <p class="step">3. اقص مقطع 45 ثانية من نص الحلقة، بالطول، وعليه كلام مكتوب</p>
+    <button id="clipBtn" disabled>ابدأ قص المقطع</button>
+    <div class="bar"><div id="clipBar"></div></div>
+    <table id="clipResult"></table>
+    <video id="clipVideo" controls playsinline hidden></video>
+  </div>
+
+  <div class="card">
+    <p class="step">معلومات الجهاز</p>
+    <table id="device"></table>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  Input, Output, Conversion, BlobSource, BufferTarget, ALL_FORMATS,
+  Mp4OutputFormat, WebMOutputFormat, getFirstEncodableVideoCodec, getFirstEncodableAudioCodec,
+  QUALITY_HIGH,
+} from 'https://cdn.jsdelivr.net/npm/mediabunny@1.60.0/dist/bundles/mediabunny.min.mjs';
+
+const $ = (id) => document.getElementById(id);
+const CLIP_SECONDS = 45;
+const OUT_W = 1080, OUT_H = 1920;
+const results = {}; // read by automated tests
+window.spikeResults = results;
+
+function log(msg) { $('log').textContent += msg + '\n'; console.log(msg); }
+function row(table, label, value, cls = '') {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${label}</td><td class="${cls}"></td>`;
+  tr.lastChild.textContent = value;
+  $(table).appendChild(tr);
+}
+const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
+const secs = (s) => s < 60 ? s.toFixed(1) + ' s' : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+function speedVerdict(ratio) {
+  // ratio = media seconds processed per wall-clock second
+  if (ratio >= 20) return ['ok', 'ممتاز'];
+  if (ratio >= 4) return ['ok', 'كويس'];
+  if (ratio >= 1) return ['warn', 'مقبول'];
+  return ['bad', 'بطيء'];
+}
+
+let peakHeap = 0;
+setInterval(() => { const m = performance.memory?.usedJSHeapSize; if (m) peakHeap = Math.max(peakHeap, m); }, 250);
+
+row('device', 'المتصفح', navigator.userAgent.match(/(Chrome|Firefox|Safari|Edg)\/[\d.]+/g)?.join(' ') ?? navigator.userAgent);
+row('device', 'أنوية المعالج', String(navigator.hardwareConcurrency ?? '?'));
+row('device', 'الذاكرة (تقريبية)', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'غير معروفة');
+row('device', 'WebCodecs', 'VideoEncoder' in window ? 'مدعوم' : 'غير مدعوم', 'VideoEncoder' in window ? 'ok' : 'bad');
+
+let file = null, duration = 0, videoTrack = null;
+
+$('file').addEventListener('change', async (e) => {
+  file = e.target.files[0];
+  if (!file) return;
+  $('info').innerHTML = ''; $('audioResult').innerHTML = ''; $('clipResult').innerHTML = '';
+  try {
+    const t0 = performance.now();
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    duration = await input.computeDuration();
+    videoTrack = await input.getPrimaryVideoTrack();
+    const audioTrack = await input.getPrimaryAudioTrack();
+    const openMs = performance.now() - t0;
+    row('info', 'الحجم', mb(file.size));
+    row('info', 'المدة', secs(duration));
+    if (videoTrack) row('info', 'الفيديو', `${videoTrack.displayWidth}×${videoTrack.displayHeight} · ${await videoTrack.getCodecParameterString() ?? videoTrack.codec}`);
+    row('info', 'الصوت', audioTrack ? `${audioTrack.codec} · ${audioTrack.sampleRate} Hz` : 'لا يوجد', audioTrack ? '' : 'bad');
+    row('info', 'وقت فتح الملف', secs(openMs / 1000));
+    Object.assign(results, { size: file.size, duration, openSeconds: openMs / 1000, videoCodec: videoTrack?.codec, audioCodec: audioTrack?.codec });
+    $('audioBtn').disabled = !audioTrack;
+    $('clipBtn').disabled = !videoTrack;
+  } catch (err) {
+    row('info', 'خطأ', String(err), 'bad');
+    log(err.stack ?? String(err));
+  }
+});
+
+$('audioBtn').addEventListener('click', async () => {
+  $('audioBtn').disabled = true; $('audioResult').innerHTML = '';
+  try {
+    // Small speech-quality audio: mono, 16 kHz, low bitrate. Plenty for transcription.
+    const codec = await getFirstEncodableAudioCodec(['opus', 'aac'], { numberOfChannels: 1, sampleRate: 16000 });
+    if (!codec) throw new Error('No audio encoder available');
+    const format = codec === 'opus' ? new WebMOutputFormat() : new Mp4OutputFormat();
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    const output = new Output({ format, target: new BufferTarget() });
+    const conversion = await Conversion.init({
+      input, output, showWarnings: false,
+      video: { discard: true },
+      audio: { codec, numberOfChannels: 1, sampleRate: 16000, bitrate: 32000 },
+    });
+    conversion.onProgress = (p) => { $('audioBar').style.width = (p * 100).toFixed(1) + '%'; };
+    const t0 = performance.now();
+    await conversion.execute();
+    const sec = (performance.now() - t0) / 1000;
+    const bytes = output.target.buffer.byteLength;
+    const ratio = duration / sec;
+    const [cls, word] = speedVerdict(ratio);
+    row('audioResult', 'الوقت', secs(sec));
+    row('audioResult', 'السرعة', `${ratio.toFixed(1)}× أسرع من المدة الحقيقية (${word})`, cls);
+    row('audioResult', 'حجم الصوت', `${mb(bytes)} (بدل ${mb(file.size)})`, 'ok');
+    row('audioResult', 'الصيغة', `${codec} · mono · 16 kHz`);
+    const url = URL.createObjectURL(new Blob([output.target.buffer], { type: format.mimeType }));
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>تحميل</td><td><a download="audio${format.fileExtension}" href="${url}">audio${format.fileExtension}</a></td>`;
+    $('audioResult').appendChild(tr);
+    Object.assign(results, { audioSeconds: sec, audioBytes: bytes, audioCodec: codec, audioSpeed: ratio });
+  } catch (err) {
+    row('audioResult', 'خطأ', String(err), 'bad');
+    log(err.stack ?? String(err));
+    results.audioError = String(err);
+  } finally {
+    $('audioBtn').disabled = false;
+  }
+});
+
+// Fake word-by-word captions, like the real product will show.
+const WORDS = 'أهم نصيحة ممكن أقولها لأي حد بيبدأ مشروع إنه يتكلم مع العملاء قبل ما يبني أي حاجة'.split(' ');
+
+$('clipBtn').addEventListener('click', async () => {
+  $('clipBtn').disabled = true; $('clipResult').innerHTML = ''; $('clipVideo').hidden = true;
+  try {
+    const start = Math.max(0, duration / 2 - CLIP_SECONDS / 2);
+    const end = Math.min(duration, start + CLIP_SECONDS);
+    const vCodec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width: OUT_W, height: OUT_H });
+    if (!vCodec) throw new Error('No video encoder available');
+    const format = vCodec === 'avc' ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat();
+    const audioCodecs = format.getSupportedCodecs().filter((c) => ['aac', 'opus', 'mp3', 'vorbis', 'flac'].includes(c));
+    const aCodec = await getFirstEncodableAudioCodec(audioCodecs, { numberOfChannels: 2, sampleRate: 48000 });
+
+    // Center crop to 9:16.
+    const srcW = videoTrack.displayWidth, srcH = videoTrack.displayHeight;
+    const cropW = Math.min(srcW, Math.round((srcH * 9) / 16 / 2) * 2);
+    const crop = { left: Math.round((srcW - cropW) / 2), top: 0, width: cropW, height: srcH };
+
+    const canvas = new OffscreenCanvas(OUT_W, OUT_H);
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'bold 84px system-ui, Tahoma, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.direction = 'rtl';
+    ctx.lineJoin = 'round';
+
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    const output = new Output({ format, target: new BufferTarget() });
+    const conversion = await Conversion.init({
+      input, output, showWarnings: false,
+      trim: { start, end },
+      video: {
+        codec: vCodec, quality: QUALITY_HIGH, crop, width: OUT_W, height: OUT_H, fit: 'cover', forceTranscode: true,
+        process: (sample) => {
+          sample.draw(ctx, 0, 0, OUT_W, OUT_H);
+          // Output timestamps already start at 0 at the beginning of the trimmed clip.
+          const group = Math.floor(Math.max(0, sample.timestamp) / 1.35) * 3 % WORDS.length;
+          const line = WORDS.slice(group, group + 3).join(' ');
+          ctx.lineWidth = 14; ctx.strokeStyle = '#000'; ctx.strokeText(line, OUT_W / 2, OUT_H * 0.72);
+          ctx.fillStyle = '#9dff3c'; ctx.fillText(line, OUT_W / 2, OUT_H * 0.72);
+          return canvas;
+        },
+        processedWidth: OUT_W, processedHeight: OUT_H,
+      },
+      audio: aCodec ? { codec: aCodec } : { discard: true },
+    });
+    if (!conversion.isValid) throw new Error('Invalid conversion: ' + JSON.stringify(conversion.discardedTracks.map((d) => d.reason)));
+    conversion.onProgress = (p) => { $('clipBar').style.width = (p * 100).toFixed(1) + '%'; };
+    const t0 = performance.now();
+    await conversion.execute();
+    const sec = (performance.now() - t0) / 1000;
+    const bytes = output.target.buffer.byteLength;
+    const ratio = (end - start) / sec;
+    const [cls, word] = speedVerdict(ratio * 4); // rendering is heavier, so judge it more gently
+    row('clipResult', 'الوقت', secs(sec));
+    row('clipResult', 'السرعة', `${ratio.toFixed(2)}× (${word})`, cls);
+    row('clipResult', 'وقت 10 مقاطع (تقدير)', secs(sec * 10));
+    row('clipResult', 'المقطع', `${OUT_W}×${OUT_H} · ${vCodec} · ${mb(bytes)}`);
+    if (peakHeap) row('clipResult', 'أقصى ذاكرة مستخدمة', mb(peakHeap), peakHeap < 1.5e9 ? 'ok' : 'warn');
+    const url = URL.createObjectURL(new Blob([output.target.buffer], { type: format.mimeType }));
+    $('clipVideo').src = url; $('clipVideo').hidden = false;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>تحميل</td><td><a download="clip${format.fileExtension}" href="${url}">clip${format.fileExtension}</a></td>`;
+    $('clipResult').appendChild(tr);
+    Object.assign(results, { clipSeconds: sec, clipBytes: bytes, clipCodec: vCodec, clipSpeed: ratio, peakHeap });
+  } catch (err) {
+    row('clipResult', 'خطأ', String(err), 'bad');
+    log(err.stack ?? String(err));
+    results.clipError = String(err);
+  } finally {
+    $('clipBtn').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
