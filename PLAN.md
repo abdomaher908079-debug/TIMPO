@@ -12,6 +12,10 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   Users just "upload a video"; the mechanism is explained in About.
 - **Backup server (later):** optional server processing for weak computers and phones
   (Oracle Cloud Always Free to start). Videos deleted right after processing.
+- **Language:** English only (English Whisper model, no language picker).
+- **Speech recognition:** Whisper base.en (~80 MB, downloaded once and cached by the browser), on the
+  graphics card (WebGPU) when available, otherwise the processor. Segment timestamps for the whole
+  episode; word timestamps for captions will be computed later only for the chosen clips.
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
 
@@ -35,8 +39,8 @@ Free = what costs us nothing (editor, saved projects, local export). Paid = what
 
 ## Build parts
 1. Design, plans, prices: done
-2. Home, pricing, sign up, "New episode" screen
-3. Audio → transcript → AI picks moments
+2. Home, pricing, sign up, "New episode" screen: done
+3. Audio → transcript → AI picks moments: done
 4. Clips screen and editor
 5. Export: clip files, captions, watermark
 6. Accounts and limits: hours used, plans, payments

@@ -1,8 +1,11 @@
 import { useRef, useState, type DragEvent } from 'react';
 import Meter from '../components/Meter';
+import Moments from '../components/Moments';
 import Progress, { type Step } from '../components/Progress';
 import { PLANS } from '../lib/plans';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
+import type { Moment } from '../lib/moments';
+import type { Segment } from '../lib/speech';
 
 // Until usage tracking exists (Part 6), everyone is treated as a Free user with a full week left.
 const plan = PLANS[0]!;
@@ -17,6 +20,9 @@ const LIMIT_GRACE_SECONDS = 30;
 type State =
   | { kind: 'empty' }
   | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number }
+  | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; moments: Moment[] }
+  // Transcribing worked but picking moments didn't: keep the transcript so a retry is quick.
+  | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string }
   | { kind: 'reading'; file: File }
   | { kind: 'ready'; file: File; info: EpisodeInfo }
   | { kind: 'error'; message: string };
@@ -64,31 +70,85 @@ export default function NewEpisode() {
   async function findClips(file: File, info: EpisodeInfo) {
     const abort = new AbortController();
     abortRef.current = abort;
-    const steps = (prep: Step['state'], detail?: string): Step[] => [
-      { label: 'Preparing the audio', state: prep, detail },
-      { label: 'Listening to every word', state: prep === 'done' ? 'blocked' : 'waiting', detail: prep === 'done' ? 'Coming next: speech recognition is being connected.' : undefined },
-      { label: 'Finding the best moments', state: 'waiting' },
+    const total = info.durationSeconds;
+    let loading = 'Starting…';
+    let device = '';
+    let listening = '';
+    const steps = (phase: 0 | 1 | 2): Step[] => [
+      { label: 'Getting speech recognition ready', state: phase > 0 ? 'done' : 'active', detail: phase > 0 ? device : loading },
+      { label: 'Listening to every word', state: phase > 1 ? 'done' : phase === 1 ? 'active' : 'waiting', detail: phase >= 1 ? listening : undefined },
+      { label: 'Finding the best moments', state: phase === 2 ? 'active' : 'waiting' },
     ];
-    setState({ kind: 'processing', file, info, steps: steps('active'), percent: 0 });
+    const update = (phase: 0 | 1 | 2, percent: number) =>
+      setState((st) => (st.kind === 'processing' && abortRef.current === abort ? { ...st, steps: steps(phase), percent } : st));
+
+    setState({ kind: 'processing', file, info, steps: steps(0), percent: 0 });
+    let segments: Segment[];
     try {
-      const { speechChunks, SPEECH_SAMPLE_RATE } = await import('../lib/audio');
-      let seconds = 0;
-      for await (const chunk of speechChunks(file, {
+      // Speech recognition is large, so it loads only when it's needed.
+      const { transcribeEpisode } = await import('../lib/speech');
+      let listenStart = 0;
+      segments = await transcribeEpisode(file, {
         signal: abort.signal,
-        // Audio preparation is the first third of the whole job.
-        onProgress: (p) => setState((st) => (st.kind === 'processing' ? { ...st, percent: p * 33 } : st)),
-      })) {
-        seconds = chunk.start + chunk.samples.length / SPEECH_SAMPLE_RATE;
-      }
-      if (abort.signal.aborted) return;
-      setState((st) =>
-        st.kind === 'processing' ? { ...st, steps: steps('done', `${formatDuration(seconds)} of audio ready`), percent: 33 } : st,
-      );
+        onLoading: (loaded, size) => {
+          loading = `Downloading ${Math.round(loaded / 1e6)} of ${Math.round(size / 1e6)} MB · only the first time`;
+          update(0, (loaded / size) * 10);
+        },
+        onReady: (d) => {
+          device = d === 'webgpu' ? 'Running on your graphics card' : 'Running on your processor';
+          listening = `0 of ${formatDuration(total)}`;
+          listenStart = performance.now();
+          update(1, 10);
+        },
+        onProgress: (seconds) => {
+          const elapsed = (performance.now() - listenStart) / 1000;
+          const left = seconds > 0 ? (elapsed / seconds) * (total - seconds) : 0;
+          listening = `${formatDuration(Math.min(seconds, total))} of ${formatDuration(total)}`;
+          if (left > 30) listening += ` · about ${Math.round(left / 60) || 1} min left`;
+          update(1, 10 + 80 * Math.min(1, seconds / total));
+        },
+      });
     } catch (err) {
       if (abort.signal.aborted) return;
-      setState({ kind: 'error', message: "We couldn't read this episode's audio. Try exporting it again as MP4 (H.264 + AAC)." });
       console.error(err);
+      setState({
+        kind: 'error',
+        message: "We couldn't listen to this episode. Try the latest Chrome or Edge, or export the episode again as MP4 (H.264 + AAC).",
+      });
+      return;
     }
+    if (!segments.length) {
+      setState({ kind: 'error', message: "We didn't hear anyone speaking in this episode. Check that it has the podcast's audio." });
+      return;
+    }
+    listening = `${segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0).toLocaleString()} words heard`;
+    update(2, 92);
+    await pickBest(file, info, segments, abort);
+  }
+
+  async function pickBest(file: File, info: EpisodeInfo, segments: Segment[], abort: AbortController) {
+    abortRef.current = abort;
+    try {
+      const { findMoments } = await import('../lib/moments');
+      const moments = await findMoments(segments, plan.clipsFound, abort.signal);
+      if (abort.signal.aborted) return;
+      setState({ kind: 'done', file, info, segments, moments });
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      console.error(err);
+      setState({ kind: 'moments-failed', file, info, segments, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  function retryMoments(file: File, info: EpisodeInfo, segments: Segment[]) {
+    const abort = new AbortController();
+    const steps: Step[] = [
+      { label: 'Getting speech recognition ready', state: 'done' },
+      { label: 'Listening to every word', state: 'done' },
+      { label: 'Finding the best moments', state: 'active' },
+    ];
+    setState({ kind: 'processing', file, info, steps, percent: 92 });
+    void pickBest(file, info, segments, abort);
   }
 
   function cancel() {
@@ -118,7 +178,29 @@ export default function NewEpisode() {
           : `${formatDuration(remainingSeconds)} of episodes left this ${plan.period}`}
       </p>
 
-      {state.kind !== 'processing' && (
+      {(state.kind === 'done' || state.kind === 'moments-failed') && (
+        <section aria-label="Results">
+          <p className="episode-name processing-name">{state.file.name}</p>
+          {state.kind === 'done' ? (
+            <Moments moments={state.moments} exportable={plan.clipsExportable} planName={plan.name} />
+          ) : (
+            <div className="card">
+              <p className="error" role="alert">
+                {state.message}
+              </p>
+              <p className="muted small">The episode's words are saved, so trying again only takes a moment.</p>
+              <button type="button" className="btn btn-primary" onClick={() => retryMoments(state.file, state.info, state.segments)}>
+                Try again
+              </button>
+            </div>
+          )}
+          <button type="button" className="btn btn-outline" onClick={() => setState({ kind: 'empty' })}>
+            Start a new episode
+          </button>
+        </section>
+      )}
+
+      {state.kind !== 'processing' && state.kind !== 'done' && state.kind !== 'moments-failed' && (
         <div
           className={`dropzone ${dragging ? 'dropzone-active' : ''}`}
           onDragOver={(e) => {
