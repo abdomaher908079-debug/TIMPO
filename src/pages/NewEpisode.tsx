@@ -75,7 +75,10 @@ export default function NewEpisode() {
     <main className="new-episode">
       <h1 className="page-title">New episode</h1>
       <p className="muted">
-        {plan.name} plan · {formatDuration(remainingSeconds)} of episodes left this {plan.period}
+        {plan.name} plan ·{' '}
+        {plan.episodesPerPeriod !== null
+          ? `${plan.episodesPerPeriod} episode (up to ${formatDuration(maxEpisodeSeconds)}) left this ${plan.period}`
+          : `${formatDuration(remainingSeconds)} of episodes left this ${plan.period}`}
       </p>
 
       <div

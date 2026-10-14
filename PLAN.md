@@ -15,8 +15,8 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 ## Plans
 |                     | Free            | Pro $15/mo ($12/mo yearly) | Studio $29/mo ($24/mo yearly) |
 |---------------------|-----------------|----------------------------|-------------------------------|
-| Episode hours       | 1 per **week**  | 10 per month               | 20 per month                  |
-| Longest episode     | 1 hour          | Any                        | Any                           |
+| Episode hours       | **1 episode per week, up to 30 min** (4/month) | 10 per month               | 20 per month                  |
+| Longest episode     | 30 minutes      | Any                        | Any                           |
 | Clips per episode   | 10 found, **3 exportable** (7 shown locked) | 20 | 30                  |
 | Export              | 1080p           | 1080p / 4K                 | 1080p / 4K                    |
 | Watermark           | Yes             | No                         | No                            |
@@ -25,8 +25,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 | Team members        | 1               | 1                          | 3                             |
 
 Free shows all the clips it finds but locks 7 of 10, so users see what they'd get by upgrading.
-A free user costs about $1–1.60/month in transcription at full use (~4 h). Lower the weekly hour if
-free usage gets too expensive.
+A free user costs about $0.30–0.60/month in transcription at full use (4 × 30 min).
 
 Free = what costs us nothing (editor, saved projects, local export). Paid = what costs us money
 (transcription hours, server) and what professionals need (no watermark, brand styles).

@@ -122,7 +122,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
         )}
       </p>
       {isSignup && (
-        <p className="muted small">Free plan: 1 hour of episodes every week. By continuing you agree to the Terms and Privacy Policy.</p>
+        <p className="muted small">Free plan: 1 episode every week, up to 30 minutes. By continuing you agree to the Terms and Privacy Policy.</p>
       )}
     </main>
   );

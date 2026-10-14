@@ -10,6 +10,8 @@ export interface Plan {
   period: 'week' | 'month';
   // Longest single episode allowed, or null for any length.
   maxEpisodeHours: number | null;
+  // Episodes allowed per period, or null for no count limit (only hours).
+  episodesPerPeriod: number | null;
   clipsFound: number;
   clipsExportable: number;
   features: string[];
@@ -22,14 +24,15 @@ export const PLANS: Plan[] = [
     name: 'Free',
     monthly: 0,
     yearlyPerMonth: 0,
-    hours: 1,
+    hours: 0.5,
     period: 'week',
-    maxEpisodeHours: 1,
+    maxEpisodeHours: 0.5,
+    episodesPerPeriod: 1,
     clipsFound: 10,
     clipsExportable: 3,
     features: [
-      '1 hour of episodes every week',
-      'Episodes up to 1 hour long',
+      '1 episode every week (4 a month)',
+      'Episodes up to 30 minutes long',
       'See all 10 best clips, export 3',
       'Full editor, 1080p export',
       'Small "Made with PeakClip" watermark',
@@ -43,6 +46,7 @@ export const PLANS: Plan[] = [
     hours: 10,
     period: 'month',
     maxEpisodeHours: null,
+    episodesPerPeriod: null,
     clipsFound: 20,
     clipsExportable: 20,
     features: [
@@ -62,6 +66,7 @@ export const PLANS: Plan[] = [
     hours: 20,
     period: 'month',
     maxEpisodeHours: null,
+    episodesPerPeriod: null,
     clipsFound: 30,
     clipsExportable: 30,
     features: [

@@ -13,6 +13,7 @@ export function formatDuration(seconds: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   if (h) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (s % 60 === 0) return `${m} min`;
   return `${m}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
