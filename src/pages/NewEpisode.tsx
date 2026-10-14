@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
 import Meter from '../components/Meter';
+import Progress, { type Step } from '../components/Progress';
 import { PLANS } from '../lib/plans';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
 
@@ -15,6 +16,7 @@ const LIMIT_GRACE_SECONDS = 30;
 
 type State =
   | { kind: 'empty' }
+  | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number }
   | { kind: 'reading'; file: File }
   | { kind: 'ready'; file: File; info: EpisodeInfo }
   | { kind: 'error'; message: string };
@@ -32,14 +34,14 @@ function problemWith(info: EpisodeInfo): string | null {
 export default function NewEpisode() {
   const [state, setState] = useState<State>({ kind: 'empty' });
   const [dragging, setDragging] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Ignores results from an earlier file if the user picks another one quickly.
   const latest = useRef(0);
 
   async function open(file: File | undefined) {
     if (!file) return;
-    setNotice(null);
+    abortRef.current?.abort();
     if (!file.type.startsWith('video/') && !/\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
       setState({ kind: 'error', message: `"${file.name}" isn't a video. Choose your episode's video file (MP4, MOV or WebM).` });
       return;
@@ -57,6 +59,41 @@ export default function NewEpisode() {
       if (id !== latest.current) return;
       setState({ kind: 'error', message: `We couldn't open "${file.name}". The file may be damaged or in a format we don't support yet.` });
     }
+  }
+
+  async function findClips(file: File, info: EpisodeInfo) {
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const steps = (prep: Step['state'], detail?: string): Step[] => [
+      { label: 'Preparing the audio', state: prep, detail },
+      { label: 'Listening to every word', state: prep === 'done' ? 'blocked' : 'waiting', detail: prep === 'done' ? 'Coming next: speech recognition is being connected.' : undefined },
+      { label: 'Finding the best moments', state: 'waiting' },
+    ];
+    setState({ kind: 'processing', file, info, steps: steps('active'), percent: 0 });
+    try {
+      const { speechChunks, SPEECH_SAMPLE_RATE } = await import('../lib/audio');
+      let seconds = 0;
+      for await (const chunk of speechChunks(file, {
+        signal: abort.signal,
+        // Audio preparation is the first third of the whole job.
+        onProgress: (p) => setState((st) => (st.kind === 'processing' ? { ...st, percent: p * 33 } : st)),
+      })) {
+        seconds = chunk.start + chunk.samples.length / SPEECH_SAMPLE_RATE;
+      }
+      if (abort.signal.aborted) return;
+      setState((st) =>
+        st.kind === 'processing' ? { ...st, steps: steps('done', `${formatDuration(seconds)} of audio ready`), percent: 33 } : st,
+      );
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      setState({ kind: 'error', message: "We couldn't read this episode's audio. Try exporting it again as MP4 (H.264 + AAC)." });
+      console.error(err);
+    }
+  }
+
+  function cancel() {
+    abortRef.current?.abort();
+    setState((st) => (st.kind === 'processing' ? { kind: 'ready', file: st.file, info: st.info } : st));
   }
 
   function onDrop(e: DragEvent) {
@@ -81,35 +118,44 @@ export default function NewEpisode() {
           : `${formatDuration(remainingSeconds)} of episodes left this ${plan.period}`}
       </p>
 
-      <div
-        className={`dropzone ${dragging ? 'dropzone-active' : ''}`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-      >
-        <Meter bars={40} peaks={dragging ? [12, 13, 14, 27, 28] : []} className="meter-small" />
-        <p className="dropzone-title">Drop your episode video here</p>
-        <p className="muted small">MP4, MOV or WebM · any length</p>
-        <button type="button" className="btn btn-outline btn-inline" onClick={() => inputRef.current?.click()}>
-          Choose file
-        </button>
-        <input
-          ref={inputRef}
-          id="episode-file"
-          type="file"
-          accept="video/*,.mkv"
-          hidden
-          onChange={(e) => {
-            void open(e.target.files?.[0]);
-            e.target.value = '';
+      {state.kind !== 'processing' && (
+        <div
+          className={`dropzone ${dragging ? 'dropzone-active' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
           }}
-        />
-      </div>
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+        >
+          <Meter bars={40} peaks={dragging ? [12, 13, 14, 27, 28] : []} className="meter-small" />
+          <p className="dropzone-title">Drop your episode video here</p>
+          <p className="muted small">MP4, MOV or WebM · any length</p>
+          <button type="button" className="btn btn-outline btn-inline" onClick={() => inputRef.current?.click()}>
+            Choose file
+          </button>
+          <input
+            ref={inputRef}
+            id="episode-file"
+            type="file"
+            accept="video/*,.mkv"
+            hidden
+            onChange={(e) => {
+              void open(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </div>
+      )}
 
       {state.kind === 'reading' && <p className="muted" role="status">Opening {state.file.name}…</p>}
+
+      {state.kind === 'processing' && (
+        <>
+          <p className="episode-name processing-name">{state.file.name}</p>
+          <Progress steps={state.steps} percent={state.percent} onCancel={cancel} />
+        </>
+      )}
 
       {state.kind === 'error' && (
         <p className="error" role="alert">
@@ -152,19 +198,14 @@ export default function NewEpisode() {
             type="button"
             className="btn btn-primary"
             disabled={blocked}
-            onClick={() => setNotice('Finding the best moments arrives in Part 3. Your file is ready for it.')}
+            onClick={() => void findClips(ready.file, ready.info)}
           >
             Find my best clips
           </button>
-          {notice && (
-            <p className="muted small" role="status">
-              {notice}
-            </p>
-          )}
         </section>
       )}
 
-      <p className="muted small">Your video stays on your computer. Only the audio is sent to find the best moments.</p>
+      <p className="muted small">Your video and audio stay on your computer. Only the written transcript is sent to find the best moments.</p>
     </main>
   );
 }

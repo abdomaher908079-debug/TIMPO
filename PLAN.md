@@ -4,8 +4,11 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 
 ## Decisions
 - **Audience:** podcasters with long episodes (1–3 h). Competitors are weak there (editor, long videos, billing).
-- **How it works:** the video stays on the user's computer. The browser extracts a small audio file,
-  the server transcribes it and the AI picks the best moments, then the browser renders the clips.
+- **How it works:** the video stays on the user's computer. The browser decodes the audio to 16 kHz
+  mono, transcribes it with Whisper (in the browser, free), and sends only the transcript text to
+  Gemini's free tier to pick the best moments. The browser then renders the clips.
+- **Money:** free services while we build; spend on ads, not services. Improve services once
+  subscriptions pay for them.
   Users just "upload a video"; the mechanism is explained in About.
 - **Backup server (later):** optional server processing for weak computers and phones
   (Oracle Cloud Always Free to start). Videos deleted right after processing.
