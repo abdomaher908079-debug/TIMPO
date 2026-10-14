@@ -22,11 +22,22 @@ Without Supabase keys the site runs in **demo mode**: logins are fake and only s
 4. For "Continue with Google", enable the Google provider under **Authentication → Providers**
    (it needs a Google Cloud OAuth client ID and secret).
 
+## Connect the AI
+
+The diagnosis runs on the server (`server/diagnose.ts`), locally through `npm run dev` and on Vercel
+through `api/diagnose.ts`. Add one key to `.env.local`:
+
+- `GEMINI_API_KEY`: free tier, get one at https://aistudio.google.com/apikey
+- `ANTHROPIC_API_KEY`: paid, for later, at https://console.anthropic.com
+
+With no key the site returns fixed **sample answers**, clearly labeled, so everything else can be tested.
+If both keys are set, Gemini is used; set `AI_PROVIDER=claude` to switch.
+
 ## Status
 
 - [x] Part 1: design
 - [x] Part 2: home, sign up / log in, upload screen
-- [ ] Part 3: AI diagnosis
+- [x] Part 3: AI diagnosis (Gemini free tier, Claude ready, sample mode)
 - [ ] Part 4: results page
 - [ ] Part 5: error-code pages for Google
 - [ ] Part 6: usage limits and abuse protection

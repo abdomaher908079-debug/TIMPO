@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import ModelNumberHelp from '../components/ModelNumberHelp';
+import DiagnosisResult from '../components/DiagnosisResult';
+import { getAccessToken } from '../lib/auth';
 import { resizeToJpeg } from '../lib/image';
-
-const MAX_PHOTOS = 3;
-const APPLIANCES = ['Washer', 'Dryer', 'Dishwasher'] as const;
-type Appliance = (typeof APPLIANCES)[number];
+import { APPLIANCES, MAX_PHOTOS, type Appliance, type DiagnoseResponse } from '../shared/types';
 
 export default function Diagnose() {
   const [appliance, setAppliance] = useState<Appliance | null>(null);
@@ -13,7 +12,8 @@ export default function Diagnose() {
   const [modelNumber, setModelNumber] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<DiagnoseResponse | null>(null);
 
   async function addPhotos(files: FileList | null) {
     if (!files) return;
@@ -28,36 +28,44 @@ export default function Diagnose() {
     setPhotos((prev) => [...prev, ...ok].slice(0, MAX_PHOTOS));
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     if (!appliance) return setError('Choose which appliance has the problem.');
     if (photos.length === 0 && !description.trim()) return setError('Add a photo or describe the problem.');
     setError(null);
-    // The AI diagnosis is Part 3. For now, confirm the form collected everything.
-    setSubmitted(true);
+    setBusy(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch('/api/diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ appliance, description, modelNumber, photos }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.diagnosis) {
+        setError(data?.error ?? 'Something went wrong. Please try again.');
+        return;
+      }
+      setResult(data as DiagnoseResponse);
+      window.scrollTo(0, 0);
+    } catch {
+      setError("Couldn't reach FixMyCode. Check your internet connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  if (submitted) {
-    return (
-      <main className="diagnose">
-        <div className="card">
-          <h1 className="page-title">Ready to diagnose</h1>
-          <p className="muted">
-            The AI diagnosis is connected in Part 3. This is what will be sent:
-          </p>
-          <ul className="summary-list">
-            <li>Appliance: {appliance}</li>
-            <li>Photos: {photos.length}</li>
-            <li>Description: {description.trim() || '(none)'}</li>
-            <li>Model number: {modelNumber.trim() || '(none)'}</li>
-          </ul>
-          <button className="btn btn-outline" onClick={() => setSubmitted(false)}>
-            Back
-          </button>
-        </div>
-      </main>
-    );
+  function startOver() {
+    setResult(null);
+    setAppliance(null);
+    setPhotos([]);
+    setDescription('');
+    setModelNumber('');
+    window.scrollTo(0, 0);
   }
+
+  if (result) return <DiagnosisResult result={result} onStartOver={startOver} />;
 
   return (
     <main className="diagnose">
@@ -148,8 +156,8 @@ export default function Diagnose() {
           onChange={(e) => setModelNumber(e.target.value)}
         />
 
-        <button className="btn btn-primary" type="submit">
-          Diagnose my appliance
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? 'Diagnosing… (up to 30 seconds)' : 'Diagnose my appliance'}
         </button>
         {error && (
           <p className="error" role="alert">
