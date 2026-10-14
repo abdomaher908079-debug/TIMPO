@@ -22,7 +22,7 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 export const supabase: SupabaseClient | null = url && anonKey ? createClient(url, anonKey) : null;
 
-const DEMO_KEY = 'fixmycode_demo_user';
+const DEMO_KEY = 'peakclip_demo_user';
 
 // The current session's token, sent to our API so it can check who's asking.
 export async function getAccessToken(): Promise<string | null> {
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!supabase) return demoLogin('demo.user@gmail.com', 'Demo User');
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: `${window.location.origin}/diagnose` },
+          options: { redirectTo: `${window.location.origin}/new` },
         });
         if (error) throw error;
       },
@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/diagnose` },
+          options: { emailRedirectTo: `${window.location.origin}/new` },
         });
         if (error) throw error;
         // With email confirmation on (Supabase's default), there's no session until they click the link.

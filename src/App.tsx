@@ -4,7 +4,7 @@ import Header from './components/Header';
 import { useAuth } from './lib/auth';
 import Home from './pages/Home';
 import AuthPage from './pages/AuthPage';
-import Diagnose from './pages/Diagnose';
+import NewEpisode from './pages/NewEpisode';
 
 export default function App() {
   const { demo } = useAuth();
@@ -16,7 +16,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
         <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
-        <Route path="/diagnose" element={<RequireAuth><Diagnose /></RequireAuth>} />
+        <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
@@ -33,6 +33,6 @@ function RequireAuth({ children }: { children: ReactNode }) {
 function GuestOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <p className="loading">Loading…</p>;
-  if (user) return <Navigate to="/diagnose" replace />;
+  if (user) return <Navigate to="/new" replace />;
   return <>{children}</>;
 }

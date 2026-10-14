@@ -51,7 +51,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       } else {
         await signInWithEmail(email.trim(), password);
       }
-      navigate('/diagnose');
+      navigate('/new');
     });
   }
 
@@ -70,7 +70,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     <main className="auth">
       <h1 className="page-title">{isSignup ? 'Create your free account' : 'Welcome back'}</h1>
       <p className="muted">
-        {isSignup ? 'Save your appliances and every diagnosis in one place.' : 'Log in to diagnose your appliance.'}
+        {isSignup ? 'Your episodes and clips, saved in one place.' : 'Log in to make clips from your episodes.'}
       </p>
 
       <button className="btn btn-light" disabled={busy} onClick={() => void run(signInWithGoogle)}>
@@ -122,7 +122,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
         )}
       </p>
       {isSignup && (
-        <p className="muted small">Free plan: 10 diagnoses per month. By continuing you agree to the Terms and Privacy Policy.</p>
+        <p className="muted small">Free plan: 1 hour of episodes per month. By continuing you agree to the Terms and Privacy Policy.</p>
       )}
     </main>
   );
