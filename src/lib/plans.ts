@@ -5,8 +5,13 @@ export interface Plan {
   name: string;
   monthly: number;
   yearlyPerMonth: number;
-  hoursPerMonth: number;
-  clipsPerEpisode: number;
+  // Episode hours allowed per period; the free plan resets weekly, paid plans monthly.
+  hours: number;
+  period: 'week' | 'month';
+  // Longest single episode allowed, or null for any length.
+  maxEpisodeHours: number | null;
+  clipsFound: number;
+  clipsExportable: number;
   features: string[];
 }
 
@@ -17,13 +22,16 @@ export const PLANS: Plan[] = [
     name: 'Free',
     monthly: 0,
     yearlyPerMonth: 0,
-    hoursPerMonth: 1,
-    clipsPerEpisode: 10,
+    hours: 1,
+    period: 'week',
+    maxEpisodeHours: 1,
+    clipsFound: 10,
+    clipsExportable: 3,
     features: [
-      '1 hour of episodes per month',
-      'Up to 10 clips per episode',
+      '1 hour of episodes every week',
+      'Episodes up to 1 hour long',
+      'See all 10 best clips, export 3',
       'Full editor, 1080p export',
-      '3 caption styles',
       'Small "Made with PeakClip" watermark',
     ],
   },
@@ -32,11 +40,15 @@ export const PLANS: Plan[] = [
     name: 'Pro',
     monthly: 15,
     yearlyPerMonth: 12,
-    hoursPerMonth: 10,
-    clipsPerEpisode: 20,
+    hours: 10,
+    period: 'month',
+    maxEpisodeHours: null,
+    clipsFound: 20,
+    clipsExportable: 20,
     features: [
       '10 hours of episodes per month',
-      'Up to 20 clips per episode',
+      'Episodes of any length',
+      'Export all clips, up to 20 per episode',
       'No watermark, up to 4K export',
       'All caption styles + your brand',
       'Priority cloud processing (3 h)',
@@ -47,11 +59,15 @@ export const PLANS: Plan[] = [
     name: 'Studio',
     monthly: 29,
     yearlyPerMonth: 24,
-    hoursPerMonth: 20,
-    clipsPerEpisode: 30,
+    hours: 20,
+    period: 'month',
+    maxEpisodeHours: null,
+    clipsFound: 30,
+    clipsExportable: 30,
     features: [
       '20 hours of episodes per month',
-      'Up to 30 clips per episode',
+      'Episodes of any length',
+      'Export all clips, up to 30 per episode',
       'No watermark, up to 4K export',
       'Brand styles for several shows',
       'Priority cloud processing (10 h)',

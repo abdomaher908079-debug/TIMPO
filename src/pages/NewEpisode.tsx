@@ -3,9 +3,10 @@ import Meter from '../components/Meter';
 import { PLANS } from '../lib/plans';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
 
-// Until usage tracking exists (Part 6), everyone is treated as a Free user with a full month left.
+// Until usage tracking exists (Part 6), everyone is treated as a Free user with a full week left.
 const plan = PLANS[0]!;
-const remainingSeconds = plan.hoursPerMonth * 3600;
+const remainingSeconds = plan.hours * 3600;
+const maxEpisodeSeconds = plan.maxEpisodeHours === null ? Infinity : plan.maxEpisodeHours * 3600;
 
 const MIN_SECONDS = 60;
 // Container durations are often a fraction of a second longer than the episode; don't block a
@@ -65,13 +66,16 @@ export default function NewEpisode() {
   }
 
   const ready = state.kind === 'ready' ? state : null;
-  const overLimit = ready ? ready.info.durationSeconds > remainingSeconds + LIMIT_GRACE_SECONDS : false;
+  const length = ready?.info.durationSeconds ?? 0;
+  const tooLong = !!ready && length > maxEpisodeSeconds + LIMIT_GRACE_SECONDS;
+  const overLimit = !!ready && !tooLong && length > remainingSeconds + LIMIT_GRACE_SECONDS;
+  const blocked = tooLong || overLimit;
 
   return (
     <main className="new-episode">
       <h1 className="page-title">New episode</h1>
       <p className="muted">
-        {plan.name} plan · {formatDuration(remainingSeconds)} of episodes left this month
+        {plan.name} plan · {formatDuration(remainingSeconds)} of episodes left this {plan.period}
       </p>
 
       <div
@@ -129,16 +133,22 @@ export default function NewEpisode() {
               <dd>{formatSize(ready.file.size)}</dd>
             </div>
           </dl>
-          {overLimit ? (
+          {tooLong && (
             <p className="notice">
-              This episode is {formatDuration(ready.info.durationSeconds)} and your {plan.name} plan has{' '}
-              {formatDuration(remainingSeconds)} left this month. Upgrade to Pro for 10 hours a month.
+              This episode is {formatDuration(length)}. On the {plan.name} plan, episodes can be up to{' '}
+              {formatDuration(maxEpisodeSeconds)} long. Upgrade to Pro for episodes of any length.
             </p>
-          ) : null}
+          )}
+          {overLimit && (
+            <p className="notice">
+              This episode is {formatDuration(length)} and you have {formatDuration(remainingSeconds)} left this{' '}
+              {plan.period}. Upgrade to Pro for 10 hours a month.
+            </p>
+          )}
           <button
             type="button"
             className="btn btn-primary"
-            disabled={overLimit}
+            disabled={blocked}
             onClick={() => setNotice('Finding the best moments arrives in Part 3. Your file is ready for it.')}
           >
             Find my best clips

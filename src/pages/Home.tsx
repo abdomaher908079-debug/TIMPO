@@ -25,7 +25,7 @@ export default function Home() {
           captions for TikTok, Reels and Shorts.
         </p>
         <Link to={startLink} className="btn btn-primary">
-          {user ? 'New episode' : "Try it free, it's 1 hour on us"}
+          {user ? 'New episode' : 'Try it free, 1 hour every week'}
         </Link>
         <p className="privacy-note">Your video never leaves your computer. No upload wait.</p>
       </section>
