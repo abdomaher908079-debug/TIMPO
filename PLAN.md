@@ -29,6 +29,17 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   from most countries). Lemon Squeezy is being folded into Stripe; Stripe doesn't take sellers from many countries.
 - **Limits:** enforced on the server when the AI picks moments (the only step that costs us). Free resets
   Mondays (UTC); paid plans with their billing month. Retrying the same episode in a period is free.
+- **Hours:** Pro 20 h, Studio 60 h. Episode hours cost us almost nothing (speech and rendering run on the user's
+  computer; Gemini is about a cent per episode), so they're generous: a weekly 3-hour show fits Pro with room. The
+  costly part, cloud processing, keeps its own smaller caps.
+- **AI quality:** Free gets Quick AI (Whisper base + Gemini Flash-Lite, all free). Pro and Studio get the same
+  Best AI (Whisper small, ~3× slower so only with a graphics card, + Gemini's top model on a paid key). The site
+  tells Free users plainly that Pro's AI is better. Gemini steps down Pro → Flash → Flash-Lite when a model is
+  overloaded or out of quota, so users get clips instead of an error.
+- **What to pay for first, once subscriptions come in:**
+  1. Gemini paid key (`GEMINI_PAID_API_KEY`) → Best AI picks for Pro/Studio. About $0.01–0.05 per episode.
+  2. Cloud processing server (Part 7) for paid users without a graphics card, so they get the larger speech model too.
+  3. Later: a paid transcription API for paid users if in-browser Whisper isn't good enough.
 - **Not built yet:** brand caption styles (Pro/Studio), team members (Studio), cloud processing (Part 7).
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
@@ -36,7 +47,8 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 ## Plans
 |                     | Free            | Pro $15/mo ($12/mo yearly) | Studio $29/mo ($24/mo yearly) |
 |---------------------|-----------------|----------------------------|-------------------------------|
-| Episode hours       | **1 episode per week, up to 30 min** (4/month) | 10 per month               | 20 per month                  |
+| Episode hours       | **1 episode per week, up to 30 min** (4/month) | 20 per month               | 60 per month                  |
+| AI quality          | Quick AI        | Best AI                    | Best AI                       |
 | Longest episode     | 30 minutes      | Any                        | Any                           |
 | Clips per episode   | 10 found, **3 exportable** (7 shown locked) | 20 | 30                  |
 | Export              | 1080p           | 1080p / 4K                 | 1080p / 4K                    |
@@ -46,7 +58,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 | Team members        | 1               | 1                          | 3                             |
 
 Free shows all the clips it finds but locks 7 of 10, so users see what they'd get by upgrading.
-A free user costs about $0.30–0.60/month in transcription at full use (4 × 30 min).
+A free user costs us about $0 (transcription runs in their browser; Gemini free tier).
 
 Free = what costs us nothing (editor, saved projects, local export). Paid = what costs us money
 (transcription hours, server) and what professionals need (no watermark, brand styles).

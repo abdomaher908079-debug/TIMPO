@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, type Connect, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { DEFAULT_GEMINI_MODEL, MomentsError, parseRequest, pickMoments } from './supabase/functions/_shared/moments';
+import { geminiFor, MomentsError, parseRequest, pickMoments } from './supabase/functions/_shared/moments';
 
 // Lets speech recognition use all CPU cores (SharedArrayBuffer needs cross-origin isolation).
 // Production hosting must send the same two headers, except on /checkout.html: Paddle's checkout
@@ -29,7 +29,6 @@ function momentsApi(env: Record<string, string>): Plugin {
     };
     if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
     try {
-      if (!env.GEMINI_API_KEY) throw new MomentsError('Add GEMINI_API_KEY to .env.local and restart the dev server.', 503);
       let raw = '';
       for await (const chunk of req) raw += chunk;
       let body: unknown = null;
@@ -38,10 +37,11 @@ function momentsApi(env: Record<string, string>): Plugin {
       } catch {
         // parseRequest reports the missing transcript.
       }
-      const moments = await pickMoments(parseRequest(body), {
-        apiKey: env.GEMINI_API_KEY,
-        model: env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
-      });
+      // Demo mode has no accounts, so the page says which plan's AI to use.
+      const quality = (body as { quality?: string } | null)?.quality === 'best' ? 'best' : 'quick';
+      const gemini = geminiFor(quality, (name) => env[name]);
+      if (!gemini) throw new MomentsError('Add GEMINI_API_KEY to .env.local and restart the dev server.', 503);
+      const moments = await pickMoments(parseRequest(body), gemini);
       send(200, { moments });
     } catch (err) {
       if (err instanceof MomentsError) return send(err.status, { error: err.message });

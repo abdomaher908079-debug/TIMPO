@@ -22,7 +22,12 @@ export async function fingerprint(file: File, seconds: number): Promise<string> 
  * plan's usage. In demo mode it goes through the dev server's /api/pick-moments.
  * Either way the Gemini key stays on the server.
  */
-export async function findMoments(segments: Segment[], count: number, episode: EpisodeRef, signal?: AbortSignal): Promise<Moment[]> {
+export async function findMoments(
+  segments: Segment[],
+  { count, quality }: { count: number; quality: 'quick' | 'best' },
+  episode: EpisodeRef,
+  signal?: AbortSignal,
+): Promise<Moment[]> {
   if (supabase) return (await callFunction<{ moments: Moment[] }>('pick-moments', { segments, episode }, signal)).moments;
 
   let res: Response;
@@ -30,7 +35,7 @@ export async function findMoments(segments: Segment[], count: number, episode: E
     res = await fetch('/api/pick-moments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ segments, count, episode }),
+      body: JSON.stringify({ segments, count, quality, episode }),
       signal,
     });
   } catch (err) {

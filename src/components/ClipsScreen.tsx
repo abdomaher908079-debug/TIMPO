@@ -14,6 +14,7 @@ interface Props {
   planName: string;
   watermark: boolean;
   allow4k: boolean;
+  quality: 'quick' | 'best';
 }
 
 export type ExportStatus =
@@ -49,7 +50,7 @@ export function download(url: string, name: string) {
 }
 
 // All the clips found, best first. On plans with an export limit, the rest can be previewed but not exported.
-export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark, allow4k }: Props) {
+export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark, allow4k, quality }: Props) {
   const [size, setSize] = useState<'1080p' | '4k'>('1080p');
   const exportSize = allow4k ? size : '1080p';
   const sizeRef = useRef(exportSize);
@@ -128,7 +129,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     if (!groups) {
       setStatus(i, { state: 'timing' });
       try {
-        if (!timerRef.current) timerRef.current = (await import('../lib/speech')).createWordTimer();
+        if (!timerRef.current) timerRef.current = (await import('../lib/speech')).createWordTimer(quality);
         const exact = groupWords(await timerRef.current.words(file, clip.start, clip.end));
         groups = exact;
         setTimed((t) => ({ ...t, [key]: exact }));
@@ -258,6 +259,12 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
           </button>
         )}
       </div>
+      {quality === 'quick' && (
+        <p className="quality-note">
+          <b>Found by our Quick AI.</b> Pro's Best AI hears every word more accurately and picks smarter moments, and you'd
+          export all {clips.length} clips without a watermark. <Link to="/account">Upgrade to Pro</Link>
+        </p>
+      )}
       <ol className="clip-grid clips-list">
         {clips.map((c, i) => {
           const isLocked = i >= exportable;

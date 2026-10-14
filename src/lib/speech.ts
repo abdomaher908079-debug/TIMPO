@@ -11,13 +11,14 @@ export interface Word {
 }
 
 export type WorkerRequest =
-  | { type: 'load' }
+  | { type: 'load'; quality: 'quick' | 'best' }
   | { type: 'transcribe'; id: number; start: number; samples: Float32Array; final: boolean }
   | { type: 'words'; id: number; samples: Float32Array };
 
 export type WorkerResponse =
   | { type: 'loading'; loaded: number; total: number }
-  | { type: 'ready'; device: 'webgpu' | 'wasm' }
+  // `model` is the speech model actually used: best needs a graphics card.
+  | { type: 'ready'; device: 'webgpu' | 'wasm'; model: 'quick' | 'best' }
   | { type: 'segments'; id: number; segments: Segment[]; doneUntil: number }
   | { type: 'words'; id: number; words: Word[] }
   | { type: 'error'; id?: number; message: string };
@@ -27,9 +28,11 @@ const PIECE_SECONDS = 60;
 
 export interface TranscribeOptions {
   signal: AbortSignal;
+  // The plan's AI quality.
+  quality: 'quick' | 'best';
   // Model download, in bytes. Only happens the first time; the browser keeps it afterwards.
   onLoading?: (loaded: number, total: number) => void;
-  onReady?: (device: 'webgpu' | 'wasm') => void;
+  onReady?: (device: 'webgpu' | 'wasm', model: 'quick' | 'best') => void;
   // Seconds of the episode transcribed so far.
   onProgress?: (seconds: number) => void;
 }
@@ -38,19 +41,20 @@ export interface TranscribeOptions {
  * Transcribes the episode's speech in the browser with Whisper. Audio is decoded one piece ahead
  * of recognition, so only a couple of minutes of audio are ever in memory.
  */
-export async function transcribeEpisode(file: File, { signal, onLoading, onReady, onProgress }: TranscribeOptions): Promise<Segment[]> {
+export async function transcribeEpisode(file: File, { signal, quality, onLoading, onReady, onProgress }: TranscribeOptions): Promise<Segment[]> {
   const worker = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
   let fail: (err: Error) => void = () => {};
   const failed = new Promise<never>((_, reject) => (fail = reject));
   failed.catch(() => {});
   const waiting = new Map<number, (r: Extract<WorkerResponse, { type: 'segments' }>) => void>();
-  let ready: (device: 'webgpu' | 'wasm') => void = () => {};
-  const loaded = new Promise<'webgpu' | 'wasm'>((resolve) => (ready = resolve));
+  type Ready = Extract<WorkerResponse, { type: 'ready' }>;
+  let ready: (msg: Ready) => void = () => {};
+  const loaded = new Promise<Ready>((resolve) => (ready = resolve));
 
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const msg = e.data;
     if (msg.type === 'loading') onLoading?.(msg.loaded, msg.total);
-    else if (msg.type === 'ready') ready(msg.device);
+    else if (msg.type === 'ready') ready(msg);
     else if (msg.type === 'segments') waiting.get(msg.id)?.(msg);
     else if (msg.type === 'error') fail(new Error(msg.message));
   };
@@ -70,10 +74,10 @@ export async function transcribeEpisode(file: File, { signal, onLoading, onReady
 
   const chunks = speechChunks(file, { chunkSeconds: PIECE_SECONDS, signal });
   try {
-    worker.postMessage({ type: 'load' } satisfies WorkerRequest);
+    worker.postMessage({ type: 'load', quality } satisfies WorkerRequest);
     // Load the model and decode the first piece at the same time.
-    const [device, first] = await Promise.race([Promise.all([loaded, chunks.next()]), failed]);
-    onReady?.(device);
+    const [info, first] = await Promise.race([Promise.all([loaded, chunks.next()]), failed]);
+    onReady?.(info.device, info.model);
 
     const segments: Segment[] = [];
     let current = first;
@@ -112,7 +116,7 @@ export interface WordTimer {
  * Times the words of single clips for their captions. Keeps one recognizer loaded so exporting
  * several clips loads the model once (it's already in the browser's cache from transcribing).
  */
-export function createWordTimer(): WordTimer {
+export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
   let worker: Worker | null = null;
   let loaded: Promise<void> | null = null;
   const waiting = new Map<number, { resolve: (w: Word[]) => void; reject: (e: Error) => void }>();
@@ -148,7 +152,7 @@ export function createWordTimer(): WordTimer {
       };
     });
     loaded.catch(() => {});
-    w.postMessage({ type: 'load' } satisfies WorkerRequest);
+    w.postMessage({ type: 'load', quality } satisfies WorkerRequest);
     worker = w;
   };
 

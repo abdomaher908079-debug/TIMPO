@@ -343,3 +343,5 @@ h1, h2, h3 { text-wrap: balance; }
 .pricing-note { margin-top: 12px; }
 .size-picker { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.85rem; }
 .size-picker select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; }
+.quality-note { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 0.86rem; color: var(--muted); }
+.quality-note b { color: var(--text); }

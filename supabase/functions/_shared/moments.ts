@@ -31,7 +31,29 @@ export const MAX_CLIP_SECONDS = 90;
 export const MAX_COUNT = 30;
 // About 4 hours of speech. Keeps a single request well inside the free tier's token limits.
 export const MAX_TRANSCRIPT_CHARS = 400_000;
+// The strongest model on Gemini's free tier, and the fallback when a configured model is unavailable.
 export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+
+export interface GeminiChoice {
+  apiKey: string;
+  model: string;
+}
+
+/**
+ * Which Gemini key and model a plan's AI quality uses (see Quality in plans.ts):
+ * - quick (Free): Flash-Lite on the free-tier key. Fast, and its free quota is the largest.
+ * - best (Pro, Studio): the top model on a paid key (GEMINI_PAID_API_KEY, a key from a project with
+ *   billing turned on). Until that key is set, the strongest free model.
+ * Model names can be overridden with GEMINI_MODEL_QUICK and GEMINI_MODEL_BEST.
+ */
+export function geminiFor(quality: 'quick' | 'best', env: (name: string) => string | undefined): GeminiChoice | null {
+  const freeKey = env('GEMINI_API_KEY');
+  const paidKey = env('GEMINI_PAID_API_KEY');
+  if (quality === 'best' && paidKey) return { apiKey: paidKey, model: env('GEMINI_MODEL_BEST') || 'gemini-pro-latest' };
+  const apiKey = freeKey || paidKey;
+  if (!apiKey) return null;
+  return { apiKey, model: quality === 'best' ? DEFAULT_GEMINI_MODEL : env('GEMINI_MODEL_QUICK') || 'gemini-flash-lite-latest' };
+}
 
 export class MomentsError extends Error {
   constructor(
@@ -117,10 +139,40 @@ export function parseRequest(body: unknown): PickMomentsRequest {
 }
 
 /** Asks Gemini for the best moments and turns its answer into clips with exact times. */
-export async function pickMoments(
-  { segments, count }: PickMomentsRequest,
-  { apiKey, model = DEFAULT_GEMINI_MODEL }: { apiKey: string; model?: string },
-): Promise<Moment[]> {
+// When a model is overloaded, out of quota or gone, step down to the next one rather than fail.
+const FALLBACK_CHAIN = ['gemini-pro-latest', DEFAULT_GEMINI_MODEL, 'gemini-flash-lite-latest'];
+
+export async function pickMoments(request: PickMomentsRequest, { apiKey, model }: GeminiChoice): Promise<Moment[]> {
+  const after = FALLBACK_CHAIN.indexOf(model);
+  const models = [model, ...(after >= 0 ? FALLBACK_CHAIN.slice(after + 1) : FALLBACK_CHAIN.slice(1))];
+  let lastError: unknown;
+  for (const m of models) {
+    // Overload (503) is usually brief: one quick retry on the same model first.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await askGemini(request, apiKey, m);
+      } catch (err) {
+        lastError = err;
+        if (!(err instanceof ModelProblem)) throw err;
+        console.error(`Gemini ${m}: ${err.detail}`);
+        if (err.detail !== 'overloaded' || attempt === 1) break;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  }
+  throw lastError instanceof ModelProblem
+    ? new MomentsError('Our AI is busy right now. Please try again in a minute.', 503)
+    : lastError;
+}
+
+// The model can't answer right now, but another one might.
+class ModelProblem extends MomentsError {
+  constructor(readonly detail: 'overloaded' | 'quota' | 'not-found') {
+    super(detail, 503);
+  }
+}
+
+async function askGemini({ segments, count }: PickMomentsRequest, apiKey: string, model: string): Promise<Moment[]> {
   const transcript = segments.map((s, i) => `${i} [${clock(s.start)}] ${s.text}`).join('\n');
   const length = clock(segments[segments.length - 1]!.end);
   const prompt = `Episode length: ${length}. Pick the ${count} best clips.\n\nTranscript:\n${transcript}`;
@@ -134,7 +186,9 @@ export async function pickMoments(
       generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.4 },
     }),
   });
-  if (res.status === 429) throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+  if (res.status === 429) throw new ModelProblem('quota');
+  if (res.status === 404) throw new ModelProblem('not-found');
+  if (res.status === 503 || res.status === 500) throw new ModelProblem('overloaded');
   if (!res.ok) {
     console.error('Gemini error', res.status, await res.text().catch(() => ''));
     throw new MomentsError('Our AI couldn’t read this episode. Please try again.', 502);

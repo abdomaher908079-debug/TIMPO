@@ -6,10 +6,14 @@ import ortWasm from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import type { Word, WorkerRequest, WorkerResponse } from './speech';
 
-// English-only Whisper: more accurate on English than the multilingual model of the same size.
-// The "timestamped" build is the same model with the extra outputs needed for exact word times
-// (used for clip captions), so users download one model for both jobs.
-const MODEL = 'onnx-community/whisper-base.en_timestamped';
+// English-only Whisper: more accurate on English than the multilingual models of the same size.
+// The "timestamped" builds have the extra outputs needed for exact word times (clip captions), so
+// one download does both jobs.
+// Quick AI (Free): base, ~200 MB, fast everywhere.
+const QUICK_MODEL = 'onnx-community/whisper-base.en_timestamped';
+// Best AI (Pro, Studio): small, ~400 MB, noticeably more accurate but about 3× slower, so only
+// with a graphics card. Without one, paid plans use the quick model (cloud processing covers them).
+const BEST_MODEL = 'onnx-community/whisper-small.en_timestamped';
 const SAMPLE_RATE = 16_000;
 // Lines that end this close to the end of a piece may be cut off; they're redone with the next piece.
 const EDGE_SECONDS = 2;
@@ -27,37 +31,44 @@ type Line = { text: string; timestamp: [number, number | null] };
 let carry = new Float32Array(0);
 let carryStart = 0;
 
-async function hasWebGpu(): Promise<boolean> {
+interface GpuAdapter {
+  features: { has(name: string): boolean };
+}
+
+async function gpuAdapter(): Promise<GpuAdapter | null> {
   try {
-    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
-    return !!(await gpu?.requestAdapter());
+    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<GpuAdapter | null> } }).gpu;
+    return (await gpu?.requestAdapter()) ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function load() {
+async function load(quality: 'quick' | 'best') {
   const progress_callback = (p: { status: string; loaded?: number; total?: number }) => {
     if (p.status === 'progress_total' && p.total) post({ type: 'loading', loaded: p.loaded ?? 0, total: p.total });
   };
-  if (await hasWebGpu()) {
+  const adapter = await gpuAdapter();
+  if (adapter) {
+    const best = quality === 'best';
     try {
-      asr = (await pipeline('automatic-speech-recognition', MODEL, {
+      asr = (await pipeline('automatic-speech-recognition', best ? BEST_MODEL : QUICK_MODEL, {
         device: 'webgpu',
-        dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+        // Half precision halves the bigger model's download where the graphics card supports it.
+        dtype: { encoder_model: best && adapter.features.has('shader-f16') ? 'fp16' : 'fp32', decoder_model_merged: 'q4' },
         progress_callback,
       })) as AutomaticSpeechRecognitionPipeline;
-      return post({ type: 'ready', device: 'webgpu' });
+      return post({ type: 'ready', device: 'webgpu', model: best ? 'best' : 'quick' });
     } catch (err) {
       console.warn('WebGPU speech recognition failed, using the CPU instead.', err);
     }
   }
-  asr = (await pipeline('automatic-speech-recognition', MODEL, {
+  asr = (await pipeline('automatic-speech-recognition', QUICK_MODEL, {
     device: 'wasm',
     dtype: 'q8',
     progress_callback,
   })) as AutomaticSpeechRecognitionPipeline;
-  post({ type: 'ready', device: 'wasm' });
+  post({ type: 'ready', device: 'wasm', model: 'quick' });
 }
 
 async function transcribe({ id, start, samples, final }: Extract<WorkerRequest, { type: 'transcribe' }>) {
@@ -125,7 +136,7 @@ const round = (t: number) => Math.round(t * 100) / 100;
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
   try {
-    if (msg.type === 'load') await load();
+    if (msg.type === 'load') await load(msg.quality);
     else if (msg.type === 'words') await words(msg);
     else await transcribe(msg);
   } catch (err) {

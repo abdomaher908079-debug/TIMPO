@@ -20,6 +20,7 @@ export const PLANS: Plan[] = [
     features: [
       '1 episode every week (4 a month)',
       'Episodes up to 30 minutes long',
+      'Quick AI: good clips, fast',
       'See all 10 best clips, export 3',
       'Full editor, 1080p export',
       'Small "Made with Hookcut" watermark',
@@ -31,8 +32,9 @@ export const PLANS: Plan[] = [
     monthly: 15,
     yearlyPerMonth: 12,
     features: [
-      '10 hours of episodes per month',
+      '20 hours of episodes per month',
       'Episodes of any length',
+      'Best AI: sharpest transcripts and smartest picks',
       'Export all clips, up to 20 per episode',
       'No watermark, up to 4K export',
       'All caption styles + your brand',
@@ -45,8 +47,9 @@ export const PLANS: Plan[] = [
     monthly: 29,
     yearlyPerMonth: 24,
     features: [
-      '20 hours of episodes per month',
+      '60 hours of episodes per month',
       'Episodes of any length',
+      'Best AI: sharpest transcripts and smartest picks',
       'Export all clips, up to 30 per episode',
       'No watermark, up to 4K export',
       'Brand styles for several shows',

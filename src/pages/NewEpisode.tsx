@@ -92,12 +92,20 @@ export default function NewEpisode() {
       let listenStart = 0;
       segments = await transcribeEpisode(file, {
         signal: abort.signal,
+        quality: plan.quality,
         onLoading: (loaded, size) => {
           loading = `Downloading ${Math.round(loaded / 1e6)} of ${Math.round(size / 1e6)} MB · only the first time`;
           update(0, (loaded / size) * 10);
         },
-        onReady: (d) => {
-          device = d === 'webgpu' ? 'Running on your graphics card' : 'Running on your processor';
+        onReady: (d, model) => {
+          const where = `running on your ${d === 'webgpu' ? 'graphics card' : 'processor'}`;
+          device =
+            plan.quality === 'quick'
+              ? `Quick AI · ${where}`
+              : model === 'best'
+                ? `Best AI · ${where}`
+                : // Paid plan on a computer without a graphics card: the larger speech model would be too slow.
+                  `Best AI · ${where}. The larger speech model needs a graphics card; moments are still picked by Best AI`;
           listening = `0 of ${formatDuration(total)}`;
           listenStart = performance.now();
           update(1, 10);
@@ -133,7 +141,12 @@ export default function NewEpisode() {
     try {
       const { findMoments } = await import('../lib/moments');
       const fp = fingerprints.current.get(file)!;
-      const moments = await findMoments(segments, plan.clipsFound, { fingerprint: fp, seconds: info.durationSeconds }, abort.signal);
+      const moments = await findMoments(
+        segments,
+        { count: plan.clipsFound, quality: plan.quality },
+        { fingerprint: fp, seconds: info.durationSeconds },
+        abort.signal,
+      );
       if (abort.signal.aborted) return;
       setState({ kind: 'done', file, info, segments, clips: clipsFromMoments(moments) });
       // The server has counted this episode; show the new usage (demo mode counts it here).
@@ -205,6 +218,7 @@ export default function NewEpisode() {
               planName={plan.name}
               watermark={plan.watermark}
               allow4k={plan.maxExport === '4k'}
+              quality={plan.quality}
             />
           ) : (
             <div className="card">
@@ -308,6 +322,7 @@ export default function NewEpisode() {
           >
             Find my best clips
           </button>
+          {plan.quality === 'quick' && <QuickAiNote />}
         </section>
       )}
 
@@ -327,6 +342,17 @@ function UpgradeNotice({ message, planName }: { message: string; planName: strin
           <Link to="/account">Upgrade</Link> for more hours and episodes of any length.
         </>
       )}
+    </p>
+  );
+}
+
+// Free uses our quick AI; be upfront that Pro's is better.
+export function QuickAiNote() {
+  return (
+    <p className="quality-note">
+      <b>Free uses our Quick AI.</b> It finds good clips fast. Pro and Studio use our Best AI: a larger speech model that hears
+      every word more accurately (sharper captions) and our strongest AI for picking the moments that will perform.{' '}
+      <Link to="/account">See Pro</Link>
     </p>
   );
 }

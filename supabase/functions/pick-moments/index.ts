@@ -1,8 +1,9 @@
 // Supabase Edge Function: POST { segments, episode: { fingerprint, seconds } } → { moments }.
-// Keeps the Gemini key on the server, checks the user's plan limits, and records usage.
-// Deploy: supabase secrets set GEMINI_API_KEY=... && supabase functions deploy pick-moments
+// Keeps the Gemini keys on the server, checks the user's plan limits, and records usage.
+// Secrets: GEMINI_API_KEY (free tier, all plans); GEMINI_PAID_API_KEY (billing on, Pro/Studio's best AI).
+// Deploy: supabase functions deploy pick-moments
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { DEFAULT_GEMINI_MODEL, MomentsError, parseRequest, pickMoments } from '../_shared/moments.ts';
+import { geminiFor, MomentsError, parseRequest, pickMoments } from '../_shared/moments.ts';
 import { checkEpisode, currentPeriod, effectivePlan, LIMITS, type ProfileRow } from '../_shared/plans.ts';
 
 const CORS = {
@@ -29,8 +30,6 @@ Deno.serve(async (req) => {
     const user = auth.user;
     if (!user) return json({ error: 'Please sign in again.' }, 401);
 
-    const apiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!apiKey) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
     const body = (await req.json().catch(() => null)) as { episode?: { fingerprint?: unknown; seconds?: unknown } } | null;
     const request = parseRequest(body);
     const fingerprint = typeof body?.episode?.fingerprint === 'string' ? body.episode.fingerprint.slice(0, 128) : '';
@@ -59,10 +58,9 @@ Deno.serve(async (req) => {
       if (problem) return json({ error: problem.message, reason: problem.reason }, 403);
     }
 
-    const moments = await pickMoments({ ...request, count: LIMITS[plan].clipsFound }, {
-      apiKey,
-      model: Deno.env.get('GEMINI_MODEL') || DEFAULT_GEMINI_MODEL,
-    });
+    const gemini = geminiFor(LIMITS[plan].quality, (name) => Deno.env.get(name));
+    if (!gemini) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
+    const moments = await pickMoments({ ...request, count: LIMITS[plan].clipsFound }, gemini);
 
     // Counted only once the moments are found, so failures don't use up the plan.
     if (!repeat) {

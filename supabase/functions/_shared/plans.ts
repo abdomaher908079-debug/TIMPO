@@ -2,6 +2,9 @@
 // Web-standard TypeScript only: no Deno or Node globals. Keep in sync with PLAN.md.
 
 export type PlanId = 'free' | 'pro' | 'studio';
+// Free gets our quick AI (free services). Paid plans get our best AI: a larger speech model and the
+// strongest Gemini model on a paid API key. Pro and Studio are equally smart; they differ in hours and extras.
+export type Quality = 'quick' | 'best';
 export type Billing = 'monthly' | 'yearly';
 
 export interface PlanLimits {
@@ -18,6 +21,7 @@ export interface PlanLimits {
   clipsExportable: number;
   watermark: boolean;
   maxExport: '1080p' | '4k';
+  quality: Quality;
 }
 
 export const LIMITS: Record<PlanId, PlanLimits> = {
@@ -31,28 +35,31 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     clipsExportable: 3,
     watermark: true,
     maxExport: '1080p',
+    quality: 'quick',
   },
   pro: {
     id: 'pro',
     period: 'month',
-    hours: 10,
+    hours: 20,
     maxEpisodeSeconds: null,
     episodesPerPeriod: null,
     clipsFound: 20,
     clipsExportable: 20,
     watermark: false,
     maxExport: '4k',
+    quality: 'best',
   },
   studio: {
     id: 'studio',
     period: 'month',
-    hours: 20,
+    hours: 60,
     maxEpisodeSeconds: null,
     episodesPerPeriod: null,
     clipsFound: 30,
     clipsExportable: 30,
     watermark: false,
     maxExport: '4k',
+    quality: 'best',
   },
 };
 

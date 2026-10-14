@@ -66,7 +66,11 @@ page). A canceled plan stays active until the end of the paid period.
    moments by transcript line, so clip times are exact. The prompt and checks live in
    `supabase/functions/_shared/moments.ts`.
 
-The Gemini key stays on a server:
+Free plans get **Quick AI** (Whisper base, Gemini Flash-Lite); Pro and Studio get **Best AI** (Whisper small on
+a graphics card, and Gemini's top model when `GEMINI_PAID_API_KEY`, a key from a project with billing on, is set).
+If a model is overloaded or out of quota, it steps down to the next one instead of failing.
+
+The Gemini keys stay on a server:
 - **Locally (demo mode):** put `GEMINI_API_KEY` in `.env.local`; the dev server answers `/api/pick-moments`.
 - **With Supabase:** deploy the Edge Function (only signed-in users can call it):
 
