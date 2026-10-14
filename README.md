@@ -10,7 +10,8 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Without Supabase keys the site runs in **demo mode**: logins are fake and only stored in your browser.
+Without Supabase keys the site runs in **demo mode**: logins, plans and usage are faked in your browser, and the
+pricing buttons switch plans for free so you can try what each plan unlocks.
 
 ## Connect Supabase (real accounts)
 
@@ -19,6 +20,42 @@ Without Supabase keys the site runs in **demo mode**: logins are fake and only s
 3. In **Authentication → URL Configuration**, set the Site URL (e.g. `http://localhost:5173`) and add
    `http://localhost:5173/new` to the Redirect URLs.
 4. For "Continue with Google", enable the Google provider under **Authentication → Providers**.
+
+## Accounts, limits and payments
+
+- **Database:** run `supabase/migrations/20261014000000_accounts.sql` (`supabase db push`, or paste it in the SQL
+  editor). It adds `profiles` (plan and subscription) and `episodes` (usage). Users can read only their own rows;
+  only the server writes them.
+- **Limits** live in `supabase/functions/_shared/plans.ts`, shared by the site (to show them) and the
+  `pick-moments` function (to enforce them). An episode counts once it gets its clips; retrying the same file in the
+  same period is free. Free resets every Monday (UTC); paid plans reset with their billing month.
+- **Payments** use [Paddle](https://www.paddle.com) as merchant of record: it charges customers and handles sales tax
+  and VAT worldwide (5% + 50¢ per sale, no monthly fee).
+
+### Set up Paddle
+
+1. Create a Paddle account (start with a [sandbox](https://sandbox-vendors.paddle.com) account for testing) and
+   check your country is supported for payouts.
+2. **Catalog → Products:** create Pro and Studio, each with a monthly and a yearly price
+   ($15 / $144 and $29 / $288). Put the four price IDs in `.env.local` (see `.env.example`) and as Supabase secrets.
+3. **Developer tools → Authentication:** create a client-side token (`VITE_PADDLE_CLIENT_TOKEN`) and an API key.
+4. **Checkout → Checkout settings:** set the default payment link to `https://your-site/checkout.html`, and add your
+   domain under approved domains.
+5. **Developer tools → Notifications:** add a destination
+   `https://<project>.supabase.co/functions/v1/paddle-webhook` for the `subscription.*` events, and copy its secret.
+6. Set the server secrets and deploy:
+
+   ```bash
+   supabase secrets set PADDLE_ENV=sandbox PADDLE_API_KEY=... PADDLE_WEBHOOK_SECRET=... \
+     PADDLE_PRICE_PRO_MONTHLY=pri_... PADDLE_PRICE_PRO_YEARLY=pri_... \
+     PADDLE_PRICE_STUDIO_MONTHLY=pri_... PADDLE_PRICE_STUDIO_YEARLY=pri_...
+   supabase functions deploy pick-moments
+   supabase functions deploy billing-portal
+   supabase functions deploy paddle-webhook --no-verify-jwt
+   ```
+
+Subscribers manage their card, invoices, plan and cancellation in Paddle's portal ("Manage billing" on the Account
+page). A canceled plan stays active until the end of the paid period.
 
 ## Finding the best moments
 
@@ -40,7 +77,7 @@ The Gemini key stays on a server:
 
 **Hosting:** the site must be served with `Cross-Origin-Opener-Policy: same-origin` and
 `Cross-Origin-Embedder-Policy: require-corp` (the dev server already does) so speech recognition can use
-every processor core. The speech runtime is served from our own site (a ~27 MB `.wasm` file in
+every processor core, **except** `/checkout.html`, where Paddle's checkout frame can't load under them. The speech runtime is served from our own site (a ~27 MB `.wasm` file in
 `dist/assets`); some hosts cap file size at 25 MB.
 
 ## Exporting clips

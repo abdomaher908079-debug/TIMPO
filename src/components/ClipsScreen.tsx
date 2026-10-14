@@ -13,6 +13,7 @@ interface Props {
   exportable: number;
   planName: string;
   watermark: boolean;
+  allow4k: boolean;
 }
 
 export type ExportStatus =
@@ -23,7 +24,8 @@ export type ExportStatus =
   | { state: 'error'; message: string };
 
 // Everything that changes the exported video. A finished export of a clip edited since is out of date.
-export const exportKey = (c: Clip) => `${rangeKey(c)}|${c.cropX}|${c.captionStyle}`;
+export const exportKey = (c: Clip, size: string) => `${rangeKey(c)}|${c.cropX}|${c.captionStyle}|${size}`;
+export const SIZE_LABELS = { '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
 
 // Frames are taken a moment in, past any cut at the very start of the clip.
 const thumbTime = (c: Clip) => c.start + Math.min(1, (c.end - c.start) / 4);
@@ -47,7 +49,11 @@ export function download(url: string, name: string) {
 }
 
 // All the clips found, best first. On plans with an export limit, the rest can be previewed but not exported.
-export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark }: Props) {
+export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark, allow4k }: Props) {
+  const [size, setSize] = useState<'1080p' | '4k'>('1080p');
+  const exportSize = allow4k ? size : '1080p';
+  const sizeRef = useRef(exportSize);
+  sizeRef.current = exportSize;
   const [editing, setEditing] = useState<number | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [exports, setExports] = useState<Record<number, ExportStatus>>({});
@@ -136,14 +142,16 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     if (signal.aborted) throw new DOMException('Canceled', 'AbortError');
     setStatus(i, { state: 'rendering', progress: 0 });
     const { renderClip } = await import('../lib/render');
+    const clipSize = sizeRef.current;
     const { blob, extension } = await renderClip(file, clip, groups, {
       watermark,
+      size: clipSize,
       signal,
       onProgress: (p) => setStatus(i, { state: 'rendering', progress: p }),
     });
     const url = URL.createObjectURL(blob);
     const name = fileName(clip, i + 1, extension);
-    setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip) });
+    setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize) });
     download(url, name);
   }
 
@@ -198,7 +206,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         locked={editing >= exportable}
         watermark={watermark}
         exportStatus={exports[editing]}
-        exportCurrent={exports[editing]?.state !== 'done' || (exports[editing] as { key: string }).key === exportKey(clip)}
+        exportCurrent={exports[editing]?.state !== 'done' || (exports[editing] as { key: string }).key === exportKey(clip, exportSize)}
+        sizeLabel={SIZE_LABELS[exportSize]}
         busy={busy}
         onExport={() => void runExports([editing])}
         onCancelExport={cancelExports}
@@ -214,7 +223,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
   const locked = clips.length - unlocked;
   const isCurrent = (i: number) => {
     const e = exports[i];
-    return e?.state === 'done' && e.key === exportKey(clips[i]!);
+    return e?.state === 'done' && e.key === exportKey(clips[i]!, exportSize);
   };
   const toExport = clips.slice(0, unlocked).flatMap((_, i) => (isCurrent(i) ? [] : [i]));
   return (
@@ -226,6 +235,15 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
           </h2>
           <p className="muted small">Tap a clip to preview and edit it.</p>
         </div>
+        {allow4k && (
+          <label className="size-picker">
+            Quality
+            <select value={size} onChange={(e) => setSize(e.target.value as '1080p' | '4k')} disabled={busy}>
+              <option value="1080p">1080p</option>
+              <option value="4k">4K</option>
+            </select>
+          </label>
+        )}
         {busy ? (
           <button type="button" className="btn btn-outline btn-inline" onClick={cancelExports}>
             Cancel export
@@ -279,7 +297,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         </p>
       )}
       <p className="muted small">
-        Clips are made on your computer as 1080×1920 videos with captions{watermark ? ' and a small watermark' : ''}, ready for TikTok,
+        Clips are made on your computer as {SIZE_LABELS[exportSize]} videos with captions{watermark ? ' and a small watermark' : ''}, ready for TikTok,
         Reels and Shorts.
       </p>
     </>

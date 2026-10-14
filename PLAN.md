@@ -25,6 +25,11 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   encode it (Chrome, Edge, Safari), otherwise WebM. Captions burned in with exact word times (Whisper timestamps
   only the clip being exported). Free: 3 clips, watermark top-left (clear of platform buttons and captions).
   Pro clips on Free can be watched and edited but not exported. 4K export comes with paid plans (Part 6).
+- **Payments:** Paddle (merchant of record: handles worldwide sales tax/VAT, 5% + 50¢, no monthly fee, sellers
+  from most countries). Lemon Squeezy is being folded into Stripe; Stripe doesn't take sellers from many countries.
+- **Limits:** enforced on the server when the AI picks moments (the only step that costs us). Free resets
+  Mondays (UTC); paid plans with their billing month. Retrying the same episode in a period is free.
+- **Not built yet:** brand caption styles (Pro/Studio), team members (Studio), cloud processing (Part 7).
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
 
@@ -52,5 +57,5 @@ Free = what costs us nothing (editor, saved projects, local export). Paid = what
 3. Audio → transcript → AI picks moments: done
 4. Clips screen and editor: done
 5. Export: clip files, captions, watermark: done
-6. Accounts and limits: hours used, plans, payments
+6. Accounts and limits: hours used, plans, payments: done
 7. Backup server and launch

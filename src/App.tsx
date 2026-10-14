@@ -5,6 +5,7 @@ import { useAuth } from './lib/auth';
 import Home from './pages/Home';
 import AuthPage from './pages/AuthPage';
 import NewEpisode from './pages/NewEpisode';
+import Account from './pages/Account';
 
 export default function App() {
   const { demo } = useAuth();
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
         <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
         <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
+        <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

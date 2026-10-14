@@ -1,38 +1,22 @@
-export type PlanId = 'free' | 'pro' | 'studio';
+import { LIMITS, type PlanId, type PlanLimits } from '../../supabase/functions/_shared/plans';
 
-export interface Plan {
-  id: PlanId;
+export type { PlanId };
+export { LIMITS };
+
+export interface Plan extends PlanLimits {
   name: string;
   monthly: number;
   yearlyPerMonth: number;
-  // Episode hours allowed per period; the free plan resets weekly, paid plans monthly.
-  hours: number;
-  period: 'week' | 'month';
-  // Longest single episode allowed, or null for any length.
-  maxEpisodeHours: number | null;
-  // Episodes allowed per period, or null for no count limit (only hours).
-  episodesPerPeriod: number | null;
-  clipsFound: number;
-  clipsExportable: number;
-  // "Made with Hookcut" on exported clips.
-  watermark: boolean;
   features: string[];
 }
 
 // Keep in sync with PLAN.md.
 export const PLANS: Plan[] = [
   {
-    id: 'free',
+    ...LIMITS.free,
     name: 'Free',
     monthly: 0,
     yearlyPerMonth: 0,
-    hours: 0.5,
-    period: 'week',
-    maxEpisodeHours: 0.5,
-    episodesPerPeriod: 1,
-    clipsFound: 10,
-    clipsExportable: 3,
-    watermark: true,
     features: [
       '1 episode every week (4 a month)',
       'Episodes up to 30 minutes long',
@@ -42,17 +26,10 @@ export const PLANS: Plan[] = [
     ],
   },
   {
-    id: 'pro',
+    ...LIMITS.pro,
     name: 'Pro',
     monthly: 15,
     yearlyPerMonth: 12,
-    hours: 10,
-    period: 'month',
-    maxEpisodeHours: null,
-    episodesPerPeriod: null,
-    clipsFound: 20,
-    clipsExportable: 20,
-    watermark: false,
     features: [
       '10 hours of episodes per month',
       'Episodes of any length',
@@ -63,17 +40,10 @@ export const PLANS: Plan[] = [
     ],
   },
   {
-    id: 'studio',
+    ...LIMITS.studio,
     name: 'Studio',
     monthly: 29,
     yearlyPerMonth: 24,
-    hours: 20,
-    period: 'month',
-    maxEpisodeHours: null,
-    episodesPerPeriod: null,
-    clipsFound: 30,
-    clipsExportable: 30,
-    watermark: false,
     features: [
       '20 hours of episodes per month',
       'Episodes of any length',
@@ -85,3 +55,5 @@ export const PLANS: Plan[] = [
     ],
   },
 ];
+
+export const planById = (id: PlanId): Plan => PLANS.find((p) => p.id === id)!;

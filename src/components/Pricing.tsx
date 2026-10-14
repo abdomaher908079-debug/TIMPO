@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PLANS } from '../lib/plans';
+import { useAccount } from '../lib/account';
+import { useAuth } from '../lib/auth';
+import { openBillingPortal, paymentsReady, startCheckout } from '../lib/billing';
+import { PLANS, type Plan } from '../lib/plans';
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
@@ -31,13 +34,63 @@ export default function Pricing() {
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              <Link to="/signup" className={`btn ${plan.id === 'pro' ? 'btn-primary' : 'btn-outline'}`}>
-                {plan.id === 'free' ? 'Start free' : `Get ${plan.name}`}
-              </Link>
+              <PlanButton plan={plan} yearly={yearly} />
             </article>
           );
         })}
       </div>
+      <p className="muted small pricing-note">Prices in US dollars. Taxes are added at checkout where they apply. Cancel any time.</p>
     </section>
+  );
+}
+
+function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
+  const { user, demo } = useAuth();
+  const account = useAccount();
+  const [error, setError] = useState<string | null>(null);
+  const style = `btn ${plan.id === 'pro' ? 'btn-primary' : 'btn-outline'}`;
+
+  if (!user) {
+    return (
+      <Link to="/signup" className={style}>
+        {plan.id === 'free' ? 'Start free' : `Get ${plan.name}`}
+      </Link>
+    );
+  }
+  if (account.plan.id === plan.id) {
+    return (
+      <button type="button" className="btn btn-outline" disabled>
+        Your plan
+      </button>
+    );
+  }
+  // Demo mode: switch plans for free, to try what each one unlocks.
+  if (demo) {
+    return (
+      <button type="button" className={style} onClick={() => account.setDemoPlan(plan.id)}>
+        Switch to {plan.name} (demo)
+      </button>
+    );
+  }
+  // Subscribers change or cancel their plan in Paddle's billing portal.
+  if (account.plan.id !== 'free') {
+    return (
+      <>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={() => openBillingPortal().catch((e: Error) => setError(e.message))}
+        >
+          {plan.id === 'free' ? 'Cancel in billing' : `Switch in billing`}
+        </button>
+        {error && <p className="error small">{error}</p>}
+      </>
+    );
+  }
+  if (plan.id === 'free') return null;
+  return (
+    <button type="button" className={style} disabled={!paymentsReady} onClick={() => startCheckout(plan.id as 'pro' | 'studio', yearly ? 'yearly' : 'monthly')}>
+      {paymentsReady ? `Upgrade to ${plan.name}` : 'Coming soon'}
+    </button>
   );
 }

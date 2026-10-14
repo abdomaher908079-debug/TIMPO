@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d0f12" />
+    <meta name="robots" content="noindex" />
+    <title>Checkout · Hookcut</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0d0f12; color: #e9edf1; font: 16px/1.5 system-ui, sans-serif; }
+      main { max-width: 420px; padding: 24px 16px; text-align: center; }
+      a { color: #ff6a13; }
+      .error { color: #ff5c5c; }
+    </style>
+  </head>
+  <body>
+    <!-- Served without the app's cross-origin isolation headers: Paddle's checkout frame can't load under them. -->
+    <main>
+      <p id="status" role="status">Opening secure checkout…</p>
+      <p><a href="/account">Back to Hookcut</a></p>
+    </main>
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+    <script type="module" src="/src/checkout.ts"></script>
+  </body>
+</html>

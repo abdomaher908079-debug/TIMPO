@@ -1,28 +1,24 @@
 import { useRef, useState, type DragEvent } from 'react';
+import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
 import ClipsScreen from '../components/ClipsScreen';
 import Progress, { type Step } from '../components/Progress';
-import { PLANS } from '../lib/plans';
+import { useAccount } from '../lib/account';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
 import { clipsFromMoments, type Clip } from '../lib/clips';
+import { fingerprint } from '../lib/moments';
 import type { Segment } from '../lib/speech';
-
-// Until usage tracking exists (Part 6), everyone is treated as a Free user with a full week left.
-const plan = PLANS[0]!;
-const remainingSeconds = plan.hours * 3600;
-const maxEpisodeSeconds = plan.maxEpisodeHours === null ? Infinity : plan.maxEpisodeHours * 3600;
+import { ApiError } from '../lib/supabase';
 
 const MIN_SECONDS = 60;
-// Container durations are often a fraction of a second longer than the episode; don't block a
-// 1:00:00 episode on a 1-hour plan over that.
-const LIMIT_GRACE_SECONDS = 30;
 
 type State =
   | { kind: 'empty' }
   | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number }
   | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; clips: Clip[] }
   // Transcribing worked but picking moments didn't: keep the transcript so a retry is quick.
-  | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string }
+  // `limit` means the plan's limits stopped it, so trying again won't help.
+  | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string; limit: boolean }
   | { kind: 'reading'; file: File }
   | { kind: 'ready'; file: File; info: EpisodeInfo }
   | { kind: 'error'; message: string };
@@ -37,8 +33,13 @@ function problemWith(info: EpisodeInfo): string | null {
   return null;
 }
 
+const RESETS = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
 export default function NewEpisode() {
+  const { plan, usage, period, check, recordDemoEpisode, refresh, loading: accountLoading } = useAccount();
   const [state, setState] = useState<State>({ kind: 'empty' });
+  // Identifies each opened file, so retrying an episode doesn't use the plan twice.
+  const fingerprints = useRef(new WeakMap<File, string>());
   const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +59,7 @@ export default function NewEpisode() {
       // The video library is large, so it loads only when a file is chosen.
       const { probeEpisode } = await import('../lib/probe');
       const info = await probeEpisode(file);
+      fingerprints.current.set(file, await fingerprint(file, info.durationSeconds));
       if (id !== latest.current) return;
       const problem = problemWith(info);
       setState(problem ? { kind: 'error', message: problem } : { kind: 'ready', file, info });
@@ -130,13 +132,18 @@ export default function NewEpisode() {
     abortRef.current = abort;
     try {
       const { findMoments } = await import('../lib/moments');
-      const moments = await findMoments(segments, plan.clipsFound, abort.signal);
+      const fp = fingerprints.current.get(file)!;
+      const moments = await findMoments(segments, plan.clipsFound, { fingerprint: fp, seconds: info.durationSeconds }, abort.signal);
       if (abort.signal.aborted) return;
       setState({ kind: 'done', file, info, segments, clips: clipsFromMoments(moments) });
+      // The server has counted this episode; show the new usage (demo mode counts it here).
+      recordDemoEpisode(fp, info.durationSeconds);
+      void refresh();
     } catch (err) {
       if (abort.signal.aborted) return;
       console.error(err);
-      setState({ kind: 'moments-failed', file, info, segments, message: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      setState({ kind: 'moments-failed', file, info, segments, message, limit: err instanceof ApiError && err.status === 403 });
     }
   }
 
@@ -163,19 +170,25 @@ export default function NewEpisode() {
   }
 
   const ready = state.kind === 'ready' ? state : null;
-  const length = ready?.info.durationSeconds ?? 0;
-  const tooLong = !!ready && length > maxEpisodeSeconds + LIMIT_GRACE_SECONDS;
-  const overLimit = !!ready && !tooLong && length > remainingSeconds + LIMIT_GRACE_SECONDS;
-  const blocked = tooLong || overLimit;
+  const limitProblem = ready ? check(ready.info.durationSeconds, fingerprints.current.get(ready.file)) : null;
+  const remainingSeconds = Math.max(0, plan.hours * 3600 - usage.seconds);
+  const episodesLeft = plan.episodesPerPeriod === null ? null : Math.max(0, plan.episodesPerPeriod - usage.episodes);
 
   return (
     <main className={`new-episode ${state.kind === 'done' ? 'new-episode-wide' : ''}`}>
       <h1 className="page-title">New episode</h1>
       <p className="muted">
-        {plan.name} plan ·{' '}
-        {plan.episodesPerPeriod !== null
-          ? `${plan.episodesPerPeriod} episode (up to ${formatDuration(maxEpisodeSeconds)}) left this ${plan.period}`
-          : `${formatDuration(remainingSeconds)} of episodes left this ${plan.period}`}
+        {accountLoading ? (
+          'Loading your plan…'
+        ) : (
+          <>
+            <Link to="/account">{plan.name} plan</Link> ·{' '}
+            {episodesLeft !== null
+              ? `${episodesLeft} of ${plan.episodesPerPeriod} episode${plan.episodesPerPeriod === 1 ? '' : 's'} left this ${plan.period}`
+              : `${formatDuration(remainingSeconds)} of ${plan.hours} hours left this ${plan.period}`}{' '}
+            · resets {RESETS.format(period.end)}
+          </>
+        )}
       </p>
 
       {(state.kind === 'done' || state.kind === 'moments-failed') && (
@@ -191,16 +204,23 @@ export default function NewEpisode() {
               exportable={plan.clipsExportable}
               planName={plan.name}
               watermark={plan.watermark}
+              allow4k={plan.maxExport === '4k'}
             />
           ) : (
             <div className="card">
-              <p className="error" role="alert">
-                {state.message}
-              </p>
-              <p className="muted small">The episode's words are saved, so trying again only takes a moment.</p>
-              <button type="button" className="btn btn-primary" onClick={() => retryMoments(state.file, state.info, state.segments)}>
-                Try again
-              </button>
+              {state.limit ? (
+                <UpgradeNotice message={state.message} planName={plan.name} />
+              ) : (
+                <>
+                  <p className="error" role="alert">
+                    {state.message}
+                  </p>
+                  <p className="muted small">The episode's words are saved, so trying again only takes a moment.</p>
+                  <button type="button" className="btn btn-primary" onClick={() => retryMoments(state.file, state.info, state.segments)}>
+                    Try again
+                  </button>
+                </>
+              )}
             </div>
           )}
           <button
@@ -279,22 +299,11 @@ export default function NewEpisode() {
               <dd>{formatSize(ready.file.size)}</dd>
             </div>
           </dl>
-          {tooLong && (
-            <p className="notice">
-              This episode is {formatDuration(length)}. On the {plan.name} plan, episodes can be up to{' '}
-              {formatDuration(maxEpisodeSeconds)} long. Upgrade to Pro for episodes of any length.
-            </p>
-          )}
-          {overLimit && (
-            <p className="notice">
-              This episode is {formatDuration(length)} and you have {formatDuration(remainingSeconds)} left this{' '}
-              {plan.period}. Upgrade to Pro for 10 hours a month.
-            </p>
-          )}
+          {limitProblem && <UpgradeNotice message={limitProblem.message} planName={plan.name} />}
           <button
             type="button"
             className="btn btn-primary"
-            disabled={blocked}
+            disabled={!!limitProblem || accountLoading}
             onClick={() => void findClips(ready.file, ready.info)}
           >
             Find my best clips
@@ -304,5 +313,20 @@ export default function NewEpisode() {
 
       <p className="muted small">Your video and audio stay on your computer. Only the written transcript is sent to find the best moments.</p>
     </main>
+  );
+}
+
+function UpgradeNotice({ message, planName }: { message: string; planName: string }) {
+  return (
+    <p className="notice" role="alert">
+      {message}{' '}
+      {planName === 'Studio' ? (
+        'Your hours reset at the start of your next billing month.'
+      ) : (
+        <>
+          <Link to="/account">Upgrade</Link> for more hours and episodes of any length.
+        </>
+      )}
+    </p>
   );
 }

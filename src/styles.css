@@ -327,3 +327,19 @@ h1, h2, h3 { text-wrap: balance; }
 .watermark svg { width: 1.4em; height: 1.4em; filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.5)); }
 .caption-off { color: var(--muted); font-size: 0.82rem; }
 .style-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* Account */
+.account-page { max-width: 980px; margin: 0 auto; }
+.account-page > .page-title, .account-page > .muted, .account-page > .notice, .account-card { max-width: 560px; }
+.account-card { margin: 18px 0 32px; }
+.account-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.account-row .btn-inline { margin: 0; }
+.account-plan { color: var(--white); margin: 2px 0 0; font-size: 1.6rem; }
+.usage-label { margin-top: 20px; }
+.usage-bar { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 8px; }
+.usage-bar i { display: block; height: 100%; background: var(--phosphor); }
+.usage-bar i.full { background: var(--amber); }
+.usage-text { margin: 8px 0 0; color: var(--text); font-size: 0.92rem; }
+.pricing-note { margin-top: 12px; }
+.size-picker { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.85rem; }
+.size-picker select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; }

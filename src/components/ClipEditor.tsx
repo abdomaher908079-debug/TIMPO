@@ -31,6 +31,7 @@ interface Props {
   exportStatus?: ExportStatus;
   // False when the clip was edited after its last export.
   exportCurrent: boolean;
+  sizeLabel: string;
   // Another export is running.
   busy: boolean;
   onExport: () => void;
@@ -328,7 +329,7 @@ export default function ClipEditor(props: Props) {
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
-function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExport, onCancelExport, watermark }: Props) {
+function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExport, onCancelExport, watermark, sizeLabel }: Props) {
   if (locked) {
     return (
       <div className="export-panel export-locked">
@@ -379,7 +380,7 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
             {done ? 'Export again with your changes' : 'Export clip'}
           </button>
           <p className="muted small">
-            1080×1920 video with captions{watermark ? ' and a small watermark' : ''}. Made on your computer.
+            {sizeLabel} video with captions{watermark ? ' and a small watermark' : ''}. Made on your computer.
           </p>
         </>
       )}

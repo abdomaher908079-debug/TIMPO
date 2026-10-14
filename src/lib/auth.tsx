@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from './supabase';
 
 export interface User {
   id: string;
@@ -18,18 +18,8 @@ interface AuthContextValue {
   signOut(): Promise<void>;
 }
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-export const supabase: SupabaseClient | null = url && anonKey ? createClient(url, anonKey) : null;
-
 const DEMO_KEY = 'hookcut_demo_user';
 
-// The current session's token, sent to our API so it can check who's asking.
-export async function getAccessToken(): Promise<string | null> {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function toUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }): User {

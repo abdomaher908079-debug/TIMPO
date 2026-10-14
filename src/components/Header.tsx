@@ -52,6 +52,9 @@ export default function Header() {
                 <Link role="menuitem" to="/new">
                   New episode
                 </Link>
+                <Link role="menuitem" to="/account">
+                  Account & plan
+                </Link>
                 <button role="menuitem" onClick={() => void signOut()}>
                   Log out
                 </button>

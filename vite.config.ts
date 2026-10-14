@@ -3,11 +3,20 @@ import react from '@vitejs/plugin-react';
 import { DEFAULT_GEMINI_MODEL, MomentsError, parseRequest, pickMoments } from './supabase/functions/_shared/moments';
 
 // Lets speech recognition use all CPU cores (SharedArrayBuffer needs cross-origin isolation).
-// Production hosting must send the same two headers.
-const isolation = {
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
+// Production hosting must send the same two headers, except on /checkout.html: Paddle's checkout
+// frame can't load in an isolated page.
+const isolation: Plugin = {
+  name: 'hookcut-isolation',
+  configureServer: (server) => void server.middlewares.use(isolate),
+  configurePreviewServer: (server) => void server.middlewares.use(isolate),
 };
+function isolate(req: Connect.IncomingMessage, res: import('node:http').ServerResponse, next: Connect.NextFunction) {
+  if (!req.url?.startsWith('/checkout')) {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  }
+  next();
+}
 
 // Local stand-in for the `pick-moments` Supabase Edge Function, used in demo mode (no Supabase keys).
 // The Gemini key is read from .env.local without the VITE_ prefix, so it never reaches the browser.
@@ -48,10 +57,9 @@ function momentsApi(env: Record<string, string>): Plugin {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), momentsApi(loadEnv(mode, process.cwd(), ''))],
-  server: { headers: isolation },
-  preview: { headers: isolation },
+  plugins: [react(), isolation, momentsApi(loadEnv(mode, process.cwd(), ''))],
   worker: { format: 'es' },
+  build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html' } } },
   // Its WebAssembly files are located relative to the package; pre-bundling breaks that.
   optimizeDeps: { exclude: ['@huggingface/transformers'] },
 }));

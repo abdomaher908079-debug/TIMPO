@@ -14,9 +14,9 @@ import {
 import { captionFromGroups, type CaptionGroup, type Clip } from './clips';
 import { CAPTION_FONT, drawCaption, drawWatermark } from './draw';
 
-// 1080p vertical, what TikTok, Reels and Shorts all expect.
-export const OUT_W = 1080;
-export const OUT_H = 1920;
+// Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
+export const SIZES = { '1080p': { width: 1080, height: 1920 }, '4k': { width: 2160, height: 3840 } } as const;
+export type ExportSize = keyof typeof SIZES;
 
 export interface RenderedClip {
   blob: Blob;
@@ -28,14 +28,20 @@ const even = (n: number) => Math.max(2, Math.floor(n / 2) * 2);
 
 /**
  * Renders one clip on this device: trims it, crops it to 9:16 with the clip's framing, scales to
- * 1080×1920, and burns in the captions and (on Free) the watermark.
+ * 1080×1920 (or 4K), and burns in the captions and (on Free) the watermark.
  */
 export async function renderClip(
   file: File,
   clip: Clip,
   captions: CaptionGroup[],
-  { watermark, onProgress, signal }: { watermark: boolean; onProgress?: (p: number) => void; signal?: AbortSignal },
+  {
+    watermark,
+    size = '1080p',
+    onProgress,
+    signal,
+  }: { watermark: boolean; size?: ExportSize; onProgress?: (p: number) => void; signal?: AbortSignal },
 ): Promise<RenderedClip> {
+  const { width: OUT_W, height: OUT_H } = SIZES[size];
   // Captions are drawn on a canvas, which only uses fonts that are already loaded.
   await Promise.all([document.fonts.load(`900 80px ${CAPTION_FONT}`), document.fonts.load(`800 80px ${CAPTION_FONT}`)]).catch(() => {});
 
