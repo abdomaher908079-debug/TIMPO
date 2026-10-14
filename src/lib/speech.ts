@@ -3,14 +3,23 @@ import { speechChunks, SPEECH_SAMPLE_RATE, type SpeechChunk } from './audio';
 
 export type { Segment };
 
+export interface Word {
+  text: string;
+  // Seconds from the start of the audio that was timed.
+  start: number;
+  end: number;
+}
+
 export type WorkerRequest =
   | { type: 'load' }
-  | { type: 'transcribe'; id: number; start: number; samples: Float32Array; final: boolean };
+  | { type: 'transcribe'; id: number; start: number; samples: Float32Array; final: boolean }
+  | { type: 'words'; id: number; samples: Float32Array };
 
 export type WorkerResponse =
   | { type: 'loading'; loaded: number; total: number }
   | { type: 'ready'; device: 'webgpu' | 'wasm' }
   | { type: 'segments'; id: number; segments: Segment[]; doneUntil: number }
+  | { type: 'words'; id: number; words: Word[] }
   | { type: 'error'; id?: number; message: string };
 
 // How much audio Whisper gets at a time. Longer pieces mean fewer cut points to stitch.
@@ -43,7 +52,7 @@ export async function transcribeEpisode(file: File, { signal, onLoading, onReady
     if (msg.type === 'loading') onLoading?.(msg.loaded, msg.total);
     else if (msg.type === 'ready') ready(msg.device);
     else if (msg.type === 'segments') waiting.get(msg.id)?.(msg);
-    else fail(new Error(msg.message));
+    else if (msg.type === 'error') fail(new Error(msg.message));
   };
   worker.onerror = (e) => fail(new Error(e.message || 'Speech recognition stopped unexpectedly.'));
   const abort = () => fail(new DOMException('Canceled', 'AbortError'));
@@ -91,4 +100,71 @@ export async function transcribeEpisode(file: File, { signal, onLoading, onReady
     // Closes the video file if we stopped early.
     chunks.return(undefined).catch(() => {});
   }
+}
+
+export interface WordTimer {
+  /** Exact word times for `start`..`end` of the episode, in episode seconds. */
+  words(file: File, start: number, end: number): Promise<Word[]>;
+  dispose(): void;
+}
+
+/**
+ * Times the words of single clips for their captions. Keeps one recognizer loaded so exporting
+ * several clips loads the model once (it's already in the browser's cache from transcribing).
+ */
+export function createWordTimer(): WordTimer {
+  let worker: Worker | null = null;
+  let loaded: Promise<void> | null = null;
+  const waiting = new Map<number, { resolve: (w: Word[]) => void; reject: (e: Error) => void }>();
+  let nextId = 0;
+
+  const failAll = (err: Error) => {
+    for (const w of waiting.values()) w.reject(err);
+    waiting.clear();
+    worker?.terminate();
+    worker = null;
+    loaded = null;
+  };
+
+  const start = () => {
+    const w = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
+    loaded = new Promise<void>((resolve, reject) => {
+      w.onmessage = (e: MessageEvent<WorkerResponse>) => {
+        const msg = e.data;
+        if (msg.type === 'ready') resolve();
+        else if (msg.type === 'words') {
+          waiting.get(msg.id)?.resolve(msg.words);
+          waiting.delete(msg.id);
+        } else if (msg.type === 'error') {
+          const err = new Error(msg.message);
+          reject(err);
+          failAll(err);
+        }
+      };
+      w.onerror = (e) => {
+        const err = new Error(e.message || 'Word timing stopped unexpectedly.');
+        reject(err);
+        failAll(err);
+      };
+    });
+    loaded.catch(() => {});
+    w.postMessage({ type: 'load' } satisfies WorkerRequest);
+    worker = w;
+  };
+
+  return {
+    async words(file, from, to) {
+      const { speechRange } = await import('./audio');
+      const [samples] = await Promise.all([speechRange(file, from, to), (worker ? loaded : (start(), loaded))!]);
+      const id = nextId++;
+      const result = new Promise<Word[]>((resolve, reject) => waiting.set(id, { resolve, reject }));
+      const copy = new Float32Array(samples);
+      worker!.postMessage({ type: 'words', id, samples: copy } satisfies WorkerRequest, [copy.buffer]);
+      const words = await result;
+      return words.map((w) => ({ ...w, start: w.start + from, end: w.end + from }));
+    },
+    dispose() {
+      failAll(new DOMException('Canceled', 'AbortError'));
+    },
+  };
 }

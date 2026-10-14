@@ -28,12 +28,12 @@ type State =
   | { kind: 'error'; message: string };
 
 function problemWith(info: EpisodeInfo): string | null {
-  if (!info.audioCodec) return "This video has no sound. PeakClip needs the episode's audio to find the best moments.";
+  if (!info.audioCodec) return "This video has no sound. Hookcut needs the episode's audio to find the best moments.";
   if (!info.videoCodec) return 'This file has no video. Choose the video version of your episode.';
   if (!info.canDecodeVideo || !info.canDecodeAudio) {
     return "Your browser can't read this video format. Try exporting the episode as MP4 (H.264), or use the latest Chrome.";
   }
-  if (info.durationSeconds < MIN_SECONDS) return 'This video is shorter than a minute. PeakClip is made for full episodes.';
+  if (info.durationSeconds < MIN_SECONDS) return 'This video is shorter than a minute. Hookcut is made for full episodes.';
   return null;
 }
 
@@ -190,6 +190,7 @@ export default function NewEpisode() {
               onChange={(clips) => setState((st) => (st.kind === 'done' ? { ...st, clips } : st))}
               exportable={plan.clipsExportable}
               planName={plan.name}
+              watermark={plan.watermark}
             />
           ) : (
             <div className="card">

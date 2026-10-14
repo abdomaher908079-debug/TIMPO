@@ -1,8 +1,10 @@
-# PeakClip (working name)
+# Hookcut
 
 Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels and Shorts.
 
 ## Decisions
+- **Name:** Hookcut (was the working name PeakClip; renamed because a near-identical product called Peakcut exists).
+  Logo: audio-meter bars with the tallest in orange, the moment we cut out. Check the domain and handles before launch.
 - **Audience:** podcasters with long episodes (1–3 h). Competitors are weak there (editor, long videos, billing).
 - **How it works:** the video stays on the user's computer. The browser decodes the audio to 16 kHz
   mono, transcribes it with Whisper (in the browser, free), and sends only the transcript text to
@@ -19,6 +21,10 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 - **Editor:** trim (handles, ±0.5 s, or start/end at a transcript line), left↔right framing of the 9:16
   crop, 3 caption styles, title. Captions in the preview use estimated word times; export uses exact ones.
   Edits live in the open tab until saved projects exist (the page warns before closing).
+- **Export:** made on the user's computer (free for us): 1080×1920, MP4 (H.264 + AAC) where the browser can
+  encode it (Chrome, Edge, Safari), otherwise WebM. Captions burned in with exact word times (Whisper timestamps
+  only the clip being exported). Free: 3 clips, watermark top-left (clear of platform buttons and captions).
+  Pro clips on Free can be watched and edited but not exported. 4K export comes with paid plans (Part 6).
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
 
@@ -45,6 +51,6 @@ Free = what costs us nothing (editor, saved projects, local export). Paid = what
 2. Home, pricing, sign up, "New episode" screen: done
 3. Audio → transcript → AI picks moments: done
 4. Clips screen and editor: done
-5. Export: clip files, captions, watermark
+5. Export: clip files, captions, watermark: done
 6. Accounts and limits: hours used, plans, payments
 7. Backup server and launch

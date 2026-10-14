@@ -14,6 +14,8 @@ export interface Plan {
   episodesPerPeriod: number | null;
   clipsFound: number;
   clipsExportable: number;
+  // "Made with Hookcut" on exported clips.
+  watermark: boolean;
   features: string[];
 }
 
@@ -30,12 +32,13 @@ export const PLANS: Plan[] = [
     episodesPerPeriod: 1,
     clipsFound: 10,
     clipsExportable: 3,
+    watermark: true,
     features: [
       '1 episode every week (4 a month)',
       'Episodes up to 30 minutes long',
       'See all 10 best clips, export 3',
       'Full editor, 1080p export',
-      'Small "Made with PeakClip" watermark',
+      'Small "Made with Hookcut" watermark',
     ],
   },
   {
@@ -49,6 +52,7 @@ export const PLANS: Plan[] = [
     episodesPerPeriod: null,
     clipsFound: 20,
     clipsExportable: 20,
+    watermark: false,
     features: [
       '10 hours of episodes per month',
       'Episodes of any length',
@@ -69,6 +73,7 @@ export const PLANS: Plan[] = [
     episodesPerPeriod: null,
     clipsFound: 30,
     clipsExportable: 30,
+    watermark: false,
     features: [
       '20 hours of episodes per month',
       'Episodes of any length',

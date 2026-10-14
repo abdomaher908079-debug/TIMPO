@@ -2,6 +2,7 @@ import type { Caption as CaptionData, CaptionStyleId } from '../lib/clips';
 
 // A caption as it will appear on the exported clip. `inline` renders it small, for style samples.
 export default function Caption({ caption, styleId, inline }: { caption: CaptionData; styleId: CaptionStyleId; inline?: boolean }) {
+  if (styleId === 'none') return inline ? <span className="caption-off">Off</span> : null;
   return (
     <span className={`caption caption-${styleId} ${inline ? 'caption-inline' : ''}`}>
       {caption.words.map((w, i) => (

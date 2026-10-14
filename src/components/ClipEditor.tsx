@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Caption from './Caption';
-import { CAPTION_STYLES, captionAt, clock, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, type Clip } from '../lib/clips';
+import { download, type ExportStatus } from './ClipsScreen';
+import Watermark from './Watermark';
+import {
+  CAPTION_STYLES,
+  captionFromGroups,
+  clock,
+  estimateWords,
+  groupWords,
+  MAX_CLIP_SECONDS,
+  MIN_CLIP_SECONDS,
+  type CaptionGroup,
+  type Clip,
+} from '../lib/clips';
 import type { Segment } from '../lib/speech';
 
 interface Props {
@@ -8,8 +21,20 @@ interface Props {
   duration: number;
   segments: Segment[];
   clip: Clip;
+  // Exact word times for the clip's current range, once it has been exported.
+  exactCaptions?: CaptionGroup[];
   number: number;
   total: number;
+  // Pro clips on the Free plan: everything works except export.
+  locked: boolean;
+  watermark: boolean;
+  exportStatus?: ExportStatus;
+  // False when the clip was edited after its last export.
+  exportCurrent: boolean;
+  // Another export is running.
+  busy: boolean;
+  onExport: () => void;
+  onCancelExport: () => void;
   onChange: (clip: Clip) => void;
   onClose: () => void;
   onPrev?: () => void;
@@ -20,7 +45,8 @@ interface Props {
 const WINDOW_SECONDS = 30;
 const NUDGE = 0.5;
 
-export default function ClipEditor({ videoUrl, duration, segments, clip, number, total, onChange, onClose, onPrev, onNext }: Props) {
+export default function ClipEditor(props: Props) {
+  const { videoUrl, duration, segments, clip, exactCaptions, number, total, watermark, onChange, onClose, onPrev, onNext } = props;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [t, setT] = useState(clip.start);
   const [playing, setPlaying] = useState(false);
@@ -88,7 +114,8 @@ export default function ClipEditor({ videoUrl, duration, segments, clip, number,
   const span = win.to - win.from;
   const pct = (time: number) => `${((time - win.from) / span) * 100}%`;
   const inClip = t >= clip.start && t < clip.end;
-  const caption = inClip ? captionAt(segments, t) : null;
+  const estimated = useMemo(() => groupWords(estimateWords(segments, win.from, win.to)), [segments, win]);
+  const caption = inClip ? captionFromGroups(exactCaptions ?? estimated, t) : null;
   const lines = useMemo(() => segments.filter((s) => s.end > win.from && s.start < win.to), [segments, win]);
   const changed = clip.start !== clip.original.start || clip.end !== clip.original.end;
 
@@ -135,6 +162,7 @@ export default function ClipEditor({ videoUrl, duration, segments, clip, number,
                 onError={() => setUnplayable(true)}
               />
             )}
+            {watermark && <Watermark />}
             {caption && <Caption caption={caption} styleId={clip.captionStyle} />}
             {!playing && !unplayable && (
               <span className="phone-play" aria-hidden="true">
@@ -150,6 +178,7 @@ export default function ClipEditor({ videoUrl, duration, segments, clip, number,
               {clock(Math.max(0, Math.min(t, clip.end) - clip.start))} / {clock(clip.end - clip.start)}
             </span>
           </div>
+          <ExportPanel {...props} />
         </div>
 
         <div className="editor-controls">
@@ -298,3 +327,62 @@ export default function ClipEditor({ videoUrl, duration, segments, clip, number,
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
+
+function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExport, onCancelExport, watermark }: Props) {
+  if (locked) {
+    return (
+      <div className="export-panel export-locked">
+        <p>
+          <b>🔒 Pro clip.</b> Watch and edit it all you like. <Link to="/#pricing">Upgrade to Pro</Link> to export it.
+        </p>
+      </div>
+    );
+  }
+  if (status?.state === 'queued' || status?.state === 'timing' || status?.state === 'rendering') {
+    const progress = status.state === 'rendering' ? status.progress : 0;
+    return (
+      <div className="export-panel" role="status">
+        <div className="export-progress">
+          <i style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+        <p className="muted small">
+          {status.state === 'queued'
+            ? 'Waiting for the other clips…'
+            : status.state === 'timing'
+              ? 'Timing every word for the captions…'
+              : `Making your clip… ${Math.round(progress * 100)}%`}
+        </p>
+        <button type="button" className="btn btn-outline" onClick={onCancelExport}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+  const done = status?.state === 'done' ? status : null;
+  return (
+    <div className="export-panel">
+      {done && exportCurrent ? (
+        <>
+          <p className="export-done">✓ Exported as {done.fileName}</p>
+          <button type="button" className="btn btn-outline" onClick={() => download(done.url, done.fileName)}>
+            Download again
+          </button>
+        </>
+      ) : (
+        <>
+          {status?.state === 'error' && (
+            <p className="error" role="alert">
+              {status.message}
+            </p>
+          )}
+          <button type="button" className="btn btn-primary" onClick={onExport} disabled={busy}>
+            {done ? 'Export again with your changes' : 'Export clip'}
+          </button>
+          <p className="muted small">
+            1080×1920 video with captions{watermark ? ' and a small watermark' : ''}. Made on your computer.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}

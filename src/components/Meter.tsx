@@ -1,5 +1,5 @@
 // Decorative audio-level waveform. Bars at `peaks` positions glow, like the
-// moments PeakClip picks out of an episode.
+// moments Hookcut picks out of an episode.
 export default function Meter({ bars = 60, peaks = [], className = '' }: { bars?: number; peaks?: number[]; className?: string }) {
   const hot = new Set(peaks);
   return (

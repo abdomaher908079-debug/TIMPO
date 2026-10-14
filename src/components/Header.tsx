@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { BRAND, BRAND_NAME } from '../lib/brand';
+import LogoMark from './LogoMark';
 
 export default function Header() {
   const { user, signOut } = useAuth();
@@ -30,8 +31,11 @@ export default function Header() {
   return (
     <header className="header">
       <Link to="/" className="logo" aria-label={`${BRAND_NAME} home`}>
-        {BRAND.first}
-        <b>{BRAND.second}</b>
+        <LogoMark />
+        <span>
+          {BRAND.first}
+          <b>{BRAND.second}</b>
+        </span>
       </Link>
       <nav className="nav">
         <a href="/#pricing" className="nav-link">

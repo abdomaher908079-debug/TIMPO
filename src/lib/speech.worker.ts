@@ -4,10 +4,12 @@ import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from '@hugging
 import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
 import ortWasm from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
-import type { WorkerRequest, WorkerResponse } from './speech';
+import type { Word, WorkerRequest, WorkerResponse } from './speech';
 
 // English-only Whisper: more accurate on English than the multilingual model of the same size.
-const MODEL = 'onnx-community/whisper-base.en';
+// The "timestamped" build is the same model with the extra outputs needed for exact word times
+// (used for clip captions), so users download one model for both jobs.
+const MODEL = 'onnx-community/whisper-base.en_timestamped';
 const SAMPLE_RATE = 16_000;
 // Lines that end this close to the end of a piece may be cut off; they're redone with the next piece.
 const EDGE_SECONDS = 2;
@@ -101,14 +103,32 @@ async function transcribe({ id, start, samples, final }: Extract<WorkerRequest, 
   post({ type: 'segments', id, segments, doneUntil: pieceStart + cut });
 }
 
+// Exact word times for one clip's audio, for its captions.
+async function words({ id, samples }: Extract<WorkerRequest, { type: 'words' }>) {
+  if (!asr) throw new Error('Speech recognition is not loaded.');
+  const duration = samples.length / SAMPLE_RATE;
+  if (duration < 0.1) return post({ type: 'words', id, words: [] });
+  const out = await asr(samples, { chunk_length_s: 30, stride_length_s: 5, return_timestamps: 'word' });
+  const lines: Line[] = (Array.isArray(out) ? out[0] : out)?.chunks ?? [];
+  const result: Word[] = [];
+  for (const line of lines) {
+    const text = line.text.trim();
+    if (!text || /^[[(].*[\])]$/.test(text)) continue;
+    const [s, e] = line.timestamp;
+    result.push({ text, start: round(s), end: round(Math.max(s, e ?? duration)) });
+  }
+  post({ type: 'words', id, words: result });
+}
+
 const round = (t: number) => Math.round(t * 100) / 100;
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
   try {
     if (msg.type === 'load') await load();
+    else if (msg.type === 'words') await words(msg);
     else await transcribe(msg);
   } catch (err) {
-    post({ type: 'error', id: msg.type === 'transcribe' ? msg.id : undefined, message: err instanceof Error ? err.message : String(err) });
+    post({ type: 'error', id: msg.type === 'load' ? undefined : msg.id, message: err instanceof Error ? err.message : String(err) });
   }
 };

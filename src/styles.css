@@ -40,6 +40,7 @@ a { color: var(--orange); }
 .header { display: flex; justify-content: space-between; align-items: center; padding: 18px 0 24px; }
 .logo { font-weight: 800; font-size: 1.25rem; color: var(--white); text-decoration: none; }
 .logo b { color: var(--orange); }
+.logo { display: inline-flex; align-items: center; gap: 8px; }
 .nav { display: flex; align-items: center; gap: 18px; }
 .nav-link { color: var(--muted); text-decoration: none; font-size: 0.95rem; }
 .nav-link:hover { color: var(--text); }
@@ -296,3 +297,33 @@ h1, h2, h3 { text-wrap: balance; }
 .transcript .line-in button { color: var(--text); background: var(--surface); }
 .transcript .line-now button { box-shadow: inset 3px 0 0 var(--orange); }
 .line-time { font-family: 'Share Tech Mono', ui-monospace, monospace; font-size: 0.75rem; color: var(--muted); margin-right: 8px; }
+
+/* Export */
+.clips-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.clips-head .btn-inline { margin: 0; }
+.export-panel { margin-top: 12px; }
+.export-panel .btn { margin-top: 8px; }
+.export-panel p { margin: 8px 0 0; }
+.export-locked { background: var(--surface-2); border-left: 3px solid var(--amber); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; }
+.export-locked p { margin: 0; }
+.export-progress { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.export-progress i { display: block; height: 100%; background: var(--phosphor); transition: width 0.2s; }
+.export-done { color: var(--phosphor); font-weight: 600; overflow-wrap: anywhere; }
+.export-badge {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; text-align: center; font-size: 0.75rem; font-weight: 700; padding: 4px 6px;
+  border-radius: 8px; background: rgba(0, 0, 0, 0.75); color: var(--white);
+}
+.export-done.export-badge, .export-badge.export-done { color: var(--bg); background: var(--phosphor); }
+.export-badge.export-error { background: var(--red); }
+.export-badge.export-stale { background: var(--amber); color: #111; }
+.clip-thumb-tall:has(.export-badge) .clip-caption { margin-bottom: 30px; }
+
+/* Watermark preview, matching drawWatermark() in lib/draw.ts */
+.watermark {
+  position: absolute; left: 5.5%; top: 7.5%; display: inline-flex; align-items: center; gap: 0.45em; pointer-events: none;
+  color: #fff; font-weight: 600; font-size: clamp(0.6rem, 3cqw, 0.85rem); text-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.32); padding: 0.3em 0.6em; border-radius: 999px; margin: -0.3em 0 0 -0.6em;
+}
+.watermark svg { width: 1.4em; height: 1.4em; filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.5)); }
+.caption-off { color: var(--muted); font-size: 0.82rem; }
+.style-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }

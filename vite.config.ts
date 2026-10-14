@@ -41,7 +41,7 @@ function momentsApi(env: Record<string, string>): Plugin {
     }
   };
   return {
-    name: 'peakclip-moments-api',
+    name: 'hookcut-moments-api',
     configureServer: (server) => void server.middlewares.use('/api/pick-moments', handler),
     configurePreviewServer: (server) => void server.middlewares.use('/api/pick-moments', handler),
   };

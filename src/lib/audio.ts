@@ -72,6 +72,46 @@ export async function* speechChunks(
   }
 }
 
+/** One stretch of the episode's audio as mono 16 kHz, e.g. a clip for word timing. */
+export async function speechRange(file: File, start: number, end: number): Promise<Float32Array> {
+  const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) throw new Error('This video has no audio track.');
+    const sink = new AudioSampleSink(track);
+    const parts: Float32Array<ArrayBuffer>[] = [];
+    let rate = 0;
+    let first = start;
+    for await (const sample of sink.samples(start, end)) {
+      try {
+        if (!rate) {
+          rate = sample.sampleRate;
+          first = sample.timestamp;
+        }
+        parts.push(toMono(sample));
+      } finally {
+        sample.close();
+      }
+    }
+    if (!rate) return new Float32Array(0);
+    // The first decoded block may begin a little before `start`; cut to the exact range.
+    const from = Math.max(0, Math.round((start - first) * rate));
+    const to = Math.round((end - first) * rate);
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    const mono = new Float32Array(Math.max(0, Math.min(total, to) - from));
+    let offset = -from;
+    for (const part of parts) {
+      const a = Math.max(0, -offset);
+      const b = Math.min(part.length, mono.length - offset);
+      if (b > a) mono.set(part.subarray(a, b), offset + a);
+      offset += part.length;
+    }
+    return resample(mono, rate);
+  } finally {
+    input.dispose();
+  }
+}
+
 function toMono(sample: AudioSample): Float32Array<ArrayBuffer> {
   const frames = sample.numberOfFrames;
   const mono = new Float32Array(frames);

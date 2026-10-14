@@ -1,4 +1,4 @@
-# PeakClip (working name)
+# Hookcut
 
 Turn a long podcast episode into ready-to-post vertical clips. See [PLAN.md](PLAN.md) for the product
 decisions, plans and build parts.
@@ -42,6 +42,13 @@ The Gemini key stays on a server:
 `Cross-Origin-Embedder-Policy: require-corp` (the dev server already does) so speech recognition can use
 every processor core. The speech runtime is served from our own site (a ~27 MB `.wasm` file in
 `dist/assets`); some hosts cap file size at 25 MB.
+
+## Exporting clips
+
+Clips are rendered on the user's computer (`src/lib/render.ts`): trimmed, cropped to 9:16 with the clip's framing,
+scaled to 1080×1920, with captions and, on Free, the watermark drawn in (`src/lib/draw.ts`). Captions use exact word
+times from Whisper, computed only for the clip being exported. Browsers that can encode H.264 (Chrome, Edge, Safari)
+produce MP4; others produce WebM.
 
 ## Video in the browser
 

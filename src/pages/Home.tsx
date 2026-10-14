@@ -21,7 +21,7 @@ export default function Home() {
           Turn your 2-hour episode into <span>10 ready-to-post clips.</span>
         </h1>
         <p className="hero-sub">
-          PeakClip listens to your whole episode, finds the moments people will share, and cuts vertical clips with
+          Hookcut listens to your whole episode, finds the moments people will share, and cuts vertical clips with
           captions for TikTok, Reels and Shorts.
         </p>
         <Link to={startLink} className="btn btn-primary">
