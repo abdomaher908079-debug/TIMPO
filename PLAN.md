@@ -16,6 +16,9 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 - **Speech recognition:** Whisper base.en (~80 MB, downloaded once and cached by the browser), on the
   graphics card (WebGPU) when available, otherwise the processor. Segment timestamps for the whole
   episode; word timestamps for captions will be computed later only for the chosen clips.
+- **Editor:** trim (handles, ±0.5 s, or start/end at a transcript line), left↔right framing of the 9:16
+  crop, 3 caption styles, title. Captions in the preview use estimated word times; export uses exact ones.
+  Edits live in the open tab until saved projects exist (the page warns before closing).
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
 
@@ -41,7 +44,7 @@ Free = what costs us nothing (editor, saved projects, local export). Paid = what
 1. Design, plans, prices: done
 2. Home, pricing, sign up, "New episode" screen: done
 3. Audio → transcript → AI picks moments: done
-4. Clips screen and editor
+4. Clips screen and editor: done
 5. Export: clip files, captions, watermark
 6. Accounts and limits: hours used, plans, payments
 7. Backup server and launch

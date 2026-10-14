@@ -1,10 +1,10 @@
 import { useRef, useState, type DragEvent } from 'react';
 import Meter from '../components/Meter';
-import Moments from '../components/Moments';
+import ClipsScreen from '../components/ClipsScreen';
 import Progress, { type Step } from '../components/Progress';
 import { PLANS } from '../lib/plans';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
-import type { Moment } from '../lib/moments';
+import { clipsFromMoments, type Clip } from '../lib/clips';
 import type { Segment } from '../lib/speech';
 
 // Until usage tracking exists (Part 6), everyone is treated as a Free user with a full week left.
@@ -20,7 +20,7 @@ const LIMIT_GRACE_SECONDS = 30;
 type State =
   | { kind: 'empty' }
   | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number }
-  | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; moments: Moment[] }
+  | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; clips: Clip[] }
   // Transcribing worked but picking moments didn't: keep the transcript so a retry is quick.
   | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string }
   | { kind: 'reading'; file: File }
@@ -132,7 +132,7 @@ export default function NewEpisode() {
       const { findMoments } = await import('../lib/moments');
       const moments = await findMoments(segments, plan.clipsFound, abort.signal);
       if (abort.signal.aborted) return;
-      setState({ kind: 'done', file, info, segments, moments });
+      setState({ kind: 'done', file, info, segments, clips: clipsFromMoments(moments) });
     } catch (err) {
       if (abort.signal.aborted) return;
       console.error(err);
@@ -169,7 +169,7 @@ export default function NewEpisode() {
   const blocked = tooLong || overLimit;
 
   return (
-    <main className="new-episode">
+    <main className={`new-episode ${state.kind === 'done' ? 'new-episode-wide' : ''}`}>
       <h1 className="page-title">New episode</h1>
       <p className="muted">
         {plan.name} plan ·{' '}
@@ -182,7 +182,15 @@ export default function NewEpisode() {
         <section aria-label="Results">
           <p className="episode-name processing-name">{state.file.name}</p>
           {state.kind === 'done' ? (
-            <Moments moments={state.moments} exportable={plan.clipsExportable} planName={plan.name} />
+            <ClipsScreen
+              file={state.file}
+              duration={state.info.durationSeconds}
+              segments={state.segments}
+              clips={state.clips}
+              onChange={(clips) => setState((st) => (st.kind === 'done' ? { ...st, clips } : st))}
+              exportable={plan.clipsExportable}
+              planName={plan.name}
+            />
           ) : (
             <div className="card">
               <p className="error" role="alert">
@@ -194,7 +202,13 @@ export default function NewEpisode() {
               </button>
             </div>
           )}
-          <button type="button" className="btn btn-outline" onClick={() => setState({ kind: 'empty' })}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => {
+              if (state.kind !== 'done' || window.confirm('Start over? Your clips and edits for this episode will be lost.')) setState({ kind: 'empty' });
+            }}
+          >
             Start a new episode
           </button>
         </section>
