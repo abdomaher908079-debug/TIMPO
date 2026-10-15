@@ -1,0 +1,25 @@
+# Runs the cloud processing server behind Caddy, which gets and renews the HTTPS certificate.
+# Usage on the server: cp .env.example .env, fill it in, then: docker compose up -d --build
+services:
+  app:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    # Uploaded audio waits here only until it's transcribed.
+    tmpfs:
+      - /tmp:size=2g
+
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CLOUD_DOMAIN: ${CLOUD_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data:

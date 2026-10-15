@@ -12,8 +12,13 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 - **Money:** free services while we build; spend on ads, not services. Improve services once
   subscriptions pay for them.
   Users just "upload a video"; the mechanism is explained in About.
-- **Backup server (later):** optional server processing for weak computers and phones
-  (Oracle Cloud Always Free to start). Videos deleted right after processing.
+- **Backup server:** optional cloud processing for weak computers and phones (Oracle Cloud Always Free,
+  4 ARM cores). Uploads the episode's **audio only** (about 15 MB an hour, never the video), transcribes it with
+  exact word times, deletes the audio right after, forgets the transcript within an hour. Suggested automatically
+  on phones and computers without a graphics card. Picking moments and making clips still happen as usual.
+- **Hosting:** Netlify free plan (commercial use allowed; Cloudflare Pages caps files at 25 MB and our speech
+  runtime is 27 MB; Vercel's free plan forbids commercial use).
+- **Legal pages:** Privacy, Terms, Refunds (14 days, Paddle needs them). Plain-language templates; get them checked.
 - **Language:** English only (English Whisper model, no language picker).
 - **Speech recognition:** Whisper base.en (~80 MB, downloaded once and cached by the browser), on the
   graphics card (WebGPU) when available, otherwise the processor. Segment timestamps for the whole
@@ -40,7 +45,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   1. Gemini paid key (`GEMINI_PAID_API_KEY`) → Best AI picks for Pro/Studio. About $0.01–0.05 per episode.
   2. Cloud processing server (Part 7) for paid users without a graphics card, so they get the larger speech model too.
   3. Later: a paid transcription API for paid users if in-browser Whisper isn't good enough.
-- **Not built yet:** brand caption styles (Pro/Studio), team members (Studio), cloud processing (Part 7).
+- **Not built yet:** brand caption styles (Pro/Studio), team members (Studio).
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
 
@@ -70,4 +75,4 @@ Free = what costs us nothing (editor, saved projects, local export). Paid = what
 4. Clips screen and editor: done
 5. Export: clip files, captions, watermark: done
 6. Accounts and limits: hours used, plans, payments: done
-7. Backup server and launch
+7. Backup server and launch: done (see LAUNCH.md for the go-live steps)

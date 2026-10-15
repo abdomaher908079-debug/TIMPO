@@ -4,13 +4,14 @@ import Pricing from '../components/Pricing';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { openBillingPortal } from '../lib/billing';
+import { cloudAvailable } from '../lib/cloud';
 import { formatDuration } from '../lib/format';
 
 const DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'long', day: 'numeric' });
 
 export default function Account() {
   const { user, demo } = useAuth();
-  const { plan, profile, period, usage, loading, refresh } = useAccount();
+  const { plan, profile, period, usage, cloudUsage, loading, refresh } = useAccount();
   const [params, setParams] = useSearchParams();
   const [billingError, setBillingError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -98,6 +99,14 @@ export default function Account() {
             : `${formatDuration(usage.seconds)} of ${plan.hours} hours used`}
           <span className="muted"> · resets {DATE.format(period.end)}</span>
         </p>
+        {cloudAvailable && !demo && (
+          <p className="usage-text">
+            Cloud processing:{' '}
+            {plan.cloudJobsPerPeriod !== null
+              ? `${cloudUsage.episodes} of ${plan.cloudJobsPerPeriod} episode${plan.cloudJobsPerPeriod === 1 ? '' : 's'} used`
+              : `${formatDuration(cloudUsage.seconds)} of ${plan.cloudSeconds / 3600} hours used`}
+          </p>
+        )}
         <Link to="/new" className="btn btn-primary">
           New episode
         </Link>

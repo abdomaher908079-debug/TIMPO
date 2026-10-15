@@ -17,6 +17,8 @@ interface AccountValue {
   profile: ProfileRow | null;
   period: Period;
   usage: Usage;
+  // Cloud processing used this period (see server/).
+  cloudUsage: Usage;
   loading: boolean;
   refresh(): Promise<void>;
   /** Whether an episode of this length fits what's left this period (the server checks again). */
@@ -71,6 +73,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeRow[]>([]);
+  const [cloudUsage, setCloudUsage] = useState<Usage>({ episodes: 0, seconds: 0 });
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -96,6 +99,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .select('fingerprint, seconds, period_start')
       .eq('period_start', period.start.toISOString());
     if (rowsError) console.error('Usage unavailable', rowsError);
+    const { data: cloudRows } = await supabase
+      .from('cloud_jobs')
+      .select('seconds')
+      .eq('period_start', period.start.toISOString());
+    const cloud = (cloudRows as { seconds: number }[] | null) ?? [];
+    setCloudUsage({ episodes: cloud.length, seconds: cloud.reduce((n, r) => n + Number(r.seconds), 0) });
     setProfile(p ?? null);
     setEpisodes((rows as EpisodeRow[] | null) ?? []);
     setLoading(false);
@@ -120,6 +129,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       profile,
       period,
       usage,
+      cloudUsage,
       loading,
       refresh,
       check: (seconds, fp) => (fp && inPeriod.some((e) => e.fingerprint === fp) ? null : checkEpisode(planId, usage, seconds)),
@@ -138,7 +148,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         void refresh();
       },
     };
-  }, [profile, episodes, loading, refresh]);
+  }, [profile, episodes, cloudUsage, loading, refresh]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

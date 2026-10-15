@@ -23,6 +23,7 @@ export const PLANS: Plan[] = [
       'Quick AI: good clips, fast',
       'See all 10 best clips, export 3',
       'Full editor, 1080p export',
+      'Cloud processing for slow devices: 1 a week',
       'Small "Made with Hookcut" watermark',
     ],
   },

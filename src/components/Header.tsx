@@ -38,9 +38,9 @@ export default function Header() {
         </span>
       </Link>
       <nav className="nav">
-        <a href="/#pricing" className="nav-link">
+        <Link to="/#pricing" className="nav-link">
           Pricing
-        </a>
+        </Link>
         {user ? (
           <div className="account" ref={menuRef}>
             <button className="avatar" aria-label="Account menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>

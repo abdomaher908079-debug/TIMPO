@@ -27,7 +27,9 @@ export default function Home() {
         <Link to={startLink} className="btn btn-primary">
           {user ? 'New episode' : 'Try it free, 1 episode every week'}
         </Link>
-        <p className="privacy-note">Your video never leaves your computer. No upload wait.</p>
+        <p className="privacy-note">
+          Your video never leaves your computer. No upload wait. <Link to="/privacy">Privacy</Link>
+        </p>
       </section>
 
       <section className="card demo" aria-label="Example result">

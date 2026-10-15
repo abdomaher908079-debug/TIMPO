@@ -1,17 +1,20 @@
-import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import { useAuth } from './lib/auth';
 import Home from './pages/Home';
 import AuthPage from './pages/AuthPage';
 import NewEpisode from './pages/NewEpisode';
 import Account from './pages/Account';
+import Footer from './components/Footer';
+import { Privacy, Refunds, Terms } from './pages/Legal';
 
 export default function App() {
   const { demo } = useAuth();
   return (
     <div className="page">
       {demo && <div className="demo-banner">Demo mode: logins are fake and only saved in this browser.</div>}
+      <ScrollOnNavigate />
       <Header />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -19,10 +22,26 @@ export default function App() {
         <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
         <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/refunds" element={<Refunds />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Footer />
     </div>
   );
+}
+
+// New pages start at the top; links like /#pricing scroll to that section.
+function ScrollOnNavigate() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return window.scrollTo(0, 0);
+    // The section may render a moment later (e.g. after the account loads).
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' }), 50);
+    return () => clearTimeout(t);
+  }, [pathname, hash]);
+  return null;
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {

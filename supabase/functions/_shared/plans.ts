@@ -22,6 +22,11 @@ export interface PlanLimits {
   watermark: boolean;
   maxExport: '1080p' | '4k';
   quality: Quality;
+  // Cloud processing (for weak computers and phones): seconds of audio per period, jobs per period
+  // (null = only seconds), and whether jobs skip ahead of Free ones. Mirrored in server/limits.py.
+  cloudSeconds: number;
+  cloudJobsPerPeriod: number | null;
+  cloudPriority: boolean;
 }
 
 export const LIMITS: Record<PlanId, PlanLimits> = {
@@ -36,6 +41,9 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     watermark: true,
     maxExport: '1080p',
     quality: 'quick',
+    cloudSeconds: 30 * 60,
+    cloudJobsPerPeriod: 1,
+    cloudPriority: false,
   },
   pro: {
     id: 'pro',
@@ -48,6 +56,9 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     watermark: false,
     maxExport: '4k',
     quality: 'best',
+    cloudSeconds: 3 * 3600,
+    cloudJobsPerPeriod: null,
+    cloudPriority: true,
   },
   studio: {
     id: 'studio',
@@ -60,6 +71,9 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     watermark: false,
     maxExport: '4k',
     quality: 'best',
+    cloudSeconds: 10 * 3600,
+    cloudJobsPerPeriod: null,
+    cloudPriority: true,
   },
 };
 

@@ -1,0 +1,2 @@
+# Single-page app: unknown paths load the app, which shows the right page. Real files are served as-is.
+/*  /index.html  200

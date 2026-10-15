@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ClipEditor from './ClipEditor';
 import { clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
-import type { Segment, WordTimer } from '../lib/speech';
+import type { Segment, Word, WordTimer } from '../lib/speech';
 
 interface Props {
   file: File;
   duration: number;
   segments: Segment[];
+  // Exact word times for the whole episode, when it was transcribed in the cloud.
+  episodeWords?: Word[];
   clips: Clip[];
   onChange: (clips: Clip[]) => void;
   exportable: number;
@@ -50,7 +52,7 @@ export function download(url: string, name: string) {
 }
 
 // All the clips found, best first. On plans with an export limit, the rest can be previewed but not exported.
-export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark, allow4k, quality }: Props) {
+export default function ClipsScreen({ file, duration, segments, episodeWords, clips, onChange, exportable, planName, watermark, allow4k, quality }: Props) {
   const [size, setSize] = useState<'1080p' | '4k'>('1080p');
   const exportSize = allow4k ? size : '1080p';
   const sizeRef = useRef(exportSize);
@@ -126,6 +128,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     const clip = clipsRef.current[i]!;
     const key = rangeKey(clip);
     let groups = timedRef.current[key];
+    // Transcribed in the cloud: exact word times already exist for the whole episode.
+    if (!groups && episodeWords) groups = groupWords(episodeWords.filter((w) => w.end > clip.start && w.start < clip.end));
     if (!groups) {
       setStatus(i, { state: 'timing' });
       try {
@@ -201,7 +205,9 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         duration={duration}
         segments={segments}
         clip={clip}
-        exactCaptions={timed[rangeKey(clip)]}
+        exactCaptions={
+          timed[rangeKey(clip)] ?? (episodeWords && groupWords(episodeWords.filter((w) => w.end > clip.start && w.start < clip.end)))
+        }
         number={editing + 1}
         total={clips.length}
         locked={editing >= exportable}

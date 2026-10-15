@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
 import ClipsScreen from '../components/ClipsScreen';
@@ -7,7 +7,8 @@ import { useAccount } from '../lib/account';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
 import { clipsFromMoments, type Clip } from '../lib/clips';
 import { fingerprint } from '../lib/moments';
-import type { Segment } from '../lib/speech';
+import { cloudAvailable, deviceLooksSlow, type CloudStage } from '../lib/cloud';
+import type { Segment, Word } from '../lib/speech';
 import { ApiError } from '../lib/supabase';
 
 const MIN_SECONDS = 60;
@@ -15,10 +16,11 @@ const MIN_SECONDS = 60;
 type State =
   | { kind: 'empty' }
   | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number }
-  | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; clips: Clip[] }
+  // `words`: exact word times for the whole episode, when it was transcribed in the cloud.
+  | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; words?: Word[]; clips: Clip[] }
   // Transcribing worked but picking moments didn't: keep the transcript so a retry is quick.
   // `limit` means the plan's limits stopped it, so trying again won't help.
-  | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string; limit: boolean }
+  | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; words?: Word[]; message: string; limit: boolean }
   | { kind: 'reading'; file: File }
   | { kind: 'ready'; file: File; info: EpisodeInfo }
   | { kind: 'error'; message: string };
@@ -38,6 +40,11 @@ const RESETS = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'sh
 export default function NewEpisode() {
   const { plan, usage, period, check, recordDemoEpisode, refresh, loading: accountLoading } = useAccount();
   const [state, setState] = useState<State>({ kind: 'empty' });
+  // Phones and computers without a graphics card get cloud processing suggested.
+  const [slowDevice, setSlowDevice] = useState(false);
+  useEffect(() => {
+    if (cloudAvailable) void deviceLooksSlow().then(setSlowDevice);
+  }, []);
   // Identifies each opened file, so retrying an episode doesn't use the plan twice.
   const fingerprints = useRef(new WeakMap<File, string>());
   const [dragging, setDragging] = useState(false);
@@ -136,7 +143,57 @@ export default function NewEpisode() {
     await pickBest(file, info, segments, abort);
   }
 
-  async function pickBest(file: File, info: EpisodeInfo, segments: Segment[], abort: AbortController) {
+  // For devices too slow to listen in the browser: only the audio is uploaded, then deleted.
+  async function findClipsInCloud(file: File, info: EpisodeInfo) {
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const total = info.durationSeconds;
+    let detail = '';
+    const steps = (phase: 0 | 1 | 2 | 3): Step[] => [
+      { label: 'Preparing the audio', state: phase > 0 ? 'done' : 'active', detail: phase === 0 ? detail : 'Only the audio is uploaded, never the video' },
+      { label: 'Uploading the audio', state: phase > 1 ? 'done' : phase === 1 ? 'active' : 'waiting', detail: phase === 1 ? detail : undefined },
+      { label: 'Listening to every word, in the cloud', state: phase > 2 ? 'done' : phase === 2 ? 'active' : 'waiting', detail: phase >= 2 ? detail : undefined },
+      { label: 'Finding the best moments', state: phase === 3 ? 'active' : 'waiting' },
+    ];
+    const update = (phase: 0 | 1 | 2 | 3, percent: number) =>
+      setState((st) => (st.kind === 'processing' && abortRef.current === abort ? { ...st, steps: steps(phase), percent } : st));
+    const onStage = (s: CloudStage) => {
+      if (s.stage === 'extracting') {
+        detail = `${Math.round(s.progress * 100)}%`;
+        update(0, s.progress * 10);
+      } else if (s.stage === 'uploading') {
+        detail = `${Math.round(s.progress * 100)}%`;
+        update(1, 10 + s.progress * 15);
+      } else if (s.stage === 'queued') {
+        detail = s.position > 0 ? `In line: ${s.position} ${s.position === 1 ? 'episode' : 'episodes'} ahead of yours` : 'Starting…';
+        update(2, 25);
+      } else {
+        detail = `${formatDuration(s.progress * total)} of ${formatDuration(total)}`;
+        update(2, 25 + s.progress * 65);
+      }
+    };
+
+    setState({ kind: 'processing', file, info, steps: steps(0), percent: 0 });
+    let result;
+    try {
+      const { transcribeInCloud } = await import('../lib/cloud');
+      result = await transcribeInCloud(file, total, plan.quality, { signal: abort.signal, onStage });
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      console.error(err);
+      setState({ kind: 'error', message: err instanceof Error ? err.message : 'Cloud processing stopped. Please try again.' });
+      return;
+    }
+    if (!result.segments.length) {
+      setState({ kind: 'error', message: "We didn't hear anyone speaking in this episode. Check that it has the podcast's audio." });
+      return;
+    }
+    detail = `${result.words.length.toLocaleString()} words heard`;
+    update(3, 92);
+    await pickBest(file, info, result.segments, abort, result.words);
+  }
+
+  async function pickBest(file: File, info: EpisodeInfo, segments: Segment[], abort: AbortController, words?: Word[]) {
     abortRef.current = abort;
     try {
       const { findMoments } = await import('../lib/moments');
@@ -148,7 +205,7 @@ export default function NewEpisode() {
         abort.signal,
       );
       if (abort.signal.aborted) return;
-      setState({ kind: 'done', file, info, segments, clips: clipsFromMoments(moments) });
+      setState({ kind: 'done', file, info, segments, words, clips: clipsFromMoments(moments) });
       // The server has counted this episode; show the new usage (demo mode counts it here).
       recordDemoEpisode(fp, info.durationSeconds);
       void refresh();
@@ -156,11 +213,11 @@ export default function NewEpisode() {
       if (abort.signal.aborted) return;
       console.error(err);
       const message = err instanceof Error ? err.message : String(err);
-      setState({ kind: 'moments-failed', file, info, segments, message, limit: err instanceof ApiError && err.status === 403 });
+      setState({ kind: 'moments-failed', file, info, segments, words, message, limit: err instanceof ApiError && err.status === 403 });
     }
   }
 
-  function retryMoments(file: File, info: EpisodeInfo, segments: Segment[]) {
+  function retryMoments(file: File, info: EpisodeInfo, segments: Segment[], words?: Word[]) {
     const abort = new AbortController();
     const steps: Step[] = [
       { label: 'Getting speech recognition ready', state: 'done' },
@@ -168,7 +225,7 @@ export default function NewEpisode() {
       { label: 'Finding the best moments', state: 'active' },
     ];
     setState({ kind: 'processing', file, info, steps, percent: 92 });
-    void pickBest(file, info, segments, abort);
+    void pickBest(file, info, segments, abort, words);
   }
 
   function cancel() {
@@ -212,6 +269,7 @@ export default function NewEpisode() {
               file={state.file}
               duration={state.info.durationSeconds}
               segments={state.segments}
+              episodeWords={state.words}
               clips={state.clips}
               onChange={(clips) => setState((st) => (st.kind === 'done' ? { ...st, clips } : st))}
               exportable={plan.clipsExportable}
@@ -230,7 +288,7 @@ export default function NewEpisode() {
                     {state.message}
                   </p>
                   <p className="muted small">The episode's words are saved, so trying again only takes a moment.</p>
-                  <button type="button" className="btn btn-primary" onClick={() => retryMoments(state.file, state.info, state.segments)}>
+                  <button type="button" className="btn btn-primary" onClick={() => retryMoments(state.file, state.info, state.segments, state.words)}>
                     Try again
                   </button>
                 </>
@@ -314,19 +372,59 @@ export default function NewEpisode() {
             </div>
           </dl>
           {limitProblem && <UpgradeNotice message={limitProblem.message} planName={plan.name} />}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!!limitProblem || accountLoading}
-            onClick={() => void findClips(ready.file, ready.info)}
-          >
-            Find my best clips
-          </button>
+          {cloudAvailable && slowDevice ? (
+            <>
+              <p className="notice">
+                This device may take a long time to listen to a full episode. Process it in the cloud instead: we upload only
+                the audio (never the video) and delete it as soon as it's transcribed.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!!limitProblem || accountLoading}
+                onClick={() => void findClipsInCloud(ready.file, ready.info)}
+              >
+                Find my best clips in the cloud
+              </button>
+              <button
+                type="button"
+                className="link-button cloud-alt"
+                disabled={!!limitProblem || accountLoading}
+                onClick={() => void findClips(ready.file, ready.info)}
+              >
+                Use this device instead
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!!limitProblem || accountLoading}
+                onClick={() => void findClips(ready.file, ready.info)}
+              >
+                Find my best clips
+              </button>
+              {cloudAvailable && (
+                <button
+                  type="button"
+                  className="link-button cloud-alt"
+                  disabled={!!limitProblem || accountLoading}
+                  onClick={() => void findClipsInCloud(ready.file, ready.info)}
+                >
+                  Slow computer? Process in the cloud (uploads the audio only)
+                </button>
+              )}
+            </>
+          )}
           {plan.quality === 'quick' && <QuickAiNote />}
         </section>
       )}
 
-      <p className="muted small">Your video and audio stay on your computer. Only the written transcript is sent to find the best moments.</p>
+      <p className="muted small">
+        Your video and audio stay on your computer. Only the written transcript is sent to Google's Gemini AI to find the best
+        moments. <Link to="/privacy">How we handle your data</Link>
+      </p>
     </main>
   );
 }

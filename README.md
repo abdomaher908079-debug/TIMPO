@@ -91,6 +91,15 @@ scaled to 1080×1920, with captions and, on Free, the watermark drawn in (`src/l
 times from Whisper, computed only for the clip being exported. Browsers that can encode H.264 (Chrome, Edge, Safari)
 produce MP4; others produce WebM.
 
+## Cloud processing
+
+For phones and computers without a graphics card, `server/` transcribes the episode's audio (never the video)
+and deletes it right after. See `server/README.md` to run it free on Oracle Cloud, and set `VITE_CLOUD_URL`.
+
+## Going live
+
+See [LAUNCH.md](LAUNCH.md): domain, Supabase, Gemini, Paddle, Netlify hosting and the cloud server, step by step.
+
 ## Video in the browser
 
 Episodes are read with [Mediabunny](https://mediabunny.dev) (WebCodecs), which reads only what it needs,
