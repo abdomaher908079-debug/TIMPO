@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { isPhone } from '../lib/device';
 import Meter from '../components/Meter';
 import ClipsScreen from '../components/ClipsScreen';
 import Progress, { type Step } from '../components/Progress';
@@ -277,7 +278,8 @@ export default function NewEpisode() {
               exportable={plan.clipsExportable}
               planName={plan.name}
               watermark={plan.watermark}
-              allow4k={plan.maxExport === '4k'}
+              // 4K is too heavy for phones: it can freeze the whole device.
+              allow4k={plan.maxExport === '4k' && !isPhone}
               quality={plan.quality}
             />
           ) : (

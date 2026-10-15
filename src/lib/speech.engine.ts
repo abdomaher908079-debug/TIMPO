@@ -87,8 +87,9 @@ async function load(quality: 'quick' | 'best', safe = false) {
     post({ type: 'stage', stage: 'downloading the speech runtime' });
     env.backends.onnx.wasm!.wasmBinary = await runtimeBinary();
   }
-  if (!safe) post({ type: 'stage', stage: 'checking the graphics chip' });
-  const adapter = safe ? null : await gpuAdapter();
+  if (!safe && !isPhone) post({ type: 'stage', stage: 'checking the graphics chip' });
+  // Never the graphics chip on phones: heavy WebGPU work can hang a phone's GPU and restart the phone.
+  const adapter = safe || isPhone ? null : await gpuAdapter();
   if (adapter) {
     const best = quality === 'best';
     try {
