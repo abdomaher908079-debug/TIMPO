@@ -39,9 +39,9 @@ Everything Hookcut needs to go live, in order. Free to run until paying users ar
 - [ ] Custom domains: add your domain (easiest if the domain itself is on Cloudflare).
 - [ ] Check: open the site, then DevTools → Console → `crossOriginIsolated` should be `true` on /new.
 
-### Speech runtime file (Cloudflare R2)
-Cloudflare Pages accepts files up to 25 MB, and the speech runtime file is 27 MB, so it isn't part of the site.
-Until you set this up, the site loads it from the free jsDelivr CDN, which works fine.
+### Speech runtime file (optional: Cloudflare R2)
+Cloudflare Pages accepts files up to 25 MB and the speech runtime file is 27 MB, so the site ships it gzipped
+(about 7 MB) and unpacks it in the browser. Nothing to set up. Only if you'd rather serve it from R2:
 - [ ] Cloudflare → R2 → create a bucket (e.g. `hookcut-files`). R2's free plan includes 10 GB and no
       download fees.
 - [ ] Upload `node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm` (after `npm install`).

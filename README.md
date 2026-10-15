@@ -84,7 +84,10 @@ The Gemini keys stay on a server:
 `Cross-Origin-Embedder-Policy: require-corp` (the dev server already does) so speech recognition can use
 every processor core, **except** `/checkout.html`, where Paddle's checkout frame can't load under them.
 `public/_headers` does this on Cloudflare Pages. The speech runtime's 27 MB file is over Pages' 25 MB limit, so the
-live site loads it from `VITE_SPEECH_RUNTIME_URL` (your Cloudflare R2 copy) or the jsDelivr CDN. 
+build ships it gzipped (about 7 MB, `dist/speech-runtime/`) and the speech worker unpacks it; set
+`VITE_SPEECH_RUNTIME_URL` to load an uncompressed copy from elsewhere (e.g. Cloudflare R2) instead.
+Every `/assets/*` file must also get the two headers above, or the browser won't start the speech worker.
+If something doesn't work on a device, open `/diagnose` there (“Check my browser” in the footer).
 
 ## Exporting clips
 
