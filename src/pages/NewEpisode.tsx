@@ -23,7 +23,8 @@ type State =
   | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; words?: Word[]; message: string; limit: boolean }
   | { kind: 'reading'; file: File }
   | { kind: 'ready'; file: File; info: EpisodeInfo }
-  | { kind: 'error'; message: string };
+  // `detail`: the technical reason, shown small so people can send it to us.
+  | { kind: 'error'; message: string; detail?: string };
 
 function problemWith(info: EpisodeInfo): string | null {
   if (!info.audioCodec) return "This video has no sound. Hookcut needs the episode's audio to find the best moments.";
@@ -131,6 +132,7 @@ export default function NewEpisode() {
       setState({
         kind: 'error',
         message: "We couldn't listen to this episode. Try the latest Chrome or Edge, or export the episode again as MP4 (H.264 + AAC).",
+        detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
       });
       return;
     }
@@ -349,6 +351,7 @@ export default function NewEpisode() {
       {state.kind === 'error' && (
         <p className="error" role="alert">
           {state.message}
+          {state.detail && <small style={{ display: 'block', marginTop: 6, opacity: 0.75, wordBreak: 'break-word' }}>Details: {state.detail}</small>}
         </p>
       )}
 
