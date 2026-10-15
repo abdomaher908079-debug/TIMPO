@@ -36,7 +36,12 @@ export default function App() {
 function ScrollOnNavigate() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
-    if (!hash) return window.scrollTo(0, 0);
+    // Not `return window.scrollTo(...)`: some browsers (e.g. Brave) return a Promise from it, and React
+    // would then try to call that as the effect's cleanup and crash.
+    if (!hash) {
+      window.scrollTo(0, 0);
+      return;
+    }
     // The section may render a moment later (e.g. after the account loads).
     const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' }), 50);
     return () => clearTimeout(t);
