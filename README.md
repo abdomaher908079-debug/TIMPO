@@ -82,8 +82,9 @@ The Gemini keys stay on a server:
 
 **Hosting:** the site must be served with `Cross-Origin-Opener-Policy: same-origin` and
 `Cross-Origin-Embedder-Policy: require-corp` (the dev server already does) so speech recognition can use
-every processor core, **except** `/checkout.html`, where Paddle's checkout frame can't load under them. The speech runtime is served from our own site (a ~27 MB `.wasm` file in
-`dist/assets`); some hosts cap file size at 25 MB.
+every processor core, **except** `/checkout.html`, where Paddle's checkout frame can't load under them.
+`public/_headers` does this on Cloudflare Pages. The speech runtime's 27 MB file is over Pages' 25 MB limit, so the
+live site loads it from `VITE_SPEECH_RUNTIME_URL` (your Cloudflare R2 copy) or the jsDelivr CDN. 
 
 ## Exporting clips
 
@@ -99,7 +100,7 @@ and deletes it right after. See `server/README.md` to run it free on Oracle Clou
 
 ## Going live
 
-See [LAUNCH.md](LAUNCH.md): domain, Supabase, Gemini, Paddle, Netlify hosting and the cloud server, step by step.
+See [LAUNCH.md](LAUNCH.md): domain, Supabase, Gemini, Paddle, Cloudflare hosting and the cloud server, step by step.
 
 ## Video in the browser
 

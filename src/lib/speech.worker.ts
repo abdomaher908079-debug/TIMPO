@@ -18,15 +18,12 @@ const SAMPLE_RATE = 16_000;
 const EDGE_SECONDS = 2;
 const MAX_CARRY_SECONDS = 45;
 
-// The speech runtime's small loader comes from our site. Its 27 MB WebAssembly file comes from the
-// jsDelivr CDN in production, because Cloudflare Pages accepts files up to 25 MB; in development,
-// from the local package. The version always matches the installed package.
-const ORT_WASM = 'ort-wasm-simd-threaded.asyncify.wasm';
+// The speech runtime's small loader comes from our site. Its 27 MB WebAssembly file is too big for
+// Cloudflare Pages (25 MB limit), so the live site loads it from VITE_SPEECH_RUNTIME_URL (your R2
+// copy) or the jsDelivr CDN; see vite.config.ts. In development it comes from the local package.
 env.backends.onnx.wasm!.wasmPaths = {
   mjs: ortMjs,
-  wasm: import.meta.env.DEV
-    ? `/node_modules/onnxruntime-web/dist/${ORT_WASM}`
-    : `https://cdn.jsdelivr.net/npm/onnxruntime-web@${__ORT_VERSION__}/dist/${ORT_WASM}`,
+  wasm: import.meta.env.DEV ? '/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm' : __SPEECH_RUNTIME_URL__,
 };
 
 declare const self: DedicatedWorkerGlobalScope;

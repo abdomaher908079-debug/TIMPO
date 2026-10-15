@@ -31,12 +31,26 @@ Everything Hookcut needs to go live, in order. Free to run until paying users ar
       pages, which are built in). Then repeat the setup with live keys and set `PADDLE_ENV=production`.
 - [ ] Confirm Paddle pays out to your country and add your payout details.
 
-## 5. Website (Netlify)
-- [ ] Create a free Netlify account, "Import from Git", choose this repository. `netlify.toml` sets the build.
-- [ ] Site settings → Environment variables: everything in `.env.example` that starts with `VITE_`.
+## 5. Website (Cloudflare Pages)
+- [ ] Cloudflare → Workers & Pages → Create → Pages → connect this GitHub repository.
+      Build command `npm run build`, output directory `dist`.
+- [ ] Settings → Environment variables: everything in `.env.example` that starts with `VITE_`.
       `VITE_LEGAL_NAME` and `VITE_SUPPORT_EMAIL` appear on the legal pages.
-- [ ] Domain management: add your domain (Netlify issues the HTTPS certificate).
+- [ ] Custom domains: add your domain (easiest if the domain itself is on Cloudflare).
 - [ ] Check: open the site, then DevTools → Console → `crossOriginIsolated` should be `true` on /new.
+
+### Speech runtime file (Cloudflare R2)
+Cloudflare Pages accepts files up to 25 MB, and the speech runtime file is 27 MB, so it isn't part of the site.
+Until you set this up, the site loads it from the free jsDelivr CDN, which works fine.
+- [ ] Cloudflare → R2 → create a bucket (e.g. `hookcut-files`). R2's free plan includes 10 GB and no
+      download fees.
+- [ ] Upload `node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm` (after `npm install`).
+- [ ] Bucket → Settings → Custom Domains: connect e.g. `files.<your domain>` (the `r2.dev` address is for testing
+      only and is rate-limited).
+- [ ] Bucket → Settings → CORS policy: allow `GET` from `https://<your domain>`.
+- [ ] Set `VITE_SPEECH_RUNTIME_URL=https://files.<your domain>/ort-wasm-simd-threaded.asyncify.wasm` in the
+      Pages environment variables and redeploy.
+- [ ] After upgrading the speech library (`npm update`), upload the new file too.
 
 ## 6. Cloud processing server (Oracle, free)
 - [ ] Follow `server/README.md`. Set `ALLOWED_ORIGINS=https://<domain>` and the website's `VITE_CLOUD_URL`.

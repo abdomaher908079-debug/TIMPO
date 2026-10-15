@@ -16,8 +16,9 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   4 ARM cores). Uploads the episode's **audio only** (about 15 MB an hour, never the video), transcribes it with
   exact word times, deletes the audio right after, forgets the transcript within an hour. Suggested automatically
   on phones and computers without a graphics card. Picking moments and making clips still happen as usual.
-- **Hosting:** Netlify free plan (commercial use allowed; Cloudflare Pages caps files at 25 MB and our speech
-  runtime is 27 MB; Vercel's free plan forbids commercial use).
+- **Hosting:** Cloudflare Pages, free (unlimited traffic, commercial use allowed). Its 25 MB file limit is below
+  the speech runtime's 27 MB file, so that one file lives in Cloudflare R2 (free, your own account) once the domain
+  exists, and on the jsDelivr CDN until then. Vercel's free plan forbids commercial use.
 - **Legal pages:** Privacy, Terms, Refunds (14 days, Paddle needs them). Plain-language templates; get them checked.
 - **Language:** English only (English Whisper model, no language picker).
 - **Speech recognition:** Whisper base.en (~80 MB, downloaded once and cached by the browser), on the

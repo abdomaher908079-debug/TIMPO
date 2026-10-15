@@ -1,5 +1,5 @@
 # Speech recognition needs cross-origin isolation to use every processor core. Keep this list in step
-# with the routes in src/App.tsx. /checkout.html is left out on purpose: Paddle's checkout can't load there.
+# with the routes in src/App.tsx. /checkout(.html) is left out on purpose: Paddle's checkout can't load there.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

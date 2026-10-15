@@ -58,13 +58,39 @@ function momentsApi(env: Record<string, string>): Plugin {
 }
 
 const ORT_VERSION = JSON.parse(readFileSync('node_modules/onnxruntime-web/package.json', 'utf8')).version as string;
+const ORT_WASM = 'ort-wasm-simd-threaded.asyncify.wasm';
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), isolation, momentsApi(loadEnv(mode, process.cwd(), ''))],
-  worker: { format: 'es' },
-  // The speech runtime's version, to load its WebAssembly from the CDN (see speech.worker.ts).
-  define: { __ORT_VERSION__: JSON.stringify(ORT_VERSION) },
-  build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html' } } },
-  // Its WebAssembly files are located relative to the package; pre-bundling breaks that.
-  optimizeDeps: { exclude: ['@huggingface/transformers'] },
-}));
+// Where the live site loads the speech runtime's 27 MB WebAssembly file from. Cloudflare Pages
+// refuses files over 25 MB, so it isn't part of the site: VITE_SPEECH_RUNTIME_URL points at your own
+// copy (e.g. in Cloudflare R2), otherwise the free jsDelivr CDN. See LAUNCH.md.
+function speechRuntimeUrl(env: Record<string, string>) {
+  return env.VITE_SPEECH_RUNTIME_URL || `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/${ORT_WASM}`;
+}
+
+// The runtime also has a built-in fallback pointing at that file, which would make the build copy it
+// into the site. Point the fallback at the same address instead.
+function ortWasmElsewhere(url: string): Plugin {
+  const fallback = `new URL("${ORT_WASM}",import.meta.url)`;
+  return {
+    name: 'hookcut-ort-wasm-elsewhere',
+    enforce: 'pre',
+    apply: 'build',
+    transform(code, id) {
+      if (!id.includes('onnxruntime-web') || !code.includes(fallback)) return null;
+      return code.split(fallback).join(`new URL(${JSON.stringify(url)})`);
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const runtimeUrl = speechRuntimeUrl(env);
+  return {
+    plugins: [react(), isolation, momentsApi(env)],
+    worker: { format: 'es', plugins: () => [ortWasmElsewhere(runtimeUrl)] },
+    define: { __SPEECH_RUNTIME_URL__: JSON.stringify(runtimeUrl) },
+    build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html' } } },
+    // Its WebAssembly files are located relative to the package; pre-bundling breaks that.
+    optimizeDeps: { exclude: ['@huggingface/transformers'] },
+  };
+});
