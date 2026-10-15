@@ -12,7 +12,7 @@ import { isPhone } from './device';
 // Quick AI (Free): base, ~200 MB, fast everywhere.
 const QUICK_MODEL = 'onnx-community/whisper-base.en_timestamped';
 // Best AI (Pro, Studio): small, ~400 MB, noticeably more accurate but about 3× slower, so only
-// with a graphics card. Without one, paid plans use the quick model (cloud processing covers them).
+// with a graphics card. Without one, paid plans use the quick model (cloud listening covers them).
 const BEST_MODEL = 'onnx-community/whisper-small.en_timestamped';
 const SAMPLE_RATE = 16_000;
 // Lines that end this close to the end of a piece may be cut off; they're redone with the next piece.

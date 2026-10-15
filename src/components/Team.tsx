@@ -94,7 +94,7 @@ export default function Team() {
         <>
           <p className="muted small">
             Studio includes {TEAM_SIZE} people: you and {TEAM_SIZE - 1} others. Your team shares the plan's {plan.hours} hours, brand
-            kits, cloud processing and Best AI.
+            kits, cloud listening and Best AI.
           </p>
           <ul className="team-list">
             <li>

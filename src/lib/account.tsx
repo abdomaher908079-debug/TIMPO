@@ -21,7 +21,7 @@ interface AccountValue {
   workspace: WorkspaceRow | null;
   period: Period;
   usage: Usage;
-  // Cloud processing used this period (see server/).
+  // Cloud listening used this period (the transcribe function).
   cloudUsage: Usage;
   loading: boolean;
   refresh(): Promise<void>;

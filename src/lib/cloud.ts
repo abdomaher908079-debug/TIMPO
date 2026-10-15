@@ -1,20 +1,16 @@
-import {
-  ALL_FORMATS,
-  BlobSource,
-  BufferTarget,
-  Conversion,
-  getFirstEncodableAudioCodec,
-  Input,
-  Mp4OutputFormat,
-  Output,
-  WebMOutputFormat,
-} from 'mediabunny';
-import type { Segment, Word } from './speech';
-import { getAccessToken } from './supabase';
+import { ALL_FORMATS, AdtsOutputFormat, BlobSource, BufferTarget, Conversion, getFirstEncodableAudioCodec, Input, OggOutputFormat, Output } from 'mediabunny';
+import type { Segment } from './speech';
+import { ApiError, getAccessToken, supabase } from './supabase';
 
-// Our cloud processing server (server/). Not set = the option isn't offered.
-const CLOUD_URL = (import.meta.env.VITE_CLOUD_URL as string | undefined)?.replace(/\/$/, '');
-export const cloudAvailable = !!CLOUD_URL;
+// Cloud listening runs on the `transcribe` Supabase Edge Function (Gemini), so it needs Supabase.
+export const cloudAvailable = !!supabase;
+
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '');
+const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+// Must match PIECE_SECONDS in supabase/functions/_shared/transcribe.ts.
+const PIECE_SECONDS = 5 * 60;
+// Pieces sent at the same time: quicker, but gentle on the AI's per-minute limits.
+const PARALLEL = 3;
 
 /**
  * Whether this device is likely too slow to transcribe in the browser: no graphics card for
@@ -30,77 +26,65 @@ export async function deviceLooksSlow(): Promise<boolean> {
   }
 }
 
-export type CloudStage =
-  | { stage: 'extracting'; progress: number }
-  | { stage: 'uploading'; progress: number }
-  | { stage: 'queued'; position: number }
-  | { stage: 'listening'; progress: number };
-
-export interface CloudTranscript {
-  segments: Segment[];
-  // Exact word times for the whole episode, so exporting clips needs no more speech recognition.
-  words: Word[];
-}
-
 /**
- * Transcribes an episode on our server: extracts the audio only (mono speech quality, about
- * 15 MB per hour), uploads it, and waits for the transcript. The server deletes the audio once done.
+ * Transcribes an episode in the cloud: only the audio (never the video) is cut into pieces of a few
+ * minutes, and each piece goes to Gemini through our server, which doesn't keep it. `onProgress`
+ * gets 0..1. Word timing for captions still happens on the device, clip by clip, when exporting.
  */
 export async function transcribeInCloud(
   file: File,
   seconds: number,
-  quality: 'quick' | 'best',
-  { signal, onStage }: { signal: AbortSignal; onStage: (s: CloudStage) => void },
-): Promise<CloudTranscript> {
-  if (!CLOUD_URL) throw new Error('Cloud processing isn’t available.');
-  const audio = await extractAudio(file, signal, (p) => onStage({ stage: 'extracting', progress: p }));
-  const token = await getAccessToken();
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
-  const form = new FormData();
-  form.append('audio', audio.blob, `episode${audio.extension}`);
-  form.append('seconds', String(seconds));
-  form.append('quality', quality);
-  const created = await upload(`${CLOUD_URL}/jobs`, form, headers, signal, (p) => onStage({ stage: 'uploading', progress: p }));
-  const id = created.id as string;
-
-  const cancel = () => void fetch(`${CLOUD_URL}/jobs/${id}`, { method: 'DELETE', headers }).catch(() => {});
-  signal.addEventListener('abort', cancel);
+  fingerprint: string,
+  { signal: outer, onProgress }: { signal: AbortSignal; onProgress: (p: number) => void },
+): Promise<Segment[]> {
+  if (!cloudAvailable) throw new Error('Cloud listening isn’t available.');
+  // When one piece fails, the others stop too.
+  const stop = new AbortController();
+  const signal = AbortSignal.any([outer, stop.signal]);
+  const format = await audioFormat();
+  // A last piece shorter than about a minute and a half joins the one before it.
+  const count = Math.max(1, Math.round(seconds / PIECE_SECONDS + 0.2));
+  const results: Segment[][] = [];
+  let done = 0;
+  const run = async (i: number) => {
+    const start = i * PIECE_SECONDS;
+    const end = i === count - 1 ? seconds : start + PIECE_SECONDS;
+    const audio = await extractAudio(file, start, end, format, signal);
+    results[i] = await send(audio, { start, length: end - start, seconds, fingerprint }, signal);
+    onProgress(++done / count);
+  };
+  onProgress(0);
+  // The first piece goes alone: the server checks the plan's limits on it before the rest are sent.
+  await run(0);
+  let next = 1;
+  const worker = async () => {
+    while (next < count) await run(next++);
+  };
   try {
-    for (;;) {
-      if (signal.aborted) throw new DOMException('Canceled', 'AbortError');
-      const res = await fetch(`${CLOUD_URL}/jobs/${id}`, { headers, signal });
-      const job = (await res.json().catch(() => ({}))) as {
-        status?: string;
-        position?: number;
-        progress?: number;
-        error?: string;
-        detail?: string;
-        result?: CloudTranscript;
-      };
-      if (!res.ok) throw new Error(job.detail ?? 'Cloud processing stopped. Please try again.');
-      if (job.status === 'done' && job.result) return { segments: job.result.segments, words: job.result.words };
-      if (job.status === 'error' || job.status === 'canceled') throw new Error(job.error ?? 'Cloud processing stopped. Please try again.');
-      if (job.status === 'queued') onStage({ stage: 'queued', position: job.position ?? 0 });
-      else onStage({ stage: 'listening', progress: job.progress ?? 0 });
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, count - 1) }, worker));
   } finally {
-    signal.removeEventListener('abort', cancel);
+    stop.abort();
   }
+  return results.flat();
 }
 
-// Speech-quality audio: mono and low bitrate is plenty for transcription and keeps uploads small.
-async function extractAudio(file: File, signal: AbortSignal, onProgress: (p: number) => void) {
-  let codec = await getFirstEncodableAudioCodec(['opus', 'aac'], { numberOfChannels: 1, sampleRate: 16000 });
-  let sampleRate = 16000;
-  if (!codec) {
-    // Some AAC encoders don't do 16 kHz.
-    codec = await getFirstEncodableAudioCodec(['opus', 'aac'], { numberOfChannels: 1, sampleRate: 48000 });
-    sampleRate = 48000;
+interface AudioFormat {
+  codec: 'opus' | 'aac';
+  sampleRate: number;
+}
+
+// Speech-quality audio in a format Gemini reads: Opus in Ogg, or AAC where Opus can't be encoded.
+async function audioFormat(): Promise<AudioFormat> {
+  // Some AAC encoders don't do 16 kHz.
+  for (const sampleRate of [16000, 48000]) {
+    const codec = await getFirstEncodableAudioCodec(['opus', 'aac'], { numberOfChannels: 1, sampleRate });
+    if (codec === 'opus' || codec === 'aac') return { codec, sampleRate };
   }
-  if (!codec) throw new Error("This browser can't prepare audio for cloud processing. Try the latest Chrome.");
-  const format = codec === 'opus' ? new WebMOutputFormat() : new Mp4OutputFormat({ fastStart: 'in-memory' });
+  throw new Error("This browser can't prepare audio for cloud listening. Try the latest Chrome or Safari.");
+}
+
+async function extractAudio(file: File, start: number, end: number, { codec, sampleRate }: AudioFormat, signal: AbortSignal): Promise<Blob> {
+  const format = codec === 'opus' ? new OggOutputFormat() : new AdtsOutputFormat();
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
     const output = new Output({ format, target: new BufferTarget() });
@@ -108,11 +92,11 @@ async function extractAudio(file: File, signal: AbortSignal, onProgress: (p: num
       input,
       output,
       showWarnings: false,
+      trim: { start, end },
       video: { discard: true },
       audio: { codec, numberOfChannels: 1, sampleRate, bitrate: 32_000, forceTranscode: true },
     });
     if (!conversion.isValid) throw new Error("We couldn't read this episode's audio.");
-    conversion.onProgress = onProgress;
     const stop = () => void conversion.cancel();
     signal.addEventListener('abort', stop);
     try {
@@ -121,38 +105,39 @@ async function extractAudio(file: File, signal: AbortSignal, onProgress: (p: num
       signal.removeEventListener('abort', stop);
     }
     if (signal.aborted) throw new DOMException('Canceled', 'AbortError');
-    return { blob: new Blob([output.target.buffer!], { type: format.mimeType }), extension: format.fileExtension };
+    return new Blob([output.target.buffer!], { type: codec === 'opus' ? 'audio/ogg' : 'audio/aac' });
   } finally {
     input.dispose();
   }
 }
 
-// XMLHttpRequest, because fetch can't report upload progress.
-function upload(
-  url: string,
-  body: FormData,
-  headers: Record<string, string>,
+async function send(
+  audio: Blob,
+  piece: { start: number; length: number; seconds: number; fingerprint: string },
   signal: AbortSignal,
-  onProgress: (p: number) => void,
-): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
-    xhr.onload = () => {
-      let data: Record<string, unknown> = {};
-      try {
-        data = JSON.parse(xhr.responseText) as Record<string, unknown>;
-      } catch {
-        // Not JSON: use the generic message below.
-      }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-      else reject(new Error((data.detail as string | undefined) ?? 'The upload failed. Please try again.'));
-    };
-    xhr.onerror = () => reject(new Error('The upload failed. Check your internet connection and try again.'));
-    xhr.onabort = () => reject(new DOMException('Canceled', 'AbortError'));
-    signal.addEventListener('abort', () => xhr.abort(), { once: true });
-    xhr.send(body);
-  });
+): Promise<Segment[]> {
+  const form = new FormData();
+  form.append('audio', audio, audio.type === 'audio/ogg' ? 'piece.ogg' : 'piece.aac');
+  for (const [k, v] of Object.entries(piece)) form.append(k, String(v));
+  const headers: Record<string, string> = { apikey: ANON_KEY };
+  const token = await getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  // One more try for a dropped connection or a busy AI; limits and other answers are final.
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/transcribe`, { method: 'POST', headers, body: form, signal });
+    } catch (err) {
+      if (signal.aborted) throw err;
+      if (attempt < 1) continue;
+      throw new Error('We couldn’t reach our server. Check your internet connection and try again.');
+    }
+    const data = (await res.json().catch(() => ({}))) as { segments?: Segment[]; error?: string; reason?: string };
+    if (res.ok && data.segments) return data.segments;
+    if (attempt < 1 && (res.status >= 500 || res.status === 429)) {
+      await new Promise((r) => setTimeout(r, 5000));
+      continue;
+    }
+    throw new ApiError(data.error ?? 'Cloud listening stopped. Please try again.', res.status, data.reason);
+  }
 }

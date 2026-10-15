@@ -105,7 +105,7 @@ export default function Account() {
         </p>
         {cloudAvailable && !demo && (
           <p className="usage-text">
-            Cloud processing:{' '}
+            Cloud listening:{' '}
             {plan.cloudJobsPerPeriod !== null
               ? `${cloudUsage.episodes} of ${plan.cloudJobsPerPeriod} episode${plan.cloudJobsPerPeriod === 1 ? '' : 's'} used`
               : `${formatDuration(cloudUsage.seconds)} of ${plan.cloudSeconds / 3600} hours used`}

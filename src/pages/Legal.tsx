@@ -29,8 +29,8 @@ export function Privacy() {
       <h2>Your video stays on your computer</h2>
       <p>
         When you choose an episode, your browser reads it on your own computer. It turns the speech into text (a transcript),
-        finds the best moments and makes your clips there too. <b>Your video and audio are never uploaded</b>, except when
-        you choose cloud processing (below).
+        finds the best moments and makes your clips there too. <b>Your video is never uploaded.</b> Your audio is only sent
+        when the episode is listened to in the cloud (below).
       </p>
 
       <h2>What we send to AI</h2>
@@ -43,11 +43,14 @@ export function Privacy() {
         AI service.
       </p>
 
-      <h2>Cloud processing (optional)</h2>
+      <h2>Cloud listening (phones and slow computers)</h2>
       <p>
-        If your computer or phone is too slow, you can choose to process an episode in the cloud. Then we upload{' '}
-        <b>the episode's audio only</b> (never the video) to our server, turn it into a transcript, and delete the audio as soon
-        as that's done. The transcript is deleted from our server within an hour.
+        Phones, and computers too slow to listen to a full episode, listen in the cloud: we send{' '}
+        <b>the episode's audio only</b> (never the video), a few minutes at a time, through our server to{' '}
+        <b>Google's Gemini AI</b>, which writes down what's said. On a computer you can choose this or listening on your
+        device. Today we use Google's free Gemini service, so as above Google may use the audio it receives to improve its
+        products, which can include people reviewing it. We don't store your audio: it passes through our server and is
+        gone once Google returns the transcript. The word timing for your clips' captions still happens on your device.
       </p>
 
       <h2>Your account</h2>
@@ -97,7 +100,7 @@ export function Terms() {
       <h2>Your content</h2>
       <p>
         You keep all rights to your episodes and clips. Only process content you own or have permission to use. You give us
-        permission to process your transcripts (and, for cloud processing, your audio) only as needed to provide the service.
+        permission to process your transcripts (and, for cloud listening, your audio) only as needed to provide the service.
       </p>
 
       <h2>Acceptable use</h2>

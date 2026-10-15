@@ -96,10 +96,13 @@ scaled to 1080×1920, with captions and, on Free, the watermark drawn in (`src/l
 times from Whisper, computed only for the clip being exported. Browsers that can encode H.264 (Chrome, Edge, Safari)
 produce MP4; others produce WebM.
 
-## Cloud processing
+## Cloud listening
 
-For phones and computers without a graphics card, `server/` transcribes the episode's audio (never the video)
-and deletes it right after. See `server/README.md` to run it free on Oracle Cloud, and set `VITE_CLOUD_URL`.
+Phones (by default) and computers without a graphics card can listen in the cloud: the browser cuts the episode's
+audio (never the video) into 5-minute pieces and sends them to the `transcribe` Edge Function, which has Gemini write
+each one down with timestamps and keeps nothing. Captions' word timing still runs on the device, clip by clip, at
+export. Usage is checked against the plan and recorded in `cloud_jobs`. Needs only Supabase and `GEMINI_API_KEY`:
+`supabase functions deploy transcribe`.
 
 ## Going live
 

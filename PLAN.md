@@ -12,10 +12,10 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 - **Money:** free services while we build; spend on ads, not services. Improve services once
   subscriptions pay for them.
   Users just "upload a video"; the mechanism is explained in About.
-- **Backup server:** optional cloud processing for weak computers and phones (Oracle Cloud Always Free,
-  4 ARM cores). Uploads the episode's **audio only** (about 15 MB an hour, never the video), transcribes it with
-  exact word times, deletes the audio right after, forgets the transcript within an hour. Suggested automatically
-  on phones and computers without a graphics card. Picking moments and making clips still happen as usual.
+- **Cloud listening:** for phones (by default) and computers without a graphics card. The episode's **audio only**
+  (about 15 MB an hour, never the video) goes in 5-minute pieces through a Supabase Edge Function to Gemini, which
+  writes it down with timestamps; nothing is stored. No server of our own. Captions' word timing, picking moments
+  and making clips still happen as usual.
 - **Hosting:** Cloudflare Pages, free (unlimited traffic, commercial use allowed). Its 25 MB file limit is below
   the speech runtime's 27 MB file, so that one file lives in Cloudflare R2 (free, your own account) once the domain
   exists, and on the jsDelivr CDN until then. Vercel's free plan forbids commercial use.
@@ -44,7 +44,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   overloaded or out of quota, so users get clips instead of an error.
 - **What to pay for first, once subscriptions come in:**
   1. Gemini paid key (`GEMINI_PAID_API_KEY`) → Best AI picks for Pro/Studio. About $0.01–0.05 per episode.
-  2. Cloud processing server (Part 7) for paid users without a graphics card, so they get the larger speech model too.
+  2. The paid Gemini key also keeps paid users' cloud-listening audio out of Google's product improvement.
   3. Later: a paid transcription API for paid users if in-browser Whisper isn't good enough.
 - **Brand kits:** a show's caption font (8 free Google Fonts), style, colors, position and logo, used in the preview
   and the export. Pro 1, Studio 5. Logos are resized in the browser and stored with the kit (no file storage).

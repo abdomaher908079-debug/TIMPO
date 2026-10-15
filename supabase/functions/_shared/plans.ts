@@ -22,11 +22,10 @@ export interface PlanLimits {
   watermark: boolean;
   maxExport: '1080p' | '4k';
   quality: Quality;
-  // Cloud processing (for weak computers and phones): seconds of audio per period, jobs per period
-  // (null = only seconds), and whether jobs skip ahead of Free ones. Mirrored in server/limits.py.
+  // Cloud listening (for phones and slow computers): seconds of audio per period, episodes per period
+  // (null = only seconds). Enforced by the transcribe function.
   cloudSeconds: number;
   cloudJobsPerPeriod: number | null;
-  cloudPriority: boolean;
 }
 
 export const LIMITS: Record<PlanId, PlanLimits> = {
@@ -43,7 +42,6 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     quality: 'quick',
     cloudSeconds: 30 * 60,
     cloudJobsPerPeriod: 1,
-    cloudPriority: false,
   },
   pro: {
     id: 'pro',
@@ -58,7 +56,6 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     quality: 'best',
     cloudSeconds: 3 * 3600,
     cloudJobsPerPeriod: null,
-    cloudPriority: true,
   },
   studio: {
     id: 'studio',
@@ -73,7 +70,6 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     quality: 'best',
     cloudSeconds: 10 * 3600,
     cloudJobsPerPeriod: null,
-    cloudPriority: true,
   },
 };
 
@@ -170,4 +166,23 @@ export function effectivePlan(profile: ProfileRow | null): PlanId {
   if (!profile || profile.plan === 'free') return 'free';
   const status = profile.subscription_status;
   return status === 'active' || status === 'trialing' || status === 'past_due' ? profile.plan : 'free';
+}
+
+/** Whether an episode of `seconds` fits the plan's cloud listening this period (mirrors checkEpisode). */
+export function checkCloud(plan: PlanId, usage: Usage, seconds: number): LimitProblem | null {
+  const l = LIMITS[plan];
+  if (l.cloudJobsPerPeriod !== null && usage.episodes >= l.cloudJobsPerPeriod) {
+    return {
+      reason: 'no-episodes-left',
+      message: `You've used your cloud listening for this ${l.period}. You can still listen on this device, or upgrade for more.`,
+    };
+  }
+  const left = l.cloudSeconds - usage.seconds;
+  if (seconds > left + GRACE_SECONDS) {
+    return {
+      reason: 'no-hours-left',
+      message: `This episode needs ${hm(seconds)} of cloud listening and you have ${hm(Math.max(0, left))} left this ${l.period}.`,
+    };
+  }
+  return null;
 }

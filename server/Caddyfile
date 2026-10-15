@@ -1,6 +1,0 @@
-{$CLOUD_DOMAIN} {
-	request_body {
-		max_size 300MB
-	}
-	reverse_proxy app:8787
-}

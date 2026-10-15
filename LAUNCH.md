@@ -52,12 +52,12 @@ Cloudflare Pages accepts files up to 25 MB and the speech runtime file is 27 MB,
       Pages environment variables and redeploy.
 - [ ] After upgrading the speech library (`npm update`), upload the new file too.
 
-## 6. Cloud processing server (Oracle, free)
-- [ ] Follow `server/README.md`. Set `ALLOWED_ORIGINS=https://<domain>` and the website's `VITE_CLOUD_URL`.
+## 6. Cloud listening (phones)
+- [ ] Deploy the `transcribe` function (`supabase functions deploy transcribe`). It uses the same `GEMINI_API_KEY`.
 
 ## 7. Before announcing
 - [ ] Have the Terms, Privacy and Refund pages checked (they're plain-language templates, not legal advice).
 - [ ] Full test on a real computer: sign up → upload an episode → clips → export → upgrade (sandbox) →
       Pro features (4K, no watermark, Best AI on a computer with a graphics card).
-- [ ] Test on a phone with cloud processing.
+- [ ] Test on a phone with cloud listening.
 - [ ] Try the free plan limits: a second episode in the same week is blocked.
