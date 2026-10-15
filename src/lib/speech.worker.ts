@@ -2,7 +2,6 @@
 // Runs Whisper off the main thread so the page stays responsive during a long episode.
 import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from '@huggingface/transformers';
 import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
-import ortWasm from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import type { Word, WorkerRequest, WorkerResponse } from './speech';
 
@@ -19,8 +18,16 @@ const SAMPLE_RATE = 16_000;
 const EDGE_SECONDS = 2;
 const MAX_CARRY_SECONDS = 45;
 
-// Serve the speech runtime from our own site rather than a public CDN (the default).
-env.backends.onnx.wasm!.wasmPaths = { mjs: ortMjs, wasm: ortWasm };
+// The speech runtime's small loader comes from our site. Its 27 MB WebAssembly file comes from the
+// jsDelivr CDN in production, because Cloudflare Pages accepts files up to 25 MB; in development,
+// from the local package. The version always matches the installed package.
+const ORT_WASM = 'ort-wasm-simd-threaded.asyncify.wasm';
+env.backends.onnx.wasm!.wasmPaths = {
+  mjs: ortMjs,
+  wasm: import.meta.env.DEV
+    ? `/node_modules/onnxruntime-web/dist/${ORT_WASM}`
+    : `https://cdn.jsdelivr.net/npm/onnxruntime-web@${__ORT_VERSION__}/dist/${ORT_WASM}`,
+};
 
 declare const self: DedicatedWorkerGlobalScope;
 const post = (msg: WorkerResponse, transfer: Transferable[] = []) => self.postMessage(msg, transfer);

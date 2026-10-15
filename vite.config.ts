@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig, loadEnv, type Connect, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { geminiFor, MomentsError, parseRequest, pickMoments } from './supabase/functions/_shared/moments';
@@ -56,9 +57,13 @@ function momentsApi(env: Record<string, string>): Plugin {
   };
 }
 
+const ORT_VERSION = JSON.parse(readFileSync('node_modules/onnxruntime-web/package.json', 'utf8')).version as string;
+
 export default defineConfig(({ mode }) => ({
   plugins: [react(), isolation, momentsApi(loadEnv(mode, process.cwd(), ''))],
   worker: { format: 'es' },
+  // The speech runtime's version, to load its WebAssembly from the CDN (see speech.worker.ts).
+  define: { __ORT_VERSION__: JSON.stringify(ORT_VERSION) },
   build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html' } } },
   // Its WebAssembly files are located relative to the package; pre-bundling breaks that.
   optimizeDeps: { exclude: ['@huggingface/transformers'] },
