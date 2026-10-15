@@ -4,9 +4,11 @@ import { useAuth } from '../lib/auth';
 
 const MIN_PASSWORD = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Google sign-in needs the Google provider turned on in Supabase (Authentication → Providers) first.
+const GOOGLE_LOGIN = import.meta.env.VITE_GOOGLE_LOGIN === 'on';
 
 export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { demo, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -73,11 +75,15 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
         {isSignup ? 'Your episodes and clips, saved in one place.' : 'Log in to make clips from your episodes.'}
       </p>
 
-      <button className="btn btn-light" disabled={busy} onClick={() => void run(signInWithGoogle)}>
-        Continue with Google
-      </button>
+      {(demo || GOOGLE_LOGIN) && (
+        <>
+          <button className="btn btn-light" disabled={busy} onClick={() => void run(signInWithGoogle)}>
+            Continue with Google
+          </button>
 
-      <div className="divider">or</div>
+          <div className="divider">or</div>
+        </>
+      )}
 
       <form onSubmit={submit} noValidate>
         <label className="field-label" htmlFor="email">
