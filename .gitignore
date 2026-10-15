@@ -3,3 +3,6 @@ dist
 .env
 .env.local
 __pycache__
+
+# Supabase CLI cache
+supabase/.temp/
