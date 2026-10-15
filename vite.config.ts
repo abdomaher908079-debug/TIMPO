@@ -1,4 +1,6 @@
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { defineConfig, loadEnv, type Connect, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { geminiFor, MomentsError, parseRequest, pickMoments } from './supabase/functions/_shared/moments';
@@ -60,11 +62,27 @@ function momentsApi(env: Record<string, string>): Plugin {
 const ORT_VERSION = JSON.parse(readFileSync('node_modules/onnxruntime-web/package.json', 'utf8')).version as string;
 const ORT_WASM = 'ort-wasm-simd-threaded.asyncify.wasm';
 
-// Where the live site loads the speech runtime's 27 MB WebAssembly file from. Cloudflare Pages
-// refuses files over 25 MB, so it isn't part of the site: VITE_SPEECH_RUNTIME_URL points at your own
-// copy (e.g. in Cloudflare R2), otherwise the free jsDelivr CDN. See LAUNCH.md.
+// The speech runtime's 27 MB WebAssembly file is over Cloudflare Pages' 25 MB limit, so the site carries it
+// gzipped (about 7 MB) and the speech worker unpacks it. VITE_SPEECH_RUNTIME_URL can point at your own
+// uncompressed copy instead (e.g. in Cloudflare R2). See LAUNCH.md.
+const SPEECH_RUNTIME_GZ = `/speech-runtime/ort-${ORT_VERSION}.wasm.gz`;
+
 function speechRuntimeUrl(env: Record<string, string>) {
   return env.VITE_SPEECH_RUNTIME_URL || `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/${ORT_WASM}`;
+}
+
+function speechRuntimeGz(): Plugin {
+  return {
+    name: 'hookcut-speech-runtime-gz',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: SPEECH_RUNTIME_GZ.slice(1),
+        source: gzipSync(readFileSync(`node_modules/onnxruntime-web/dist/${ORT_WASM}`), { level: 9 }),
+      });
+    },
+  };
 }
 
 // The runtime also has a built-in fallback pointing at that file, which would make the build copy it
@@ -82,13 +100,26 @@ function ortWasmElsewhere(url: string): Plugin {
   };
 }
 
+function appVersion() {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const runtimeUrl = speechRuntimeUrl(env);
+  const ownCopy = !env.VITE_SPEECH_RUNTIME_URL;
   return {
-    plugins: [react(), isolation, momentsApi(env)],
+    plugins: [react(), isolation, momentsApi(env), ...(ownCopy ? [speechRuntimeGz()] : [])],
     worker: { format: 'es', plugins: () => [ortWasmElsewhere(runtimeUrl)] },
-    define: { __SPEECH_RUNTIME_URL__: JSON.stringify(runtimeUrl) },
+    define: {
+      __SPEECH_RUNTIME_URL__: JSON.stringify(runtimeUrl),
+      __SPEECH_RUNTIME_GZ__: JSON.stringify(ownCopy ? SPEECH_RUNTIME_GZ : ''),
+      __APP_VERSION__: JSON.stringify(appVersion()),
+    },
     build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html' } } },
     // Its WebAssembly files are located relative to the package; pre-bundling breaks that.
     optimizeDeps: { exclude: ['@huggingface/transformers'] },

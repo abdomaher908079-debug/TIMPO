@@ -19,14 +19,35 @@ const EDGE_SECONDS = 2;
 const MAX_CARRY_SECONDS = 45;
 
 // The speech runtime's small loader comes from our site. Its 27 MB WebAssembly file is too big for
-// Cloudflare Pages (25 MB limit), so the live site loads it from VITE_SPEECH_RUNTIME_URL (your R2
-// copy) or the jsDelivr CDN; see vite.config.ts. In development it comes from the local package.
+// Cloudflare Pages (25 MB limit), so the live site carries it gzipped and unpacks it here (see
+// runtimeBinary), or loads it from VITE_SPEECH_RUNTIME_URL (your R2 copy); see vite.config.ts.
+// In development it comes from the local package.
 env.backends.onnx.wasm!.wasmPaths = {
   mjs: ortMjs,
   wasm: import.meta.env.DEV ? '/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm' : __SPEECH_RUNTIME_URL__,
 };
 
 declare const self: DedicatedWorkerGlobalScope;
+
+let runtime: Promise<Uint8Array> | null = null;
+// Downloads and unpacks our own gzipped copy of the runtime's WebAssembly file (cached by the browser).
+function runtimeBinary(): Promise<Uint8Array> {
+  runtime ??= (async () => {
+    const res = await fetch(__SPEECH_RUNTIME_GZ__);
+    if (!res.ok) throw new Error(`Couldn't download the speech runtime (HTTP ${res.status}).`);
+    let bytes = new Uint8Array(await res.arrayBuffer());
+    // Still gzipped, unless the host already unpacked it (Content-Encoding: gzip).
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      const unpacked = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+      bytes = new Uint8Array(await new Response(unpacked).arrayBuffer());
+    }
+    // WebAssembly files start with "\0asm".
+    if (bytes[0] !== 0 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) throw new Error('The speech runtime download was damaged.');
+    return bytes;
+  })();
+  runtime.catch(() => (runtime = null));
+  return runtime;
+}
 const post = (msg: WorkerResponse, transfer: Transferable[] = []) => self.postMessage(msg, transfer);
 
 let asr: AutomaticSpeechRecognitionPipeline | null = null;
@@ -59,6 +80,10 @@ async function load(quality: 'quick' | 'best', safe = false) {
     }
   };
   if (safe) env.backends.onnx.wasm!.numThreads = 1;
+  if (!import.meta.env.DEV && __SPEECH_RUNTIME_GZ__) {
+    post({ type: 'stage', stage: 'downloading the speech runtime' });
+    env.backends.onnx.wasm!.wasmBinary = await runtimeBinary();
+  }
   if (!safe) post({ type: 'stage', stage: 'checking the graphics chip' });
   const adapter = safe ? null : await gpuAdapter();
   if (adapter) {

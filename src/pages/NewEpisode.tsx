@@ -351,7 +351,11 @@ export default function NewEpisode() {
       {state.kind === 'error' && (
         <p className="error" role="alert">
           {state.message}
-          {state.detail && <small style={{ display: 'block', marginTop: 6, opacity: 0.75, wordBreak: 'break-word' }}>Details: {state.detail}</small>}
+          {state.detail && (
+            <small style={{ display: 'block', marginTop: 6, opacity: 0.75, wordBreak: 'break-word' }}>
+              Details: {state.detail} · <Link to="/diagnose">Check my browser</Link>
+            </small>
+          )}
         </p>
       )}
 

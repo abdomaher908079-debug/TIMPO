@@ -10,6 +10,7 @@ export default function Footer() {
         <Link to="/terms">Terms</Link>
         <Link to="/refunds">Refunds</Link>
         <a href={`mailto:${LEGAL.email}`}>Contact</a>
+        <Link to="/diagnose">Check my browser</Link>
       </nav>
       <p>
         © {new Date().getFullYear()} {BRAND_NAME}

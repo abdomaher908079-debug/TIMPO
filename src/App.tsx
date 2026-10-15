@@ -8,6 +8,7 @@ import NewEpisode from './pages/NewEpisode';
 import Account from './pages/Account';
 import Footer from './components/Footer';
 import { Privacy, Refunds, Terms } from './pages/Legal';
+import Diagnose from './pages/Diagnose';
 
 export default function App() {
   const { demo } = useAuth();
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/refunds" element={<Refunds />} />
+        <Route path="/diagnose" element={<Diagnose />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Footer />

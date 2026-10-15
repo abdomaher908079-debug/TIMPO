@@ -407,3 +407,11 @@ h1, h2, h3 { text-wrap: balance; }
 .team-invite p { margin: 0 0 8px; }
 .team-buttons { display: flex; gap: 8px; }
 .team-buttons .btn { margin: 0; }
+
+.diagnose { list-style: none; padding: 0; margin: 16px 0; }
+.diagnose li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.diagnose li > span { width: 18px; flex: none; font-weight: 700; }
+.diagnose li.ok > span { color: var(--phosphor); }
+.diagnose li.bad > span, .diagnose li.bad strong { color: var(--orange); }
+.diagnose li .small { word-break: break-word; }
+.diagnose-report { white-space: pre-wrap; word-break: break-word; font-size: 12px; opacity: 0.7; margin-top: 16px; }

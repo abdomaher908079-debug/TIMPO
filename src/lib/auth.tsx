@@ -12,6 +12,8 @@ interface AuthContextValue {
   loading: boolean;
   // True when Supabase keys aren't set: logins are faked in this browser only.
   demo: boolean;
+  // Whether "Continue with Google" can work: the Google provider is turned on in Supabase.
+  googleEnabled: boolean;
   signInWithGoogle(): Promise<void>;
   signInWithEmail(email: string, password: string): Promise<void>;
   signUpWithEmail(email: string, password: string): Promise<{ needsConfirmation: boolean }>;
@@ -48,6 +50,17 @@ function writeDemoUser(user: User | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [googleEnabled, setGoogleEnabled] = useState(!supabase);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const url = import.meta.env.VITE_SUPABASE_URL as string;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings: { external?: { google?: boolean } } | null) => setGoogleEnabled(!!settings?.external?.google))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -76,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       demo: !supabase,
+      googleEnabled,
       async signInWithGoogle() {
         if (!supabase) return demoLogin('demo.user@gmail.com', 'Demo User');
         const { error } = await supabase.auth.signInWithOAuth({
@@ -112,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
       },
     };
-  }, [user, loading]);
+  }, [user, loading, googleEnabled]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

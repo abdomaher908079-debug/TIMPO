@@ -4,11 +4,9 @@ import { useAuth } from '../lib/auth';
 
 const MIN_PASSWORD = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Google sign-in needs the Google provider turned on in Supabase (Authentication → Providers) first.
-const GOOGLE_LOGIN = import.meta.env.VITE_GOOGLE_LOGIN === 'on';
 
 export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
-  const { demo, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { googleEnabled, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,7 +73,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
         {isSignup ? 'Your episodes and clips, saved in one place.' : 'Log in to make clips from your episodes.'}
       </p>
 
-      {(demo || GOOGLE_LOGIN) && (
+      {/* Shown once the Google provider is turned on in Supabase (Authentication → Providers). */}
+      {googleEnabled && (
         <>
           <button className="btn btn-light" disabled={busy} onClick={() => void run(signInWithGoogle)}>
             Continue with Google
