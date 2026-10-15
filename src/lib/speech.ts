@@ -18,6 +18,8 @@ export type WorkerRequest =
 
 export type WorkerResponse =
   | { type: 'loading'; loaded: number; total: number }
+  // What the recognizer is doing while it gets ready, for error messages.
+  | { type: 'stage'; stage: string }
   // `model` is the speech model actually used: best needs a graphics card.
   | { type: 'ready'; device: 'webgpu' | 'wasm'; model: 'quick' | 'best' }
   | { type: 'segments'; id: number; segments: Segment[]; doneUntil: number }
@@ -54,7 +56,7 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
   let ready: (msg: Ready) => void = () => {};
   const loaded = new Promise<Ready>((resolve) => (ready = resolve));
   let isReady = false;
-  let stage = 'getting speech recognition ready';
+  let stage = 'opening the speech worker';
 
   // If the recognizer crashes or fails while loading, try once more in safe mode before giving up.
   const crashed = (from: Worker, message: string) => {
@@ -62,6 +64,7 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     if (from !== worker) return;
     if (!isReady && !safeMode) {
       safeMode = true;
+      stage = 'opening the speech worker';
       worker.terminate();
       worker = startWorker();
       return;
@@ -73,6 +76,7 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     w.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const msg = e.data;
       if (msg.type === 'loading') onLoading?.(msg.loaded, msg.total);
+      else if (msg.type === 'stage') stage = msg.stage;
       else if (msg.type === 'ready') {
         isReady = true;
         stage = 'listening';
@@ -80,7 +84,8 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
       } else if (msg.type === 'segments') waiting.get(msg.id)?.(msg);
       else if (msg.type === 'error') crashed(w, msg.message);
     };
-    w.onerror = (e) => crashed(w, e.message || 'Speech recognition stopped unexpectedly.');
+    // An error with no message usually means the worker's own file failed to load.
+    w.onerror = (e) => crashed(w, e.message || `Speech recognition stopped unexpectedly [${e.type}${e.filename ? ` ${e.filename.split('/').pop()}:${e.lineno}` : ''}]`);
     w.postMessage({ type: 'load', quality, safe: safeMode } satisfies WorkerRequest);
     return w;
   };
