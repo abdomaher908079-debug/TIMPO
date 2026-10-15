@@ -36,6 +36,8 @@ MAX_QUEUED = 50
 RESULT_TTL_SECONDS = 3600
 # English-only Whisper, like the browser: base for Quick AI, small (more accurate) for Best AI.
 MODELS = {"quick": "base.en", "best": "small.en"}
+# Set (e.g. base.en) to use one model for every plan, on servers too slow for small.en.
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "").strip()
 
 
 @dataclass
@@ -69,7 +71,7 @@ class JobCanceled(Exception):
 
 def model_for(quality: str) -> WhisperModel:
     if quality not in models:
-        models[quality] = WhisperModel(MODELS[quality], device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4)
+        models[quality] = WhisperModel(WHISPER_MODEL or MODELS[quality], device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4)
     return models[quality]
 
 
@@ -98,7 +100,7 @@ def transcribe(job: Job) -> dict:
         # Skips long silences, which is faster and stops Whisper inventing words in them.
         vad_filter=True,
         word_timestamps=True,
-        beam_size=5 if job.quality == "best" else 1,
+        beam_size=5 if job.quality == "best" and not WHISPER_MODEL else 1,
     )
     duration = info.duration or 0
     # The file decides the real length; the upload only declared one.
