@@ -48,11 +48,12 @@ async function gpuAdapter(): Promise<GpuAdapter | null> {
   }
 }
 
-async function load(quality: 'quick' | 'best') {
+async function load(quality: 'quick' | 'best', safe = false) {
   const progress_callback = (p: { status: string; loaded?: number; total?: number }) => {
     if (p.status === 'progress_total' && p.total) post({ type: 'loading', loaded: p.loaded ?? 0, total: p.total });
   };
-  const adapter = await gpuAdapter();
+  if (safe) env.backends.onnx.wasm!.numThreads = 1;
+  const adapter = safe ? null : await gpuAdapter();
   if (adapter) {
     const best = quality === 'best';
     try {
@@ -137,10 +138,17 @@ async function words({ id, samples }: Extract<WorkerRequest, { type: 'words' }>)
 
 const round = (t: number) => Math.round(t * 100) / 100;
 
+// Errors outside a request (e.g. inside the speech runtime's own threads) would otherwise end the worker
+// with no message at all.
+self.addEventListener('error', (e) => post({ type: 'error', message: `Uncaught: ${e.message || 'unknown error'}` }));
+self.addEventListener('unhandledrejection', (e) =>
+  post({ type: 'error', message: `Uncaught: ${e.reason instanceof Error ? e.reason.message : String(e.reason)}` }),
+);
+
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
   try {
-    if (msg.type === 'load') await load(msg.quality);
+    if (msg.type === 'load') await load(msg.quality, msg.safe);
     else if (msg.type === 'words') await words(msg);
     else await transcribe(msg);
   } catch (err) {

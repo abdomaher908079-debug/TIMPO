@@ -11,7 +11,8 @@ export interface Word {
 }
 
 export type WorkerRequest =
-  | { type: 'load'; quality: 'quick' | 'best' }
+  // `safe`: processor only, one thread. Used after the recognizer crashed on this device (e.g. a phone).
+  | { type: 'load'; quality: 'quick' | 'best'; safe?: boolean }
   | { type: 'transcribe'; id: number; start: number; samples: Float32Array; final: boolean }
   | { type: 'words'; id: number; samples: Float32Array };
 
@@ -25,6 +26,9 @@ export type WorkerResponse =
 
 // How much audio Whisper gets at a time. Longer pieces mean fewer cut points to stitch.
 const PIECE_SECONDS = 60;
+
+// Set once the recognizer has crashed while loading on this device; later loads go straight to safe mode.
+let safeMode = false;
 
 export interface TranscribeOptions {
   signal: AbortSignal;
@@ -42,7 +46,6 @@ export interface TranscribeOptions {
  * of recognition, so only a couple of minutes of audio are ever in memory.
  */
 export async function transcribeEpisode(file: File, { signal, quality, onLoading, onReady, onProgress }: TranscribeOptions): Promise<Segment[]> {
-  const worker = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
   let fail: (err: Error) => void = () => {};
   const failed = new Promise<never>((_, reject) => (fail = reject));
   failed.catch(() => {});
@@ -50,15 +53,38 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
   type Ready = Extract<WorkerResponse, { type: 'ready' }>;
   let ready: (msg: Ready) => void = () => {};
   const loaded = new Promise<Ready>((resolve) => (ready = resolve));
+  let isReady = false;
+  let stage = 'getting speech recognition ready';
 
-  worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-    const msg = e.data;
-    if (msg.type === 'loading') onLoading?.(msg.loaded, msg.total);
-    else if (msg.type === 'ready') ready(msg);
-    else if (msg.type === 'segments') waiting.get(msg.id)?.(msg);
-    else if (msg.type === 'error') fail(new Error(msg.message));
+  // If the recognizer crashes or fails while loading, try once more in safe mode before giving up.
+  const crashed = (from: Worker, message: string) => {
+    // A replaced worker can still report its crash twice (an error message, then an error event).
+    if (from !== worker) return;
+    if (!isReady && !safeMode) {
+      safeMode = true;
+      worker.terminate();
+      worker = startWorker();
+      return;
+    }
+    fail(new Error(`${message} (while ${stage}${safeMode ? ', safe mode' : ''})`));
   };
-  worker.onerror = (e) => fail(new Error(e.message || 'Speech recognition stopped unexpectedly.'));
+  const startWorker = () => {
+    const w = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (e: MessageEvent<WorkerResponse>) => {
+      const msg = e.data;
+      if (msg.type === 'loading') onLoading?.(msg.loaded, msg.total);
+      else if (msg.type === 'ready') {
+        isReady = true;
+        stage = 'listening';
+        ready(msg);
+      } else if (msg.type === 'segments') waiting.get(msg.id)?.(msg);
+      else if (msg.type === 'error') crashed(w, msg.message);
+    };
+    w.onerror = (e) => crashed(w, e.message || 'Speech recognition stopped unexpectedly.');
+    w.postMessage({ type: 'load', quality, safe: safeMode } satisfies WorkerRequest);
+    return w;
+  };
+  let worker = startWorker();
   const abort = () => fail(new DOMException('Canceled', 'AbortError'));
   signal.addEventListener('abort', abort);
 
@@ -74,7 +100,6 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
 
   const chunks = speechChunks(file, { chunkSeconds: PIECE_SECONDS, signal });
   try {
-    worker.postMessage({ type: 'load', quality } satisfies WorkerRequest);
     // Load the model and decode the first piece at the same time.
     const [info, first] = await Promise.race([Promise.all([loaded, chunks.next()]), failed]);
     onReady?.(info.device, info.model);
@@ -152,7 +177,7 @@ export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
       };
     });
     loaded.catch(() => {});
-    w.postMessage({ type: 'load', quality } satisfies WorkerRequest);
+    w.postMessage({ type: 'load', quality, safe: safeMode } satisfies WorkerRequest);
     worker = w;
   };
 
