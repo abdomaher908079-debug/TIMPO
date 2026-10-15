@@ -11,8 +11,9 @@ import {
   QUALITY_HIGH,
   WebMOutputFormat,
 } from 'mediabunny';
-import { captionFromGroups, type CaptionGroup, type Clip } from './clips';
-import { CAPTION_FONT, drawCaption, drawWatermark } from './draw';
+import type { BrandKit } from './brandKits';
+import { captionFromGroups, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { drawCaption, drawLogo, drawWatermark } from './draw';
 
 // Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
 export const SIZES = { '1080p': { width: 1080, height: 1920 }, '4k': { width: 2160, height: 3840 } } as const;
@@ -35,15 +36,27 @@ export async function renderClip(
   clip: Clip,
   captions: CaptionGroup[],
   {
+    look,
+    logo,
     watermark,
     size = '1080p',
     onProgress,
     signal,
-  }: { watermark: boolean; size?: ExportSize; onProgress?: (p: number) => void; signal?: AbortSignal },
+  }: {
+    look: CaptionLook;
+    // A brand kit's logo, already decoded.
+    logo?: { image: ImageBitmap; corner: BrandKit['logo_corner'] } | null;
+    watermark: boolean;
+    size?: ExportSize;
+    onProgress?: (p: number) => void;
+    signal?: AbortSignal;
+  },
 ): Promise<RenderedClip> {
   const { width: OUT_W, height: OUT_H } = SIZES[size];
   // Captions are drawn on a canvas, which only uses fonts that are already loaded.
-  await Promise.all([document.fonts.load(`900 80px ${CAPTION_FONT}`), document.fonts.load(`800 80px ${CAPTION_FONT}`)]).catch(() => {});
+  const { ensureFont } = await import('./brandKits');
+  await ensureFont(look.font);
+  await document.fonts.load(`${look.weight} 80px "${look.font}"`).catch(() => {});
 
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
@@ -93,7 +106,8 @@ export async function renderClip(
           sample.draw(ctx, 0, 0, OUT_W, OUT_H);
           // Sample times start at 0 at the clip's start.
           const caption = captionFromGroups(captions, clip.start + sample.timestamp);
-          if (caption) drawCaption(ctx, caption, clip.captionStyle, OUT_W, OUT_H);
+          if (logo) drawLogo(ctx, logo.image, logo.corner, OUT_W, OUT_H);
+          if (caption) drawCaption(ctx, caption, look, OUT_W, OUT_H);
           if (watermark) drawWatermark(ctx, OUT_W, OUT_H);
           return canvas;
         },

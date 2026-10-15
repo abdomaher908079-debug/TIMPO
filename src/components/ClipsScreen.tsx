@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ClipEditor from './ClipEditor';
-import { clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { useAccount } from '../lib/account';
+import { ensureFont, listKits, type BrandKit } from '../lib/brandKits';
+import { captionLook, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, Word, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -26,8 +28,12 @@ export type ExportStatus =
   | { state: 'done'; url: string; fileName: string; key: string }
   | { state: 'error'; message: string };
 
-// Everything that changes the exported video. A finished export of a clip edited since is out of date.
-export const exportKey = (c: Clip, size: string) => `${rangeKey(c)}|${c.cropX}|${c.captionStyle}|${size}`;
+// Everything that changes the exported video. A finished export of a clip edited since (or whose
+// brand kit was edited since) is out of date.
+export const exportKey = (c: Clip, size: string, kits: BrandKit[]) => {
+  const { look, kit } = captionLook(c, kits);
+  return `${rangeKey(c)}|${c.cropX}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
+};
 export const SIZE_LABELS = { '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
 
 // Frames are taken a moment in, past any cut at the very start of the clip.
@@ -63,12 +69,37 @@ export default function ClipsScreen({ file, duration, segments, episodeWords, cl
   // Exact word times per clip range, so re-exports and the preview reuse them.
   const [timed, setTimed] = useState<Record<string, CaptionGroup[]>>({});
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const { workspace } = useAccount();
+  const [kits, setKits] = useState<BrandKit[]>([]);
+  const kitsRef = useRef(kits);
+  kitsRef.current = kits;
   const clipsRef = useRef(clips);
   clipsRef.current = clips;
   const timedRef = useRef(timed);
   timedRef.current = timed;
   const timerRef = useRef<WordTimer | null>(null);
   const jobRef = useRef<AbortController | null>(null);
+
+  // The team's brand kits. Clips that haven't picked a look yet use the first kit.
+  const workspaceId = workspace?.owner_id;
+  useEffect(() => {
+    if (!workspaceId) return;
+    let live = true;
+    listKits(workspaceId)
+      .then((list) => {
+        if (!live) return;
+        setKits(list);
+        list.forEach((k) => void ensureFont(k.font));
+        const first = list[0]?.id ?? null;
+        if (clipsRef.current.some((c) => c.brandKitId === undefined)) {
+          onChange(clipsRef.current.map((c) => (c.brandKitId === undefined ? { ...c, brandKitId: first } : c)));
+        }
+      })
+      .catch((err) => console.warn(err));
+    return () => {
+      live = false;
+    };
+  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -148,7 +179,18 @@ export default function ClipsScreen({ file, duration, segments, episodeWords, cl
     setStatus(i, { state: 'rendering', progress: 0 });
     const { renderClip } = await import('../lib/render');
     const clipSize = sizeRef.current;
+    const { look, kit } = captionLook(clip, kitsRef.current);
+    let logo = null;
+    if (kit?.logo) {
+      try {
+        logo = { image: await createImageBitmap(await (await fetch(kit.logo)).blob()), corner: kit.logo_corner };
+      } catch (err) {
+        console.warn('Logo unavailable', err);
+      }
+    }
     const { blob, extension } = await renderClip(file, clip, groups, {
+      look,
+      logo,
       watermark,
       size: clipSize,
       signal,
@@ -156,7 +198,8 @@ export default function ClipsScreen({ file, duration, segments, episodeWords, cl
     });
     const url = URL.createObjectURL(blob);
     const name = fileName(clip, i + 1, extension);
-    setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize) });
+    logo?.image.close();
+    setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize, kitsRef.current) });
     download(url, name);
   }
 
@@ -213,7 +256,8 @@ export default function ClipsScreen({ file, duration, segments, episodeWords, cl
         locked={editing >= exportable}
         watermark={watermark}
         exportStatus={exports[editing]}
-        exportCurrent={exports[editing]?.state !== 'done' || (exports[editing] as { key: string }).key === exportKey(clip, exportSize)}
+        exportCurrent={exports[editing]?.state !== 'done' || (exports[editing] as { key: string }).key === exportKey(clip, exportSize, kits)}
+        kits={kits}
         sizeLabel={SIZE_LABELS[exportSize]}
         busy={busy}
         onExport={() => void runExports([editing])}
@@ -230,7 +274,7 @@ export default function ClipsScreen({ file, duration, segments, episodeWords, cl
   const locked = clips.length - unlocked;
   const isCurrent = (i: number) => {
     const e = exports[i];
-    return e?.state === 'done' && e.key === exportKey(clips[i]!, exportSize);
+    return e?.state === 'done' && e.key === exportKey(clips[i]!, exportSize, kits);
   };
   const toExport = clips.slice(0, unlocked).flatMap((_, i) => (isCurrent(i) ? [] : [i]));
   return (

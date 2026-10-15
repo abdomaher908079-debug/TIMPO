@@ -2,19 +2,23 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import {
   checkEpisode,
   currentPeriod,
-  effectivePlan,
   type LimitProblem,
   type Period,
   type ProfileRow,
   type Usage,
+  type WorkspaceRow,
 } from '../../supabase/functions/_shared/plans';
 import { useAuth } from './auth';
 import { planById, type Plan, type PlanId } from './plans';
 import { supabase } from './supabase';
 
 interface AccountValue {
+  // The plan you work under: your own, or your Studio team's.
   plan: Plan;
+  // Your own subscription (billing details on the Account page).
   profile: ProfileRow | null;
+  // Who pays: you, or the Studio owner whose team you're in.
+  workspace: WorkspaceRow | null;
   period: Period;
   usage: Usage;
   // Cloud processing used this period (see server/).
@@ -72,6 +76,7 @@ const demoProfile = (plan: PlanId): ProfileRow => ({
 export function AccountProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceRow | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeRow[]>([]);
   const [cloudUsage, setCloudUsage] = useState<Usage>({ episodes: 0, seconds: 0 });
   const [loading, setLoading] = useState(true);
@@ -79,33 +84,45 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!user) {
       setProfile(null);
+      setWorkspace(null);
       setEpisodes([]);
       setLoading(false);
       return;
     }
     if (!supabase) {
       const demo = readDemo();
-      setProfile(demoProfile(demo.plan));
+      const p = demoProfile(demo.plan);
+      setProfile(p);
+      setWorkspace({ ...p, owner_id: user.id, is_team_member: false });
       setEpisodes(demo.episodes);
       setLoading(false);
       return;
     }
-    const { data: p, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>();
+    const [{ data: p, error }, { data: w, error: wError }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>(),
+      supabase.rpc('my_workspace').maybeSingle<WorkspaceRow>(),
+    ]);
     if (error) console.error('Profile unavailable', error);
-    const plan = effectivePlan(p ?? null);
-    const period = currentPeriod(plan, new Date(), { start: p?.current_period_start ?? null, end: p?.current_period_end ?? null });
+    if (wError) console.error('Workspace unavailable', wError);
+    const ws = w ?? null;
+    const plan = ws?.plan ?? 'free';
+    const wsId = ws?.owner_id ?? user.id;
+    const period = currentPeriod(plan, new Date(), { start: ws?.current_period_start ?? null, end: ws?.current_period_end ?? null });
     const { data: rows, error: rowsError } = await supabase
       .from('episodes')
       .select('fingerprint, seconds, period_start')
+      .eq('workspace_id', wsId)
       .eq('period_start', period.start.toISOString());
     if (rowsError) console.error('Usage unavailable', rowsError);
     const { data: cloudRows } = await supabase
       .from('cloud_jobs')
       .select('seconds')
+      .eq('workspace_id', wsId)
       .eq('period_start', period.start.toISOString());
     const cloud = (cloudRows as { seconds: number }[] | null) ?? [];
     setCloudUsage({ episodes: cloud.length, seconds: cloud.reduce((n, r) => n + Number(r.seconds), 0) });
     setProfile(p ?? null);
+    setWorkspace(ws);
     setEpisodes((rows as EpisodeRow[] | null) ?? []);
     setLoading(false);
   }, [user]);
@@ -116,10 +133,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo<AccountValue>(() => {
-    const planId = effectivePlan(profile);
+    const planId = workspace?.plan ?? 'free';
     const period = currentPeriod(planId, new Date(), {
-      start: profile?.current_period_start ?? null,
-      end: profile?.current_period_end ?? null,
+      start: workspace?.current_period_start ?? null,
+      end: workspace?.current_period_end ?? null,
     });
     const start = period.start.getTime();
     const inPeriod = episodes.filter((e) => new Date(e.period_start).getTime() === start);
@@ -127,6 +144,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return {
       plan: planById(planId),
       profile,
+      workspace,
       period,
       usage,
       cloudUsage,
@@ -148,7 +166,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         void refresh();
       },
     };
-  }, [profile, episodes, cloudUsage, loading, refresh]);
+  }, [profile, workspace, episodes, cloudUsage, loading, refresh]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

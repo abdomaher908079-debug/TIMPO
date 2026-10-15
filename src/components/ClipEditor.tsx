@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import Caption from './Caption';
 import { download, type ExportStatus } from './ClipsScreen';
 import Watermark from './Watermark';
+import { useAccount } from '../lib/account';
+import type { BrandKit } from '../lib/brandKits';
 import {
   CAPTION_STYLES,
   captionFromGroups,
+  captionLook,
   clock,
   estimateWords,
   groupWords,
@@ -21,6 +24,8 @@ interface Props {
   duration: number;
   segments: Segment[];
   clip: Clip;
+  // The team's brand kits, offered as caption looks.
+  kits: BrandKit[];
   // Exact word times for the clip's current range, once it has been exported.
   exactCaptions?: CaptionGroup[];
   number: number;
@@ -47,7 +52,7 @@ const WINDOW_SECONDS = 30;
 const NUDGE = 0.5;
 
 export default function ClipEditor(props: Props) {
-  const { videoUrl, duration, segments, clip, exactCaptions, number, total, watermark, onChange, onClose, onPrev, onNext } = props;
+  const { videoUrl, duration, segments, clip, kits, exactCaptions, number, total, watermark, onChange, onClose, onPrev, onNext } = props;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [t, setT] = useState(clip.start);
   const [playing, setPlaying] = useState(false);
@@ -117,6 +122,9 @@ export default function ClipEditor(props: Props) {
   const inClip = t >= clip.start && t < clip.end;
   const estimated = useMemo(() => groupWords(estimateWords(segments, win.from, win.to)), [segments, win]);
   const caption = inClip ? captionFromGroups(exactCaptions ?? estimated, t) : null;
+  const { look, kit } = captionLook(clip, kits);
+  const { plan } = useAccount();
+  const sample = { words: ['Best', 'moment'], active: 1 };
   const lines = useMemo(() => segments.filter((s) => s.end > win.from && s.start < win.to), [segments, win]);
   const changed = clip.start !== clip.original.start || clip.end !== clip.original.end;
 
@@ -164,7 +172,8 @@ export default function ClipEditor(props: Props) {
               />
             )}
             {watermark && <Watermark />}
-            {caption && <Caption caption={caption} styleId={clip.captionStyle} />}
+            {kit?.logo && <img className={`phone-logo logo-${kit.logo_corner}`} src={kit.logo} alt="" />}
+            {caption && <Caption caption={caption} look={look} />}
             {!playing && !unplayable && (
               <span className="phone-play" aria-hidden="true">
                 ▶
@@ -280,22 +289,56 @@ export default function ClipEditor(props: Props) {
 
           <span className="field-label">Captions</span>
           <div className="style-picker" role="radiogroup" aria-label="Caption style">
-            {CAPTION_STYLES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                role="radio"
-                aria-checked={clip.captionStyle === s.id}
-                className={`style-option ${clip.captionStyle === s.id ? 'on' : ''}`}
-                onClick={() => onChange({ ...clip, captionStyle: s.id })}
-              >
-                <span className="style-sample">
-                  <Caption caption={{ words: ['Best', 'moment'], active: 1 }} styleId={s.id} inline />
-                </span>
-                {s.name}
-              </button>
-            ))}
+            {kits.map((k) => {
+              const on = kit?.id === k.id;
+              return (
+                <button
+                  key={k.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  className={`style-option style-brand ${on ? 'on' : ''}`}
+                  onClick={() => onChange({ ...clip, brandKitId: k.id })}
+                >
+                  <span className="style-sample">
+                    <Caption caption={sample} look={captionLook({ captionStyle: 'bold', brandKitId: k.id }, kits).look} inline />
+                  </span>
+                  {k.name}
+                </button>
+              );
+            })}
+            {CAPTION_STYLES.map((s) => {
+              const on = !kit && clip.captionStyle === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  className={`style-option ${on ? 'on' : ''}`}
+                  onClick={() => onChange({ ...clip, captionStyle: s.id, brandKitId: null })}
+                >
+                  <span className="style-sample">
+                    <Caption caption={sample} look={captionLook({ captionStyle: s.id }, []).look} inline />
+                  </span>
+                  {s.name}
+                </button>
+              );
+            })}
           </div>
+          {!kits.length && (
+            <p className="muted small">
+              {plan.id === 'free' ? (
+                <>
+                  Want captions in your show's font and colors, with your logo? <Link to="/account">Brand kits come with Pro</Link>.
+                </>
+              ) : (
+                <>
+                  <Link to="/account#brand-kits">Create your brand kit</Link>: your font, colors and logo on every clip.
+                </>
+              )}
+            </p>
+          )}
 
           <span className="field-label">Transcript</span>
           <p className="muted small">Tap a line to jump to it, then set the clip's start or end there.</p>

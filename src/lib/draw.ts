@@ -1,22 +1,23 @@
 import { BRAND_NAME, LOGO_BARS, LOGO_ORANGE, LOGO_PEAK } from './brand';
-import type { Caption, CaptionStyleId } from './clips';
+import type { BrandKit } from './brandKits';
+import type { Caption, CaptionLook } from './clips';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
-const PHOSPHOR = '#9dff3c';
 export const CAPTION_FONT = 'Inter, system-ui, sans-serif';
 
 /**
- * Draws a caption onto a W×H video frame, matching the editor preview: centered, with its top at
- * 66% of the height, wrapped to two lines when it doesn't fit.
+ * Draws a caption onto a W×H video frame, matching the editor preview: centered, with its top at the
+ * look's position, wrapped to two lines when it doesn't fit.
  */
-export function drawCaption(ctx: Ctx, caption: Caption, style: CaptionStyleId, W: number, H: number) {
+export function drawCaption(ctx: Ctx, caption: Caption, look: CaptionLook, W: number, H: number) {
+  const style = look.style;
   if (style === 'none' || !caption.words.length) return;
   const upper = style !== 'boxed';
   const size = Math.round(W * 0.075);
   const words = caption.words.map((w) => (upper ? w.toUpperCase() : w));
   ctx.save();
-  ctx.font = `${style === 'boxed' ? 800 : 900} ${size}px ${CAPTION_FONT}`;
+  ctx.font = `${look.weight} ${size}px "${look.font}", ${CAPTION_FONT}`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   const space = ctx.measureText(' ').width;
@@ -39,7 +40,7 @@ export function drawCaption(ctx: Ctx, caption: Caption, style: CaptionStyleId, W
   });
 
   const lineHeight = size * 1.15;
-  const top = H * 0.66;
+  const top = H * look.position;
   lines.forEach((line, li) => {
     const total = line.reduce((n, i, k) => n + widths[i]! + (k ? space : 0), 0);
     let x = (W - total) / 2;
@@ -48,9 +49,9 @@ export function drawCaption(ctx: Ctx, caption: Caption, style: CaptionStyleId, W
       const on = i === caption.active;
       if (style === 'boxed') {
         const pad = size * 0.12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+        ctx.fillStyle = look.boxColor;
         ctx.fillRect(x - pad, y - lineHeight / 2, widths[i]! + pad * 2, lineHeight);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = look.textColor;
         ctx.fillText(words[i]!, x, y);
       } else {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
@@ -63,7 +64,7 @@ export function drawCaption(ctx: Ctx, caption: Caption, style: CaptionStyleId, W
           ctx.strokeText(words[i]!, x, y);
           ctx.shadowColor = 'transparent';
         }
-        ctx.fillStyle = style === 'highlight' && on ? PHOSPHOR : '#fff';
+        ctx.fillStyle = style === 'highlight' && on ? look.accentColor : look.textColor;
         ctx.fillText(words[i]!, x, y);
         ctx.shadowColor = 'transparent';
       }
@@ -110,4 +111,21 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fill();
+}
+
+// Logo position for each corner, clear of the platforms' own buttons and text: the bottom corners sit
+// above the caption/username area at the bottom of TikTok, Reels and Shorts.
+export function logoBox(corner: BrandKit['logo_corner'], imgW: number, imgH: number, W: number, H: number) {
+  const scale = Math.min((W * 0.2) / imgW, (H * 0.08) / imgH);
+  const w = imgW * scale;
+  const h = imgH * scale;
+  const x = corner.endsWith('left') ? W * 0.055 : W * 0.945 - w;
+  const y = corner.startsWith('top') ? H * 0.075 : H * 0.78 - h;
+  return { x, y, w, h };
+}
+
+/** A brand kit's logo, drawn in its corner. */
+export function drawLogo(ctx: Ctx, image: ImageBitmap, corner: BrandKit['logo_corner'], W: number, H: number) {
+  const { x, y, w, h } = logoBox(corner, image.width, image.height, W, H);
+  ctx.drawImage(image, x, y, w, h);
 }

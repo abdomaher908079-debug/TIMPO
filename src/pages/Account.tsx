@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import BrandKits from '../components/BrandKits';
 import Pricing from '../components/Pricing';
+import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { openBillingPortal } from '../lib/billing';
@@ -11,7 +13,7 @@ const DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'long
 
 export default function Account() {
   const { user, demo } = useAuth();
-  const { plan, profile, period, usage, cloudUsage, loading, refresh } = useAccount();
+  const { plan, profile, workspace, period, usage, cloudUsage, loading, refresh } = useAccount();
   const [params, setParams] = useSearchParams();
   const [billingError, setBillingError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -37,7 +39,9 @@ export default function Account() {
 
   const hoursTotal = plan.hours * 3600;
   const share = plan.episodesPerPeriod !== null ? usage.episodes / plan.episodesPerPeriod : usage.seconds / hoursTotal;
-  const paid = plan.id !== 'free';
+  // Team members use the owner's plan but have no billing of their own.
+  const member = !!workspace?.is_team_member;
+  const paid = plan.id !== 'free' && !member;
 
   return (
     <main className="account-page">
@@ -54,7 +58,7 @@ export default function Account() {
         <div className="account-row">
           <div>
             <p className="eyebrow">Plan</p>
-            <h2 className="account-plan">{loading ? '…' : plan.name}</h2>
+            <h2 className="account-plan">{loading ? '…' : member ? `${plan.name} · team` : plan.name}</h2>
           </div>
           {paid && !demo && (
             <button
@@ -112,7 +116,10 @@ export default function Account() {
         </Link>
       </section>
 
-      <Pricing />
+      <BrandKits />
+      <Team />
+
+      {!member && <Pricing />}
     </main>
   );
 }

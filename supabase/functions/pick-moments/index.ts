@@ -4,7 +4,7 @@
 // Deploy: supabase functions deploy pick-moments
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { geminiFor, MomentsError, parseRequest, pickMoments } from '../_shared/moments.ts';
-import { checkEpisode, currentPeriod, effectivePlan, LIMITS, type ProfileRow } from '../_shared/plans.ts';
+import { checkEpisode, currentPeriod, LIMITS, type WorkspaceRow } from '../_shared/plans.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -39,15 +39,18 @@ Deno.serve(async (req) => {
     const seconds = Math.max(lastWord, Number(body?.episode?.seconds) || 0);
 
     const now = new Date();
-    const { data: profile } = await admin.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>();
-    const plan = effectivePlan(profile);
-    const period = currentPeriod(plan, now, { start: profile?.current_period_start ?? null, end: profile?.current_period_end ?? null });
+    // Studio team members use the team's plan and share its hours.
+    const { data: workspace, error: wsError } = await admin.rpc('workspace_of', { uid: user.id }).maybeSingle<WorkspaceRow>();
+    if (wsError) throw wsError;
+    const plan = workspace?.plan ?? 'free';
+    const workspaceId = workspace?.owner_id ?? user.id;
+    const period = currentPeriod(plan, now, { start: workspace?.current_period_start ?? null, end: workspace?.current_period_end ?? null });
     const periodStart = period.start.toISOString();
 
     const { data: rows, error } = await admin
       .from('episodes')
       .select('fingerprint, seconds')
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
       .eq('period_start', periodStart);
     if (error) throw error;
     // Trying the same episode again this period is free.
@@ -66,7 +69,10 @@ Deno.serve(async (req) => {
     if (!repeat) {
       const { error: insertError } = await admin
         .from('episodes')
-        .upsert({ user_id: user.id, fingerprint, seconds, period_start: periodStart }, { onConflict: 'user_id,fingerprint,period_start', ignoreDuplicates: true });
+        .upsert(
+          { user_id: user.id, workspace_id: workspaceId, fingerprint, seconds, period_start: periodStart },
+          { onConflict: 'workspace_id,fingerprint,period_start', ignoreDuplicates: true },
+        );
       if (insertError) console.error('Usage not recorded', insertError);
     }
     return json({ moments });

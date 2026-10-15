@@ -45,7 +45,12 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   1. Gemini paid key (`GEMINI_PAID_API_KEY`) → Best AI picks for Pro/Studio. About $0.01–0.05 per episode.
   2. Cloud processing server (Part 7) for paid users without a graphics card, so they get the larger speech model too.
   3. Later: a paid transcription API for paid users if in-browser Whisper isn't good enough.
-- **Not built yet:** brand caption styles (Pro/Studio), team members (Studio).
+- **Brand kits:** a show's caption font (8 free Google Fonts), style, colors, position and logo, used in the preview
+  and the export. Pro 1, Studio 5. Logos are resized in the browser and stored with the kit (no file storage).
+- **Studio teams:** 3 people (owner + 2 invited by email). Members work in the owner's "workspace": its plan, hours,
+  brand kits, cloud time and Best AI; no billing of their own. No email service yet: the owner copies an invite
+  message; the person signs up with that email and clicks Join. If the owner's Studio ends, members fall back to
+  their own plan. Limits and access are enforced in the database (tested on Postgres).
 - **Skipped:** pasting YouTube links (against YouTube's Terms of Service).
 - **Design:** direction A. Dark background, orange actions, phosphor green for waveform, scores and captions.
 

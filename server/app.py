@@ -42,6 +42,7 @@ MODELS = {"quick": "base.en", "best": "small.en"}
 class Job:
     id: str
     user_id: str
+    workspace_id: str
     plan: str
     quality: str
     path: str
@@ -181,30 +182,34 @@ def service_headers() -> dict:
 @dataclass
 class User:
     id: str
+    # Who pays: the user, or the Studio owner whose team they're in. Plan and hours are the workspace's.
+    workspace_id: str
     plan: str
-    profile: dict | None
+    workspace: dict | None
 
 
 async def current_user(authorization: str = Header(default="")) -> User:
     if AUTH_DISABLED:
-        return User(id="local", plan="pro", profile=None)
+        return User(id="local", workspace_id="local", plan="pro", workspace=None)
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, "Please sign in again.")
     res = await http.get(f"{SUPABASE_URL}/auth/v1/user", headers={"apikey": SUPABASE_ANON_KEY, "Authorization": authorization})
     if res.status_code != 200:
         raise HTTPException(401, "Please sign in again.")
     user_id = res.json()["id"]
-    res = await http.get(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{user_id}", "select": "*"}, headers=service_headers())
+    res = await http.post(f"{SUPABASE_URL}/rest/v1/rpc/workspace_of", json={"uid": user_id}, headers=service_headers())
     res.raise_for_status()
     rows = res.json()
-    profile = rows[0] if rows else None
-    return User(id=user_id, plan=limits.effective_plan(profile), profile=profile)
+    workspace = rows[0] if rows else None
+    # workspace_of already returns the effective plan.
+    plan = workspace["plan"] if workspace and workspace.get("plan") in limits.CLOUD else "free"
+    return User(id=user_id, workspace_id=workspace["owner_id"] if workspace else user_id, plan=plan, workspace=workspace)
 
 
 async def usage(user: User, period_start: datetime) -> tuple[int, float]:
     res = await http.get(
         f"{SUPABASE_URL}/rest/v1/cloud_jobs",
-        params={"user_id": f"eq.{user.id}", "period_start": f"eq.{period_start.isoformat()}", "select": "seconds"},
+        params={"workspace_id": f"eq.{user.workspace_id}", "period_start": f"eq.{period_start.isoformat()}", "select": "seconds"},
         headers=service_headers(),
     )
     res.raise_for_status()
@@ -217,7 +222,7 @@ async def record_usage(job: Job, seconds: float):
         return
     res = await http.post(
         f"{SUPABASE_URL}/rest/v1/cloud_jobs",
-        json={"user_id": job.user_id, "seconds": seconds, "period_start": job.period_start.isoformat()},
+        json={"user_id": job.user_id, "workspace_id": job.workspace_id, "seconds": seconds, "period_start": job.period_start.isoformat()},
         headers=service_headers(),
     )
     if res.status_code >= 300:
@@ -259,7 +264,7 @@ async def create_job(
 
     period_start = None
     if not AUTH_DISABLED:
-        period_start = limits.current_period_start(user.plan, datetime.now(timezone.utc), user.profile)
+        period_start = limits.current_period_start(user.plan, datetime.now(timezone.utc), user.workspace)
         jobs_used, seconds_used = await usage(user, period_start)
         problem = limits.check(user.plan, jobs_used, seconds_used, seconds)
         if problem:
@@ -284,6 +289,7 @@ async def create_job(
     job = Job(
         id=uuid.uuid4().hex,
         user_id=user.id,
+        workspace_id=user.workspace_id,
         plan=user.plan,
         quality=quality,
         path=path,

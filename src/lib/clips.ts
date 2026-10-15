@@ -1,3 +1,4 @@
+import { fontWeight, type BrandKit } from './brandKits';
 import type { Moment } from './moments';
 import type { Segment, Word } from './speech';
 
@@ -27,6 +28,56 @@ export interface Clip {
   // Horizontal framing of the 9:16 crop: 0 = left edge, 50 = center, 100 = right edge.
   cropX: number;
   captionStyle: CaptionStyleId;
+  // A brand kit's look instead of captionStyle. undefined = not chosen yet (the first kit is used).
+  brandKitId?: string | null;
+}
+
+/** Everything that decides how captions look, from a basic style or a brand kit. */
+export interface CaptionLook {
+  style: CaptionStyleId;
+  font: string;
+  weight: number;
+  textColor: string;
+  // The highlighted word (Highlight).
+  accentColor: string;
+  // The box behind words (Boxed), as a CSS color.
+  boxColor: string;
+  // Top of the captions, as a fraction of the video's height.
+  position: number;
+}
+
+const PHOSPHOR = '#9dff3c';
+
+/** How a clip's captions look: its brand kit if it uses one, otherwise its basic style. */
+export function captionLook(clip: Pick<Clip, 'captionStyle' | 'brandKitId'>, kits: BrandKit[]): { look: CaptionLook; kit: BrandKit | null } {
+  const kit = (clip.brandKitId && kits.find((k) => k.id === clip.brandKitId)) || null;
+  if (kit) {
+    return {
+      kit,
+      look: {
+        style: kit.style,
+        font: kit.font,
+        weight: fontWeight(kit.font),
+        textColor: kit.text_color,
+        accentColor: kit.accent_color,
+        boxColor: kit.accent_color,
+        position: kit.position,
+      },
+    };
+  }
+  const style = clip.captionStyle;
+  return {
+    kit: null,
+    look: {
+      style,
+      font: 'Inter',
+      weight: style === 'boxed' ? 800 : 900,
+      textColor: '#ffffff',
+      accentColor: PHOSPHOR,
+      boxColor: 'rgba(0, 0, 0, 0.82)',
+      position: 0.66,
+    },
+  };
 }
 
 export function clipsFromMoments(moments: Moment[]): Clip[] {

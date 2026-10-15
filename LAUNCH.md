@@ -10,7 +10,7 @@ Everything Hookcut needs to go live, in order. Free to run until paying users ar
 
 ## 2. Supabase (accounts and usage)
 - [ ] Create a project at supabase.com (free).
-- [ ] Run both files in `supabase/migrations/` (SQL editor, or `supabase db push`).
+- [ ] Run the files in `supabase/migrations/` in order (SQL editor, or `supabase db push`).
 - [ ] Authentication → URL Configuration: Site URL = your domain; add `https://<domain>/new` and
       `https://<domain>/account` to Redirect URLs.
 - [ ] Authentication → Providers → Google: turn on "Continue with Google" (needs a Google Cloud OAuth client).

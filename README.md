@@ -23,8 +23,9 @@ pricing buttons switch plans for free so you can try what each plan unlocks.
 
 ## Accounts, limits and payments
 
-- **Database:** run `supabase/migrations/20261014000000_accounts.sql` (`supabase db push`, or paste it in the SQL
-  editor). It adds `profiles` (plan and subscription) and `episodes` (usage). Users can read only their own rows;
+- **Database:** run the files in `supabase/migrations/` in order (`supabase db push`, or paste them in the SQL
+  editor). They add `profiles` (plan and subscription), `episodes` and `cloud_jobs` (usage), `team_members`
+  (Studio teams) and `brand_kits`. Users can read only their own rows;
   only the server writes them.
 - **Limits** live in `supabase/functions/_shared/plans.ts`, shared by the site (to show them) and the
   `pick-moments` function (to enforce them). An episode counts once it gets its clips; retrying the same file in the

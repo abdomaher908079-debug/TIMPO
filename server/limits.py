@@ -13,13 +13,6 @@ CLOUD = {
 GRACE_SECONDS = 30
 
 
-def effective_plan(profile: dict | None) -> str:
-    """Unpaid or ended subscriptions fall back to Free (same rule as effectivePlan in plans.ts)."""
-    if not profile or profile.get("plan") not in ("pro", "studio"):
-        return "free"
-    return profile["plan"] if profile.get("subscription_status") in ("active", "trialing", "past_due") else "free"
-
-
 def _parse(ts: str | None) -> datetime | None:
     if not ts:
         return None
@@ -29,6 +22,7 @@ def _parse(ts: str | None) -> datetime | None:
 
 
 def current_period_start(plan: str, now: datetime, profile: dict | None) -> datetime:
+    # `profile` is the workspace's billing period (a profile or a workspace_of row).
     """Start of the usage period containing `now` (same rule as currentPeriod in plans.ts)."""
     if plan != "free" and profile:
         start, end = _parse(profile.get("current_period_start")), _parse(profile.get("current_period_end"))

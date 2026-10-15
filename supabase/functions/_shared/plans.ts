@@ -148,6 +148,21 @@ export interface ProfileRow {
 }
 
 /**
+ * The workspace a user works in (from the database's workspace_of): their own account, or the
+ * Studio team they're in. Its plan is already the effective plan.
+ */
+export interface WorkspaceRow {
+  owner_id: string;
+  plan: PlanId;
+  billing: Billing | null;
+  subscription_status: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at: string | null;
+  is_team_member: boolean;
+}
+
+/**
  * The plan a profile is entitled to. A subscription canceled by the user stays `active` until its
  * paid period ends (with `cancel_at` set); `canceled` and `paused` mean it has ended.
  */
