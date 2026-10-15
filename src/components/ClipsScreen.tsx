@@ -188,13 +188,20 @@ export default function ClipsScreen({ file, duration, segments, episodeWords, cl
         console.warn('Logo unavailable', err);
       }
     }
+    // Progress redraws this whole screen, so at most about 5 times a second rather than every frame.
+    let shown = 0;
     const { blob, extension } = await renderClip(file, clip, groups, {
       look,
       logo,
       watermark,
       size: clipSize,
       signal,
-      onProgress: (p) => setStatus(i, { state: 'rendering', progress: p }),
+      onProgress: (p) => {
+        const now = performance.now();
+        if (now - shown < 200) return;
+        shown = now;
+        setStatus(i, { state: 'rendering', progress: p });
+      },
     });
     const url = URL.createObjectURL(blob);
     const name = fileName(clip, i + 1, extension);

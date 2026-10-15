@@ -4,6 +4,7 @@ import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from '@hugging
 import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import type { Word, WorkerRequest, WorkerResponse } from './speech';
+import { isPhone } from './device';
 
 // English-only Whisper: more accurate on English than the multilingual models of the same size.
 // The "timestamped" builds have the extra outputs needed for exact word times (clip captions), so
@@ -79,7 +80,9 @@ async function load(quality: 'quick' | 'best', safe = false) {
       post({ type: 'stage', stage: 'starting the speech model' });
     }
   };
+  // Safe mode: one thread. Phones: two, so the rest of the phone stays responsive while it listens.
   if (safe) env.backends.onnx.wasm!.numThreads = 1;
+  else if (isPhone) env.backends.onnx.wasm!.numThreads = Math.min(2, navigator.hardwareConcurrency || 2);
   if (!import.meta.env.DEV && __SPEECH_RUNTIME_GZ__) {
     post({ type: 'stage', stage: 'downloading the speech runtime' });
     env.backends.onnx.wasm!.wasmBinary = await runtimeBinary();

@@ -13,6 +13,7 @@ import {
 } from 'mediabunny';
 import type { BrandKit } from './brandKits';
 import { captionFromGroups, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { breathe } from './device';
 import { drawCaption, drawLogo, drawWatermark } from './draw';
 
 // Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
@@ -102,7 +103,9 @@ export async function renderClip(
         forceTranscode: true,
         processedWidth: OUT_W,
         processedHeight: OUT_H,
-        process: (sample) => {
+        process: async (sample) => {
+          // One frame at a time with a pause in between, so the page (and the phone) stays responsive.
+          await breathe();
           sample.draw(ctx, 0, 0, OUT_W, OUT_H);
           // Sample times start at 0 at the clip's start.
           const caption = captionFromGroups(captions, clip.start + sample.timestamp);
