@@ -12,7 +12,7 @@ import {
   WebMOutputFormat,
 } from 'mediabunny';
 import type { BrandKit } from './brandKits';
-import { captionFromGroups, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { captionFromGroups, cropAt, type CaptionGroup, type CaptionLook, type Clip } from './clips';
 import { breathe } from './device';
 import { drawCaption, drawLogo, drawWatermark } from './draw';
 
@@ -25,8 +25,6 @@ export interface RenderedClip {
   // '.mp4' or '.webm'
   extension: string;
 }
-
-const even = (n: number) => Math.max(2, Math.floor(n / 2) * 2);
 
 /**
  * Renders one clip on this device: trims it, crops it to 9:16 with the clip's framing, scales to
@@ -73,20 +71,21 @@ export async function renderClip(
       { numberOfChannels: 2, sampleRate: 48000 },
     );
 
-    // Crop the largest 9:16 area, placed left-to-right by the clip's framing.
+    // Fill: the largest 9:16 area, placed left-to-right by the clip's framing (which can follow the
+    // speaker). Fit: the whole picture across the middle, over a blurred copy of itself.
     const srcW = track.displayWidth;
     const srcH = track.displayHeight;
-    let crop;
-    if (srcW / srcH > 9 / 16) {
-      const width = even(Math.min(srcW, (srcH * 9) / 16));
-      crop = { left: Math.round(((srcW - width) * clip.cropX) / 100), top: 0, width, height: srcH };
-    } else {
-      const height = even(Math.min(srcH, (srcW * 16) / 9));
-      crop = { left: 0, top: Math.round((srcH - height) / 2), width: srcW, height };
-    }
+    const wide = srcW / srcH > 9 / 16;
+    const cropW = wide ? Math.min(srcW, (srcH * 9) / 16) : srcW;
+    const cropH = wide ? srcH : Math.min(srcH, (srcW * 16) / 9);
+    const fit = clip.layout === 'fit' && wide;
+    const fitH = Math.round((OUT_W * srcH) / srcW);
 
     const canvas = new OffscreenCanvas(OUT_W, OUT_H);
     const ctx = canvas.getContext('2d')!;
+    // The blurred background: drawn tiny, then stretched (much cheaper than a blur filter on phones).
+    const blur = new OffscreenCanvas(18, 32);
+    const blurCtx = blur.getContext('2d')!;
     const output = new Output({ format, target: new BufferTarget() });
     const conversion = await Conversion.init({
       input,
@@ -96,19 +95,27 @@ export async function renderClip(
       video: {
         codec: videoCodec,
         bitrate: QUALITY_HIGH,
-        crop,
-        width: OUT_W,
-        height: OUT_H,
-        fit: 'cover',
         forceTranscode: true,
         processedWidth: OUT_W,
         processedHeight: OUT_H,
         process: async (sample) => {
           // One frame at a time with a pause in between, so the page (and the phone) stays responsive.
           await breathe();
-          sample.draw(ctx, 0, 0, OUT_W, OUT_H);
           // Sample times start at 0 at the clip's start.
-          const caption = captionFromGroups(captions, clip.start + sample.timestamp);
+          const t = clip.start + sample.timestamp;
+          const left = ((srcW - cropW) * cropAt(clip, t)) / 100;
+          const top = (srcH - cropH) / 2;
+          if (fit) {
+            sample.draw(blurCtx, left, top, cropW, cropH, 0, 0, blur.width, blur.height);
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(blur, 0, 0, OUT_W, OUT_H);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.fillRect(0, 0, OUT_W, OUT_H);
+            sample.draw(ctx, 0, Math.round((OUT_H - fitH) / 2), OUT_W, fitH);
+          } else {
+            sample.draw(ctx, left, top, cropW, cropH, 0, 0, OUT_W, OUT_H);
+          }
+          const caption = captionFromGroups(captions, t);
           if (logo) drawLogo(ctx, logo.image, logo.corner, OUT_W, OUT_H);
           if (caption) drawCaption(ctx, caption, look, OUT_W, OUT_H);
           if (watermark) drawWatermark(ctx, OUT_W, OUT_H);

@@ -11,6 +11,8 @@ import { fingerprint } from '../lib/moments';
 import { cloudAvailable, deviceLooksSlow } from '../lib/cloud';
 import type { Segment } from '../lib/speech';
 import { ApiError } from '../lib/supabase';
+import { useAuth } from '../lib/auth';
+import { forgetEpisode, loadEpisode, saveEpisode, saveVideo, type SavedEpisode } from '../lib/saved';
 
 const MIN_SECONDS = 60;
 
@@ -22,9 +24,16 @@ type State =
   // `limit` means the plan's limits stopped it, so trying again won't help.
   | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string; limit: boolean }
   | { kind: 'reading'; file: File }
+  // Saved clips whose video this browser couldn't keep: choosing the same video again reopens them.
+  | { kind: 'reopen'; episode: SavedEpisode }
   | { kind: 'ready'; file: File; info: EpisodeInfo }
   // `detail`: the technical reason, shown small so people can send it to us.
   | { kind: 'error'; message: string; detail?: string };
+
+function restored(episode: SavedEpisode, file: File): State {
+  const { info, segments, clips } = episode;
+  return clips.length ? { kind: 'done', file, info, segments, clips } : { kind: 'moments-failed', file, info, segments, message: 'Finding the best moments stopped.', limit: false };
+}
 
 function problemWith(info: EpisodeInfo): string | null {
   if (!info.audioCodec) return "This video has no sound. Hookcut needs the episode's audio to find the best moments.";
@@ -41,6 +50,58 @@ const RESETS = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'sh
 export default function NewEpisode() {
   const { plan, usage, period, check, recordDemoEpisode, refresh, loading: accountLoading } = useAccount();
   const [state, setState] = useState<State>({ kind: 'empty' });
+  const { user } = useAuth();
+  const userId = user?.id ?? 'demo';
+
+  // Reopen the last episode's clips after a refresh or a closed tab.
+  useEffect(() => {
+    let live = true;
+    void loadEpisode(userId).then((saved) => {
+      if (!live || !saved) return;
+      const { episode, file } = saved;
+      setState((st) => {
+        if (st.kind !== 'empty') return st;
+        if (!file) return { kind: 'reopen', episode };
+        fingerprints.current.set(file, episode.fingerprint);
+        return restored(episode, file);
+      });
+    });
+    return () => {
+      live = false;
+    };
+  }, [userId]);
+
+  // Save the work as it changes: the transcript once, the clips after every edit.
+  const savedVideo = useRef<File | null>(null);
+  useEffect(() => {
+    if (state.kind !== 'done' && state.kind !== 'moments-failed') return;
+    const fingerprint = fingerprints.current.get(state.file);
+    if (!fingerprint) return;
+    const id = setTimeout(() => {
+      void saveEpisode(userId, {
+        fingerprint,
+        fileName: state.file.name,
+        info: state.info,
+        segments: state.segments,
+        clips: state.kind === 'done' ? state.clips : [],
+        savedAt: Date.now(),
+      });
+      if (savedVideo.current !== state.file) {
+        savedVideo.current = state.file;
+        void saveVideo(userId, fingerprint, state.file);
+      }
+    }, 400);
+    return () => clearTimeout(id);
+  }, [state, userId]);
+
+  // Leaving while an episode is being listened to would lose that work.
+  const processing = state.kind === 'processing';
+  useEffect(() => {
+    if (!processing) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [processing]);
   // Phones and computers without a graphics card get cloud listening by default.
   const [slowDevice, setSlowDevice] = useState(false);
   useEffect(() => {
@@ -53,6 +114,9 @@ export default function NewEpisode() {
   const inputRef = useRef<HTMLInputElement>(null);
   // Ignores results from an earlier file if the user picks another one quickly.
   const latest = useRef(0);
+
+  const reopening = useRef<SavedEpisode | null>(null);
+  reopening.current = state.kind === 'reopen' ? state.episode : null;
 
   async function open(file: File | undefined) {
     if (!file) return;
@@ -67,8 +131,14 @@ export default function NewEpisode() {
       // The video library is large, so it loads only when a file is chosen.
       const { probeEpisode } = await import('../lib/probe');
       const info = await probeEpisode(file);
-      fingerprints.current.set(file, await fingerprint(file, info.durationSeconds));
+      const fp = await fingerprint(file, info.durationSeconds);
+      fingerprints.current.set(file, fp);
       if (id !== latest.current) return;
+      // The video of saved clips, chosen again: reopen them.
+      if (reopening.current?.fingerprint === fp) {
+        setState(restored(reopening.current, file));
+        return;
+      }
       const problem = problemWith(info);
       setState(problem ? { kind: 'error', message: problem } : { kind: 'ready', file, info });
     } catch {
@@ -291,7 +361,11 @@ export default function NewEpisode() {
             type="button"
             className="btn btn-outline"
             onClick={() => {
-              if (state.kind !== 'done' || window.confirm('Start over? Your clips and edits for this episode will be lost.')) setState({ kind: 'empty' });
+              if (state.kind !== 'done' || window.confirm('Start over? Your clips and edits for this episode will be lost.')) {
+                savedVideo.current = null;
+                void forgetEpisode(userId);
+                setState({ kind: 'empty' });
+              }
             }}
           >
             Start a new episode
@@ -326,6 +400,23 @@ export default function NewEpisode() {
               e.target.value = '';
             }}
           />
+        </div>
+      )}
+
+      {state.kind === 'reopen' && (
+        <div className="notice" role="status">
+          Your {state.episode.clips.length} clips from <b>{state.episode.fileName}</b> are saved. Choose that video again to
+          continue where you left off.{' '}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              void forgetEpisode(userId);
+              setState({ kind: 'empty' });
+            }}
+          >
+            Start a new episode instead
+          </button>
         </div>
       )}
 

@@ -10,6 +10,7 @@ import {
   captionFromGroups,
   captionLook,
   clock,
+  cropAt,
   estimateWords,
   groupWords,
   MAX_CLIP_SECONDS,
@@ -24,6 +25,8 @@ interface Props {
   duration: number;
   segments: Segment[];
   clip: Clip;
+  // A still of the clip, shown blurred behind the picture in the "whole picture" layout.
+  thumb?: string;
   // The team's brand kits, offered as caption looks.
   kits: BrandKit[];
   // Exact word times for the clip's current range, once it has been exported.
@@ -52,7 +55,7 @@ const WINDOW_SECONDS = 30;
 const NUDGE = 0.5;
 
 export default function ClipEditor(props: Props) {
-  const { videoUrl, duration, segments, clip, kits, exactCaptions, number, total, watermark, onChange, onClose, onPrev, onNext } = props;
+  const { videoUrl, duration, segments, clip, thumb, kits, exactCaptions, number, total, watermark, onChange, onClose, onPrev, onNext } = props;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [t, setT] = useState(clip.start);
   const [playing, setPlaying] = useState(false);
@@ -127,6 +130,7 @@ export default function ClipEditor(props: Props) {
   const sample = { words: ['Best', 'moment'], active: 1 };
   const lines = useMemo(() => segments.filter((s) => s.end > win.from && s.start < win.to), [segments, win]);
   const changed = clip.start !== clip.original.start || clip.end !== clip.original.end;
+  const fit = wide && clip.layout === 'fit';
 
   return (
     <section className="editor" aria-label={`Edit clip ${number}`}>
@@ -150,6 +154,7 @@ export default function ClipEditor(props: Props) {
       <div className="editor-body">
         <div className="editor-preview">
           <div className="phone" onClick={togglePlay}>
+            {fit && thumb && <img className="phone-backdrop" src={thumb} alt="" />}
             {unplayable ? (
               <p className="phone-message">
                 Your browser can't preview this video format. You can still trim the clip using the transcript.
@@ -160,7 +165,7 @@ export default function ClipEditor(props: Props) {
                 src={videoUrl}
                 playsInline
                 preload="auto"
-                style={{ objectPosition: `${clip.cropX}% 50%` }}
+                style={fit ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${cropAt(clip, t)}% 50%` }}
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget;
                   setWide(v.videoWidth / v.videoHeight > 9 / 16 + 0.01);
@@ -266,24 +271,49 @@ export default function ClipEditor(props: Props) {
 
           {wide && (
             <>
-              <label className="field-label" htmlFor="clip-framing">
-                Framing
-              </label>
-              <input
-                id="clip-framing"
-                type="range"
-                className="slider"
-                min={0}
-                max={100}
-                value={clip.cropX}
-                onChange={(e) => onChange({ ...clip, cropX: Number(e.target.value) })}
-                aria-valuetext={clip.cropX < 40 ? 'Left' : clip.cropX > 60 ? 'Right' : 'Center'}
-              />
-              <div className="slider-labels">
-                <span>Left</span>
-                <span>Center</span>
-                <span>Right</span>
+              <span className="field-label">Framing</span>
+              <div className="style-picker layout-picker" role="radiogroup" aria-label="Framing">
+                {(
+                  [
+                    ['fill', 'Fill the screen'],
+                    ['fit', 'Whole picture'],
+                  ] as const
+                ).map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={clip.layout === id}
+                    className={`style-option ${clip.layout === id ? 'on' : ''}`}
+                    onClick={() => onChange({ ...clip, layout: id, framed: true })}
+                  >
+                    {name}
+                  </button>
+                ))}
               </div>
+              {clip.layout === 'fill' && (
+                <>
+                  <input
+                    id="clip-framing"
+                    type="range"
+                    className="slider"
+                    min={0}
+                    max={100}
+                    aria-label="Framing position"
+                    value={Math.round(cropAt(clip, t))}
+                    // Moving it fixes the framing in place instead of following the speaker.
+                    onChange={(e) => onChange({ ...clip, cropX: Number(e.target.value), track: undefined, framed: true })}
+                    aria-valuetext={clip.cropX < 40 ? 'Left' : clip.cropX > 60 ? 'Right' : 'Center'}
+                  />
+                  <div className="slider-labels">
+                    <span>Left</span>
+                    <span>Center</span>
+                    <span>Right</span>
+                  </div>
+                  {clip.track && <p className="muted small">Following the speaker. Move the slider to keep it in one place.</p>}
+                </>
+              )}
+              {!clip.framed && <p className="muted small">Finding the faces in this clip…</p>}
             </>
           )}
 

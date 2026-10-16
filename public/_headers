@@ -50,3 +50,7 @@
 # Our gzipped copy of the speech runtime (see vite.config.ts). The version is in the file name.
 /speech-runtime/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Face detection model for auto framing.
+/models/*
+  Cache-Control: public, max-age=604800

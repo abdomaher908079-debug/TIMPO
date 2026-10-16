@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import ClipEditor from './ClipEditor';
 import { useAccount } from '../lib/account';
 import { ensureFont, listKits, type BrandKit } from '../lib/brandKits';
-import { alignWords, captionLook, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { alignWords, captionLook, cropAt, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -30,7 +30,7 @@ export type ExportStatus =
 // brand kit was edited since) is out of date.
 export const exportKey = (c: Clip, size: string, kits: BrandKit[]) => {
   const { look, kit } = captionLook(c, kits);
-  return `${rangeKey(c)}|${c.cropX}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
+  return `${rangeKey(c)}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
 };
 export const SIZE_LABELS = { '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
 
@@ -123,6 +123,42 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     return () => abort.abort();
   }, [file, missingKey, editing, busy]);
 
+  // Auto framing: finds the faces in each clip, to follow the speaker or show the whole picture.
+  // Changes only clips nobody has framed yet, one at a time as each is done.
+  async function frameClips(indices: number[], signal: AbortSignal) {
+    const { autoFrame } = await import('../lib/framing');
+    const ranges = indices.map((i) => clipsRef.current[i]!);
+    await autoFrame(
+      file,
+      ranges,
+      (k, framing) => {
+        const i = indices[k]!;
+        const now = clipsRef.current[i];
+        // Skip clips the user framed meanwhile, or trimmed to another range.
+        if (!now || now.framed || now.start !== ranges[k]!.start || now.end !== ranges[k]!.end) return;
+        const next = clipsRef.current.map((c, j) => (j === i ? { ...c, ...framing, framed: true } : c));
+        clipsRef.current = next;
+        onChange(next);
+      },
+      signal,
+    );
+  }
+  const unframed = clips.flatMap((c, i) => (c.framed ? [] : [i])).join(',');
+  useEffect(() => {
+    // Decoding frames competes with exporting, so wait for that.
+    if (!unframed || busy) return;
+    const abort = new AbortController();
+    frameClips(unframed.split(',').map(Number), abort.signal).catch((err) => {
+      if (abort.signal.aborted) return;
+      console.warn('Auto framing failed; clips stay centered.', err);
+      // Don't keep trying: centered framing still works, and people can frame clips by hand.
+      const next = clipsRef.current.map((c) => (c.framed ? c : { ...c, framed: true }));
+      clipsRef.current = next;
+      onChange(next);
+    });
+    return () => abort.abort();
+  }, [unframed, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Get caption timing ready while people look at their clips, so the first export starts right away
   // (on phones this is a ~40 MB download the first time; the browser keeps it afterwards).
   useEffect(() => {
@@ -153,12 +189,13 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     [],
   );
 
-  // Edits live only in this tab until saved projects exist, so warn before they're lost.
+  // Clips and edits are saved in the browser (saved.ts), but an export in progress would be lost.
   useEffect(() => {
+    if (!busy) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, []);
+  }, [busy]);
 
   const setStatus = (i: number, status: ExportStatus) =>
     setExports((ex) => {
@@ -168,6 +205,11 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     });
 
   async function exportOne(i: number, signal: AbortSignal) {
+    // Frame it first if auto framing hasn't reached this clip yet.
+    if (!clipsRef.current[i]!.framed) {
+      setStatus(i, { state: 'timing' });
+      await frameClips([i], signal).catch((err) => console.warn('Auto framing failed', err));
+    }
     const clip = clipsRef.current[i]!;
     const key = rangeKey(clip);
     let groups = timedRef.current[key];
@@ -266,6 +308,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         duration={duration}
         segments={segments}
         clip={clip}
+        thumb={thumbs[thumbTime(clip).toFixed(2)]}
         exactCaptions={timed[rangeKey(clip)]}
         number={editing + 1}
         total={clips.length}
@@ -345,7 +388,15 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
                 aria-label={`${isLocked ? 'Pro clip, preview only: ' : ''}${c.title}, score ${c.score}, ${Math.round(c.end - c.start)} seconds`}
               >
                 <span className="clip-thumb clip-thumb-tall">
-                  {thumb && <img src={thumb} alt="" style={{ objectPosition: `${c.cropX}% 50%` }} />}
+                  {thumb && c.layout === 'fit' && <img className="thumb-backdrop" src={thumb} alt="" />}
+                  {thumb && (
+                    <img
+                      className={c.layout === 'fit' ? 'thumb-fit' : undefined}
+                      src={thumb}
+                      alt=""
+                      style={c.layout === 'fit' ? undefined : { objectPosition: `${cropAt(c, thumbTime(c))}% 50%` }}
+                    />
+                  )}
                   <span className="clip-score">{c.score}</span>
                   <span className="clip-len">{Math.round(c.end - c.start)}s</span>
                   {isLocked ? <span className="clip-lock">🔒 Pro</span> : <span className="clip-caption">{c.hook}</span>}

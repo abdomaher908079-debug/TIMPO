@@ -16,6 +16,30 @@ export const MIN_CLIP_SECONDS = 5;
 // YouTube Shorts allows up to 3 minutes; TikTok and Reels allow more.
 export const MAX_CLIP_SECONDS = 180;
 
+/**
+ * How a clip fills the vertical frame:
+ * - fill: a 9:16 crop of the video, following `track` (the speaker's face) or `cropX`.
+ * - fit: the whole picture across the middle, over a blurred copy of itself. For people sitting
+ *   too far apart for one crop, or videos without faces (screens, slides).
+ */
+export type Layout = 'fill' | 'fit';
+
+// Where the crop sits over time: `x` is the crop's position (0 = left edge, 100 = right edge) from
+// episode time `t` on.
+export type FramingTrack = { t: number; x: number }[];
+
+/** The crop position at episode time `t`. */
+export function cropAt(framing: { cropX: number; track?: FramingTrack }, t: number): number {
+  const track = framing.track;
+  if (!track?.length) return framing.cropX;
+  let x = track[0]!.x;
+  for (const k of track) {
+    if (k.t > t) break;
+    x = k.x;
+  }
+  return x;
+}
+
 export interface Clip {
   start: number;
   end: number;
@@ -27,6 +51,12 @@ export interface Clip {
   original: { start: number; end: number };
   // Horizontal framing of the 9:16 crop: 0 = left edge, 50 = center, 100 = right edge.
   cropX: number;
+  // Crop of the video, or the whole picture over a blurred copy (see framing.ts).
+  layout: Layout;
+  // Where the crop follows the speaker over time (auto framing). None = cropX all along.
+  track?: FramingTrack;
+  // Auto framing has looked at this clip (or the user framed it).
+  framed?: boolean;
   captionStyle: CaptionStyleId;
   // A brand kit's look instead of captionStyle. undefined = not chosen yet (the first kit is used).
   brandKitId?: string | null;
@@ -85,6 +115,7 @@ export function clipsFromMoments(moments: Moment[]): Clip[] {
     ...m,
     original: { start: m.start, end: m.end },
     cropX: 50,
+    layout: 'fill',
     captionStyle: 'bold',
   }));
 }
