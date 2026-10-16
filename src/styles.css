@@ -487,3 +487,17 @@ h1, h2, h3 { text-wrap: balance; }
 .feature p { color: var(--muted); margin: 0; font-size: 0.95rem; }
 .final-cta-note { margin-top: 12px; }
 .account-plans-link { margin: 8px 0 24px; }
+/* Plan badge next to the logo: a light silver chip with a soft shine. */
+.plan-badge {
+  position: relative; overflow: hidden; display: inline-block; margin-left: 2px; padding: 2px 9px; border-radius: 999px;
+  background: linear-gradient(135deg, #f4f6f8 0%, #c9ced4 45%, #eef0f3 60%, #b8bec6 100%);
+  color: #0d0f12; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 6px rgba(255, 255, 255, 0.12);
+}
+.plan-badge::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+  animation: plan-shine 4s ease-in-out infinite;
+}
+@keyframes plan-shine { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) { .plan-badge::after { animation: none; } }

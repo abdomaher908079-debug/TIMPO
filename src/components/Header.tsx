@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { BRAND, BRAND_NAME } from '../lib/brand';
 import LogoMark from './LogoMark';
 
 export default function Header() {
   const { user, signOut } = useAuth();
+  const { plan, loading } = useAccount();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
@@ -36,6 +38,8 @@ export default function Header() {
           {BRAND.first}
           <b>{BRAND.second}</b>
         </span>
+        {/* The plan you work under (yours, or your Studio team's). Nothing on Free. */}
+        {user && !loading && plan.id !== 'free' && <span className="plan-badge">{plan.name}</span>}
       </Link>
       <nav className="nav">
         <Link to="/pricing" className="nav-link">
