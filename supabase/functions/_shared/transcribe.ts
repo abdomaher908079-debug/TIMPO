@@ -12,9 +12,12 @@ const AUDIO_TYPES = ['audio/ogg', 'audio/aac', 'audio/mp4', 'audio/webm', 'audio
 // the price of listening.
 const PROMPT = `Transcribe this podcast audio word for word, in the language spoken.
 Write one line per sentence (or at most about 10 seconds of speech). Start each line with the time the line starts,
-from the beginning of this audio, as MM:SS.s (minutes, seconds, tenths), then a space, then the exact words. For example:
+from the beginning of this audio, as MM:SS.s (minutes, seconds, tenths), then a space, then the exact words.
+When a line is said with strong emotion or energy (excitement, laughter, anger, a raised voice, heavy emphasis), put
+"!" and a space right after the time. For example:
 00:03.2 Welcome back to the show.
-00:06.8 Today we're talking about sleep.
+00:06.8 ! I could not believe what he told me.
+00:10.1 Today we're talking about sleep.
 Write only what is said: no speaker names, no descriptions of sounds or music, nothing else. Skip silence and music.
 If nobody speaks, write nothing.`;
 
@@ -60,8 +63,8 @@ export function parseTime(value: unknown): number {
  */
 export function toSegments(raw: unknown[], offset: number, length: number): Segment[] {
   const lines = raw
-    .map((l) => l as { start?: unknown; end?: unknown; text?: unknown })
-    .map((l) => ({ start: parseTime(l?.start), end: parseTime(l?.end), text: String(l?.text ?? '').trim() }))
+    .map((l) => l as { start?: unknown; end?: unknown; text?: unknown; energy?: unknown })
+    .map((l) => ({ start: parseTime(l?.start), end: parseTime(l?.end), text: String(l?.text ?? '').trim(), energy: l?.energy === true }))
     .filter((l) => l.text && Number.isFinite(l.start))
     .sort((a, b) => a.start - b.start);
   const segments: Segment[] = [];
@@ -74,7 +77,12 @@ export function toSegments(raw: unknown[], offset: number, length: number): Segm
     let end = Number.isFinite(line.end) && line.end > start ? line.end : start + line.text.split(/\s+/).length / 1.6 + 0.5;
     end = Math.max(start, Math.min(end, next, length));
     if (end - start < 0.2 && start >= length) continue;
-    segments.push({ start: round(offset + start), end: round(offset + Math.max(end, start + 0.2)), text: line.text });
+    segments.push({
+      start: round(offset + start),
+      end: round(offset + Math.max(end, start + 0.2)),
+      text: line.text,
+      ...(line.energy ? { energy: true } : {}),
+    });
   }
   return segments;
 }
@@ -119,7 +127,9 @@ export async function listen(
 // Models that turned down the "minimal thinking" setting (older ones): asked without it from then on.
 const noThinkingSetting = new Set<string>();
 
-async function ask(model: string, apiKey: string, type: string, data: string): Promise<{ lines: { start: string; text: string }[]; input: number; output: number }> {
+type Line = { start: string; text: string; energy?: boolean };
+
+async function ask(model: string, apiKey: string, type: string, data: string): Promise<{ lines: Line[]; input: number; output: number }> {
   // Thinking is billed as output and doesn't help writing down speech, so keep it to a minimum.
   const thinking = noThinkingSetting.has(model) ? {} : { thinkingConfig: { thinkingLevel: 'minimal' } };
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
@@ -155,12 +165,15 @@ async function ask(model: string, apiKey: string, type: string, data: string): P
   return { lines, input: usage.promptTokenCount ?? 0, output: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0) };
 }
 
-/** "00:03.2 Welcome back." lines (also "[00:03.2]", "0:03", "1:02:03.4 …") → start times and words. */
-export function parseLines(text: string): { start: string; text: string }[] {
-  const lines: { start: string; text: string }[] = [];
+/** "00:03.2 Welcome back." lines (also "[00:03.2]", "0:03", "1:02:03.4 …", "00:06.8 ! Wow.") → times and words. */
+export function parseLines(text: string): Line[] {
+  const lines: Line[] = [];
   for (const raw of text.split(/\r?\n/)) {
     const m = raw.match(/^\s*[[(]?((?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d+)?)[\])]?(?:\s*[-–]\s*[[(]?(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d+)?[\])]?)?\s*[:\-–]?\s+(.+?)\s*$/);
-    if (m) lines.push({ start: m[1]!.replace(',', '.'), text: m[2]! });
+    if (!m) continue;
+    const energetic = /^!\s*/.exec(m[2]!);
+    const words = energetic ? m[2]!.slice(energetic[0].length) : m[2]!;
+    if (words) lines.push({ start: m[1]!.replace(',', '.'), text: words, ...(energetic ? { energy: true } : {}) });
   }
   return lines;
 }

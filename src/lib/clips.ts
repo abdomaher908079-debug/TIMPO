@@ -28,10 +28,13 @@ export type Layout = 'fill' | 'fit';
 // episode time `t` on.
 export type FramingTrack = { t: number; x: number }[];
 
-/** The crop position at episode time `t`. */
-export function cropAt(framing: { cropX: number; track?: FramingTrack }, t: number): number {
+/**
+ * The crop position at episode time `t`. Following the speaker (`track`) is part of the Pro edit;
+ * without it the crop stays where the faces are most of the time (`cropX`).
+ */
+export function cropAt(framing: { cropX: number; track?: FramingTrack }, t: number, follow = true): number {
   const track = framing.track;
-  if (!track?.length) return framing.cropX;
+  if (!follow || !track?.length) return framing.cropX;
   let x = track[0]!.x;
   for (const k of track) {
     if (k.t > t) break;
@@ -57,6 +60,12 @@ export interface Clip {
   track?: FramingTrack;
   // Auto framing has looked at this clip (or the user framed it).
   framed?: boolean;
+  // The Pro edit, written by the AI with the moment (see Moment): a headline on screen, words
+  // highlighted in the captions, phrases to zoom in on. `proEdit: false` turns it off for this clip.
+  headline?: string;
+  emphasis?: string[];
+  punchIns?: string[];
+  proEdit?: boolean;
   captionStyle: CaptionStyleId;
   // A brand kit's look instead of captionStyle. undefined = not chosen yet (the first kit is used).
   brandKitId?: string | null;
@@ -136,7 +145,11 @@ export interface Caption {
   words: string[];
   // Index of the word being spoken, for the highlight style.
   active: number;
+  // Words highlighted by the Pro edit.
+  emphasis?: boolean[];
 }
+
+const normWord = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
 
 const WORDS_PER_CAPTION = 3;
 // A pause this long starts a new caption even if the current one isn't full.
@@ -173,14 +186,69 @@ export function groupWords(words: Word[]): CaptionGroup[] {
 }
 
 /** The caption on screen at time `t` from exactly timed caption groups. */
-export function captionFromGroups(groups: CaptionGroup[], t: number): Caption | null {
+export function captionFromGroups(groups: CaptionGroup[], t: number, emphasis?: string[]): Caption | null {
   const g = groups.find((g) => t >= g.start && t < g.end);
   if (!g) return null;
   let active = 0;
   g.words.forEach((w, i) => {
     if (w.start <= t) active = i;
   });
-  return { words: g.words.map((w) => w.text), active };
+  const marked = emphasis?.length ? new Set(emphasis.map(normWord)) : null;
+  return {
+    words: g.words.map((w) => w.text),
+    active,
+    ...(marked ? { emphasis: g.words.map((w) => marked.has(normWord(w.text))) } : {}),
+  };
+}
+
+// --- Pro edit: zoom-ins ---
+
+export interface Zoom {
+  start: number;
+  end: number;
+}
+
+const ZOOM = 0.12;
+const ZOOM_IN_SECONDS = 0.25;
+const ZOOM_OUT_SECONDS = 0.45;
+
+/** When to zoom in: from each punch-in phrase's first word until a moment after its sentence ends. */
+export function zoomsFor(words: Word[], phrases: string[] | undefined): Zoom[] {
+  if (!phrases?.length || !words.length) return [];
+  const norm = words.map((w) => normWord(w.text));
+  const zooms: Zoom[] = [];
+  for (const phrase of phrases) {
+    const target = phrase.split(/\s+/).map(normWord).filter(Boolean);
+    if (!target.length) continue;
+    for (let i = 0; i + target.length <= norm.length; i++) {
+      if (!target.every((t, k) => norm[i + k] === t)) continue;
+      // Hold the zoom to the end of the sentence (or at least 1.5 s, at most 4 s).
+      let j = i + target.length - 1;
+      while (j + 1 < words.length && !/[.?!]$/.test(words[j]!.text) && words[j + 1]!.start - words[i]!.start < 4) j++;
+      const start = words[i]!.start;
+      const end = Math.min(start + 4, Math.max(start + 1.5, words[j]!.end + 0.3));
+      if (!zooms.some((z) => start < z.end && z.start < end)) zooms.push({ start, end });
+      break;
+    }
+  }
+  return zooms.sort((a, b) => a.start - b.start);
+}
+
+/** How far zoomed in (1 = not at all) at time `t`: a quick ease in, a hold, and a gentler ease out. */
+export function zoomAt(zooms: Zoom[], t: number): number {
+  for (const z of zooms) {
+    if (t < z.start || t > z.end + ZOOM_OUT_SECONDS) continue;
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    if (t < z.start + ZOOM_IN_SECONDS) return 1 + ZOOM * ease((t - z.start) / ZOOM_IN_SECONDS);
+    if (t <= z.end) return 1 + ZOOM;
+    return 1 + ZOOM * ease(1 - (t - z.end) / ZOOM_OUT_SECONDS);
+  }
+  return 1;
+}
+
+/** Whether a clip gets the Pro edit: paid plans (unless turned off for it), and previews of Pro-only clips. */
+export function hasProEdit(clip: Pick<Clip, 'proEdit'>, pro: boolean): boolean {
+  return pro && clip.proEdit !== false;
 }
 
 /** Identifies a clip's time range, to know when cached word times or an export are out of date. */

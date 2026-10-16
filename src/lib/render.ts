@@ -12,9 +12,9 @@ import {
   WebMOutputFormat,
 } from 'mediabunny';
 import type { BrandKit } from './brandKits';
-import { captionFromGroups, cropAt, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { captionFromGroups, cropAt, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
 import { breathe } from './device';
-import { drawCaption, drawLogo, drawWatermark } from './draw';
+import { drawCaption, drawHeadline, drawLogo, drawWatermark } from './draw';
 
 // Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
 export const SIZES = {
@@ -42,6 +42,7 @@ export async function renderClip(
     look,
     logo,
     watermark,
+    pro = false,
     size = '1080p',
     onProgress,
     signal,
@@ -50,6 +51,8 @@ export async function renderClip(
     // A brand kit's logo, already decoded.
     logo?: { image: ImageBitmap; corner: BrandKit['logo_corner'] } | null;
     watermark: boolean;
+    // The Pro edit: follow the speaker, zoom in on punch-ins, highlighted words, the headline.
+    pro?: boolean;
     size?: ExportSize;
     onProgress?: (p: number) => void;
     signal?: AbortSignal;
@@ -84,6 +87,11 @@ export async function renderClip(
     const cropH = wide ? srcH : Math.min(srcH, (srcW * 16) / 9);
     const fit = clip.layout === 'fit' && wide;
     const fitH = Math.round((OUT_W * srcH) / srcW);
+    const zooms = pro ? zoomsFor(captions.flatMap((g) => g.words), clip.punchIns) : [];
+    const headline = pro ? clip.headline : undefined;
+    // The headline sits in the blurred band above the picture (whole picture), or near the top for
+    // the first seconds (fill), where the platforms put none of their own buttons.
+    const headlineMiddle = fit ? Math.max(0.12, ((OUT_H - fitH) / 2 / OUT_H) * 0.55) : 0.15;
 
     const canvas = new OffscreenCanvas(OUT_W, OUT_H);
     const ctx = canvas.getContext('2d')!;
@@ -107,19 +115,32 @@ export async function renderClip(
           await breathe();
           // Sample times start at 0 at the clip's start.
           const t = clip.start + sample.timestamp;
-          const left = ((srcW - cropW) * cropAt(clip, t)) / 100;
+          const left = ((srcW - cropW) * cropAt(clip, t, pro)) / 100;
           const top = (srcH - cropH) / 2;
+          const zoom = zoomAt(zooms, t);
           if (fit) {
             sample.draw(blurCtx, left, top, cropW, cropH, 0, 0, blur.width, blur.height);
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(blur, 0, 0, OUT_W, OUT_H);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
             ctx.fillRect(0, 0, OUT_W, OUT_H);
-            sample.draw(ctx, 0, Math.round((OUT_H - fitH) / 2), OUT_W, fitH);
+            const w = OUT_W * zoom;
+            const h = fitH * zoom;
+            sample.draw(ctx, (OUT_W - w) / 2, (OUT_H - h) / 2, w, h);
           } else {
-            sample.draw(ctx, left, top, cropW, cropH, 0, 0, OUT_W, OUT_H);
+            // Zooming in crops tighter around the same center.
+            const w = cropW / zoom;
+            const h = cropH / zoom;
+            const x = Math.min(srcW - w, Math.max(0, left + (cropW - w) / 2));
+            const y = Math.min(srcH - h, Math.max(0, top + (cropH - h) / 2));
+            sample.draw(ctx, x, y, w, h, 0, 0, OUT_W, OUT_H);
           }
-          const caption = captionFromGroups(captions, t);
+          if (headline) {
+            const since = sample.timestamp;
+            const alpha = fit ? 1 : since < 3.6 ? 1 : 1 - (since - 3.6) / 0.4;
+            drawHeadline(ctx, headline, look, OUT_W, OUT_H, headlineMiddle, alpha);
+          }
+          const caption = captionFromGroups(captions, t, pro ? clip.emphasis : undefined);
           if (logo) drawLogo(ctx, logo.image, logo.corner, OUT_W, OUT_H);
           if (caption) drawCaption(ctx, caption, look, OUT_W, OUT_H);
           if (watermark) drawWatermark(ctx, OUT_W, OUT_H);

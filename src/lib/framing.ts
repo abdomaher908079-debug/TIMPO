@@ -149,5 +149,14 @@ export function decide(looks: { t: number; boxes: { left: number; right: number 
       keys.push({ t: (centers[i - 1]!.t + centers[i]!.t) / 2, x: cropFor(current, crop) });
     }
   }
-  return { layout: 'fill', cropX: keys[0]!.x, track: keys.length > 1 ? keys : undefined };
+  // Without following (Free), the crop stays where the faces are most of the time.
+  const end = looks[looks.length - 1]!.t;
+  const time = new Map<number, number>();
+  keys.forEach((k, i) => {
+    const x = Math.round(k.x / 5) * 5;
+    time.set(x, (time.get(x) ?? 0) + ((keys[i + 1]?.t ?? end) - k.t));
+  });
+  const main = [...time.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+  const steady = keys.reduce((best, k) => (Math.abs(k.x - main) < Math.abs(best.x - main) ? k : best), keys[0]!).x;
+  return { layout: 'fill', cropX: steady, track: keys.length > 1 ? keys : undefined };
 }

@@ -7,6 +7,8 @@ export interface Segment {
   start: number;
   end: number;
   text: string;
+  // Said with strong emotion or energy (heard by cloud listening): excitement, laughter, a raised voice.
+  energy?: boolean;
 }
 
 export interface Moment {
@@ -19,6 +21,11 @@ export interface Moment {
   reason: string;
   // 0–100: how likely the clip is to do well on its own.
   score: number;
+  // The "Pro edit" (paid plans): on-screen headline, words to highlight in the captions, and short
+  // phrases to zoom in on. Words and phrases are copied from the clip's transcript.
+  headline?: string;
+  emphasis?: string[];
+  punchIns?: string[];
 }
 
 export interface PickMomentsRequest {
@@ -71,25 +78,40 @@ export class MomentsError extends Error {
   }
 }
 
-const SYSTEM_PROMPT = `You are a senior short-form video editor for podcasts.
-You get a numbered transcript of one episode. Each line is "<line number> [<time>] <text>".
-Pick the moments that will work best as stand-alone vertical clips on TikTok, Instagram Reels and YouTube Shorts.
+const SYSTEM_PROMPT = `You are the lead editor of a team that turns podcast episodes into short vertical clips for TikTok,
+Instagram Reels and YouTube Shorts. Your clips are known for stopping the scroll and being watched to the end.
 
-A great clip:
-- Hooks in the first 3 seconds: a bold claim, a surprising fact, a question, a strong emotion or a funny line.
-- Makes sense without the rest of the episode. Never start mid-thought or with "and", "so" or "but" referring back.
-- Has a payoff: a punchline, an insight, a story ending or a clear takeaway. Ends on a complete sentence.
-- Is ${MIN_CLIP_SECONDS} to ${MAX_CLIP_SECONDS} seconds long (30 to 60 is ideal).
+You get a numbered transcript of one episode. Each line is "<line number> [<time>] <text>". Lines marked (!) were said
+with strong emotion or energy: excitement, laughter, a raised voice, heavy emphasis.
 
-Avoid: intros, outros, ads and sponsor reads, housekeeping, small talk, and moments that only work with visuals.
-Clips must not overlap. Spread them across the episode when quality is similar.
+Pick the moments that work best as stand-alone clips. Judge each candidate like this:
+1. Hook (most important): the first sentence must stop the scroll within 3 seconds. Strong hooks are a bold or
+   contrarian claim, a surprising fact or number, a direct question, a confession, the start of a story with stakes,
+   a strong emotion, or a funny line. Start the clip exactly on that sentence. Never start mid-thought, with filler
+   ("so", "and", "yeah", "um", "like"), or with a reference to something earlier ("as I said", "that's why").
+2. Stands alone: someone who never heard the episode understands it. One idea per clip.
+3. Payoff: it ends on a complete sentence that lands: a punchline, an insight, the end of the story, a clear
+   takeaway, or a line that makes people comment. End right after it, not on the next topic.
+4. Energy: real emotion, laughter, conflict and vivid stories beat calm explanations. Favor (!) lines.
+5. Length: ${MIN_CLIP_SECONDS} to ${MAX_CLIP_SECONDS} seconds, 25 to 60 is ideal. Shorter is better when the idea is complete.
+
+Avoid intros, outros, ads, sponsor reads, housekeeping, small talk, inside jokes, and moments that only work with
+visuals. Clips must not overlap. Prefer variety: different ideas from across the episode.
 
 For each clip give:
 - startLine and endLine: the first and last transcript line numbers of the clip (inclusive).
-- title: a punchy title of at most 8 words, written for social media, no hashtags or emojis.
+- title: a punchy title of at most 8 words for the post, no hashtags or emojis.
 - hook: the exact opening words of the clip, copied from the transcript (at most 15 words).
+- headline: on-screen text shown at the top of the video, at most 7 words. It makes people need to keep
+  watching (a curiosity gap or a bold promise) and is true to the clip. Sentence case, no emojis, no hashtags, no
+  quotation marks, and different from the hook.
+- emphasis: 3 to 8 single words copied exactly from the clip to highlight in the captions: the words carrying
+  the meaning (numbers, names, strong verbs, surprising or emotional words). Never filler words.
+- punchIns: 1 to 3 short phrases (2 to 5 words) copied exactly from the clip where a quick zoom-in adds impact:
+  the punchline, a reveal, the strongest emotion. Not the first sentence.
 - reason: one short sentence on why it will perform.
-- score: 0 to 100 for how well it will perform as a stand-alone clip. Be honest and spread the scores out.
+- score: 0 to 100 for how well it will perform: hook 40 points, stands alone 20, payoff 25, energy 15. Be strict and
+  spread the scores out; most clips are not 90+.
 
 Return the clips best first.`;
 
@@ -105,11 +127,14 @@ const RESPONSE_SCHEMA = {
           endLine: { type: 'INTEGER' },
           title: { type: 'STRING' },
           hook: { type: 'STRING' },
+          headline: { type: 'STRING' },
+          emphasis: { type: 'ARRAY', items: { type: 'STRING' } },
+          punchIns: { type: 'ARRAY', items: { type: 'STRING' } },
           reason: { type: 'STRING' },
           score: { type: 'INTEGER' },
         },
-        required: ['startLine', 'endLine', 'title', 'hook', 'reason', 'score'],
-        propertyOrdering: ['startLine', 'endLine', 'title', 'hook', 'reason', 'score'],
+        required: ['startLine', 'endLine', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
+        propertyOrdering: ['startLine', 'endLine', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
       },
     },
   },
@@ -137,7 +162,7 @@ export function parseRequest(body: unknown): PickMomentsRequest {
     const text = s.text.trim();
     if (!text) continue;
     chars += text.length;
-    segments.push({ start: s.start, end: Math.max(s.start, s.end), text });
+    segments.push({ start: s.start, end: Math.max(s.start, s.end), text, ...(s.energy === true ? { energy: true } : {}) });
   }
   if (!segments.length) throw new MomentsError('We didn’t hear anyone speaking in this episode.', 422);
   if (chars > MAX_TRANSCRIPT_CHARS) throw new MomentsError('This transcript is too long to process at once.', 413);
@@ -181,7 +206,7 @@ class ModelProblem extends MomentsError {
 }
 
 async function askGemini({ segments, count }: PickMomentsRequest, apiKey: string, model: string): Promise<Moment[]> {
-  const transcript = segments.map((s, i) => `${i} [${clock(s.start)}] ${s.text}`).join('\n');
+  const transcript = segments.map((s, i) => `${i} [${clock(s.start)}]${s.energy ? ' (!)' : ''} ${s.text}`).join('\n');
   const length = clock(segments[segments.length - 1]!.end);
   const prompt = `Episode length: ${length}. Pick the ${count} best clips.\n\nTranscript:\n${transcript}`;
 
@@ -218,8 +243,28 @@ interface RawMoment {
   endLine: number;
   title: string;
   hook: string;
+  headline: string;
+  emphasis: unknown;
+  punchIns: unknown;
   reason: string;
   score: number;
+}
+
+const normWord = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
+
+/** Keeps only words and phrases that really are in the clip's text (the model sometimes paraphrases). */
+function fromClip(items: unknown, text: string, maxWords: number, max: number): string[] {
+  if (!Array.isArray(items)) return [];
+  const clip = ` ${text.split(/\s+/).map(normWord).filter(Boolean).join(' ')} `;
+  const out: string[] = [];
+  for (const item of items) {
+    const phrase = String(item ?? '').trim();
+    const words = phrase.split(/\s+/).map(normWord).filter(Boolean);
+    if (!words.length || words.length > maxWords || !clip.includes(` ${words.join(' ')} `)) continue;
+    if (!out.some((o) => normWord(o) === normWord(phrase))) out.push(phrase);
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 /**
@@ -244,7 +289,12 @@ export function toMoments(raw: unknown[], segments: Segment[], count: number): M
     if (span() < MIN_CLIP_SECONDS) continue;
     const start = segments[a]!.start;
     const end = Math.min(segments[b]!.end, start + MAX_CLIP_SECONDS);
+    const text = segments.slice(a, b + 1).map((s) => s.text).join(' ');
+    const headline = String(item.headline ?? '').replace(/["“”#]/g, '').trim().split(/\s+/).slice(0, 9).join(' ');
     candidates.push({
+      headline: headline || undefined,
+      emphasis: fromClip(item.emphasis, text, 1, 8),
+      punchIns: fromClip(item.punchIns, text, 6, 3),
       start,
       end,
       title: String(item.title ?? '').trim() || 'Untitled moment',

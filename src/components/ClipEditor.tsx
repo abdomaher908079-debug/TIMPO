@@ -11,10 +11,13 @@ import {
   captionLook,
   clock,
   cropAt,
+  hasProEdit,
   estimateWords,
   groupWords,
   MAX_CLIP_SECONDS,
   MIN_CLIP_SECONDS,
+  zoomAt,
+  zoomsFor,
   type CaptionGroup,
   type Clip,
 } from '../lib/clips';
@@ -35,6 +38,8 @@ interface Props {
   total: number;
   // Pro clips on the Free plan: everything works except export.
   locked: boolean;
+  // A paid plan: the Pro edit is theirs to use (and turn off per clip).
+  paid: boolean;
   watermark: boolean;
   exportStatus?: ExportStatus;
   // False when the clip was edited after its last export.
@@ -124,7 +129,13 @@ export default function ClipEditor(props: Props) {
   const pct = (time: number) => `${((time - win.from) / span) * 100}%`;
   const inClip = t >= clip.start && t < clip.end;
   const estimated = useMemo(() => groupWords(estimateWords(segments, win.from, win.to)), [segments, win]);
-  const caption = inClip ? captionFromGroups(exactCaptions ?? estimated, t) : null;
+  // The Pro edit: on paid plans, and shown on Pro-only clips so Free users can see it.
+  const pro = hasProEdit(clip, props.paid || props.locked);
+  const groups = exactCaptions ?? estimated;
+  const caption = inClip ? captionFromGroups(groups, t, pro ? clip.emphasis : undefined) : null;
+  const zooms = useMemo(() => (pro ? zoomsFor(groups.flatMap((g) => g.words), clip.punchIns) : []), [pro, groups, clip.punchIns]);
+  const zoom = inClip ? zoomAt(zooms, t) : 1;
+  const headlineAlpha = !pro || !clip.headline || !inClip ? 0 : clip.layout === 'fit' ? 1 : Math.max(0, Math.min(1, (4 - (t - clip.start)) / 0.4));
   const { look, kit } = captionLook(clip, kits);
   const { plan } = useAccount();
   const sample = { words: ['Best', 'moment'], active: 1 };
@@ -165,7 +176,10 @@ export default function ClipEditor(props: Props) {
                 src={videoUrl}
                 playsInline
                 preload="auto"
-                style={fit ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${cropAt(clip, t)}% 50%` }}
+                style={{
+                  ...(fit ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${cropAt(clip, t, pro)}% 50%` }),
+                  transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                }}
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget;
                   setWide(v.videoWidth / v.videoHeight > 9 / 16 + 0.01);
@@ -178,6 +192,11 @@ export default function ClipEditor(props: Props) {
             )}
             {watermark && <Watermark />}
             {kit?.logo && <img className={`phone-logo logo-${kit.logo_corner}`} src={kit.logo} alt="" />}
+            {headlineAlpha > 0 && (
+              <span className={`phone-headline ${fit ? 'phone-headline-fit' : ''}`} style={{ opacity: headlineAlpha, fontFamily: `"${look.font}", Inter, sans-serif` }}>
+                {clip.headline}
+              </span>
+            )}
             {caption && <Caption caption={caption} look={look} />}
             {!playing && !unplayable && (
               <span className="phone-play" aria-hidden="true">
@@ -256,6 +275,8 @@ export default function ClipEditor(props: Props) {
               </button>
             </span>
           </div>
+          <ProEditControl clip={clip} paid={props.paid} locked={props.locked} onChange={onChange} />
+
           {changed && (
             <button
               type="button"
@@ -458,5 +479,40 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
         </>
       )}
     </div>
+  );
+}
+
+// What the Pro edit adds, shown in the editor: a switch on paid plans, a preview on Pro-only clips,
+// and a locked row with what's missing on the clips Free can export.
+function ProEditControl({ clip, paid, locked, onChange }: { clip: Clip; paid: boolean; locked: boolean; onChange: (c: Clip) => void }) {
+  const has = !!(clip.headline || clip.emphasis?.length || clip.punchIns?.length || clip.track);
+  if (!has) return null;
+  const what = 'AI headline, zoom-ins on the best lines, highlighted key words, and framing that follows the speaker';
+  if (paid) {
+    return (
+      <label className="pro-edit pro-edit-on">
+        <input type="checkbox" checked={clip.proEdit !== false} onChange={(e) => onChange({ ...clip, proEdit: e.target.checked })} />
+        <span>
+          <b>Pro edit</b>
+          <span className="muted small">{what}</span>
+        </span>
+      </label>
+    );
+  }
+  if (locked) {
+    return (
+      <p className="pro-edit pro-edit-preview">
+        <b>✨ You're seeing the Pro edit</b>
+        <span className="muted small">
+          {what}. <Link to="/account">Upgrade to Pro</Link> to export clips like this.
+        </span>
+      </p>
+    );
+  }
+  return (
+    <Link to="/account" className="pro-edit pro-edit-locked">
+      <b>🔒 Pro edit</b>
+      <span className="muted small">{what}. Open a 🔒 Pro clip to see it, or upgrade to get it on every clip.</span>
+    </Link>
   );
 }

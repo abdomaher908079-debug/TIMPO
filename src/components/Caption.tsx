@@ -16,7 +16,10 @@ export default function Caption({ caption, look, inline }: { caption: CaptionDat
   return (
     <span className={`caption caption-${look.style} ${inline ? 'caption-inline' : ''}`} style={style}>
       {caption.words.map((w, i) => (
-        <span key={i} className={i === caption.active ? 'caption-word-on' : undefined}>
+        <span
+          key={i}
+          className={[i === caption.active ? 'caption-word-on' : '', caption.emphasis?.[i] ? 'caption-word-em' : ''].join(' ').trim() || undefined}
+        >
           {w}{' '}
         </span>
       ))}

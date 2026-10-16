@@ -5,7 +5,7 @@ import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { useWakeLock } from '../lib/wakeLock';
 import { ensureFont, listKits, type BrandKit } from '../lib/brandKits';
-import { alignWords, captionLook, cropAt, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { alignWords, captionLook, cropAt, hasProEdit, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -34,7 +34,7 @@ export type ExportStatus =
 // brand kit was edited since) is out of date.
 export const exportKey = (c: Clip, size: string, kits: BrandKit[]) => {
   const { look, kit } = captionLook(c, kits);
-  return `${rangeKey(c)}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
+  return `${rangeKey(c)}|${c.proEdit !== false}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
 };
 export const SIZE_LABELS = { '720p': '720×1280', '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
 type Size = keyof typeof SIZE_LABELS;
@@ -95,6 +95,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const { workspace } = useAccount();
   const { user } = useAuth();
+  // Paid plans get the Pro edit; Free sees it on the Pro-only clips.
+  const paid = planName !== 'Free';
   const [kits, setKits] = useState<BrandKit[]>([]);
   const kitsRef = useRef(kits);
   kitsRef.current = kits;
@@ -274,6 +276,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       look,
       logo,
       watermark,
+      pro: hasProEdit(clip, paid),
       size: clipSize,
       signal,
       onProgress: (p) => {
@@ -347,6 +350,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         number={editing + 1}
         total={clips.length}
         locked={editing >= exportable}
+        paid={paid}
         watermark={watermark}
         exportStatus={exports[editing]}
         exportCurrent={exports[editing]?.state !== 'done' || (exports[editing] as { key: string }).key === exportKey(clip, exportSize, kits)}
@@ -395,8 +399,9 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       </div>
       {quality === 'quick' && (
         <p className="quality-note">
-          <b>Found by our Quick AI.</b> Pro's Best AI hears every word more accurately and picks smarter moments, and you'd
-          export all {clips.length} clips without a watermark. <Link to="/account">Upgrade to Pro</Link>
+          <b>Found by our Quick AI.</b> The 🔒 clips show the <b>Pro edit</b>: an AI headline, zoom-ins on the best lines,
+          highlighted key words and framing that follows the speaker. Pro also gets our Best AI and exports all {clips.length}{' '}
+          clips without a watermark. <Link to="/account">Upgrade to Pro</Link>
         </p>
       )}
       <div className="style-picker size-options" role="radiogroup" aria-label="Video quality">
@@ -445,12 +450,14 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
                       className={c.layout === 'fit' ? 'thumb-fit' : undefined}
                       src={thumb}
                       alt=""
-                      style={c.layout === 'fit' ? undefined : { objectPosition: `${cropAt(c, thumbTime(c))}% 50%` }}
+                      style={c.layout === 'fit' ? undefined : { objectPosition: `${cropAt(c, thumbTime(c), hasProEdit(c, paid || isLocked))}% 50%` }}
                     />
                   )}
                   <span className="clip-score">{c.score}</span>
                   <span className="clip-len">{Math.round(c.end - c.start)}s</span>
+                  {hasProEdit(c, paid || isLocked) && c.headline && <span className="clip-headline">{c.headline}</span>}
                   {isLocked ? <span className="clip-lock">🔒 Pro</span> : <span className="clip-caption">{c.hook}</span>}
+                  {isLocked && c.headline && <span className="clip-pro-badge">✨ Pro edit</span>}
                   {status && <ExportBadge status={status} current={status.state !== 'done' || isCurrent(i)} />}
                 </span>
                 <span className="clip-meta">
