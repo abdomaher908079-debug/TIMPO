@@ -33,7 +33,7 @@ export const PLANS: Plan[] = [
     monthly: 15,
     yearlyPerMonth: 12,
     features: [
-      '20 hours of episodes per month',
+      '20 hours of episodes per month (up to 40 episodes)',
       'Episodes of any length',
       'Best AI: sharpest transcripts and smartest picks',
       'Pro edit: AI headline, zoom-ins, highlighted words, follows the speaker',
@@ -49,7 +49,7 @@ export const PLANS: Plan[] = [
     monthly: 29,
     yearlyPerMonth: 24,
     features: [
-      '60 hours of episodes per month',
+      '40 hours of episodes per month (up to 100 episodes)',
       'Episodes of any length',
       'Best AI: sharpest transcripts and smartest picks',
       'Pro edit: AI headline, zoom-ins, highlighted words, follows the speaker',

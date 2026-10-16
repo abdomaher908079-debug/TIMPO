@@ -44,6 +44,8 @@ export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
 export interface GeminiChoice {
   apiKey: string;
   model: string;
+  // The paid key (billing on): its requests cost us money.
+  paid?: boolean;
   // Tried when every model on the first key is busy or out of quota.
   backup?: GeminiChoice;
 }
@@ -62,10 +64,10 @@ export function geminiFor(quality: 'quick' | 'best', env: (name: string) => stri
   const paidKey = env('GEMINI_PAID_API_KEY');
   if (quality === 'quick') {
     const model = env('GEMINI_MODEL_QUICK') || 'gemini-flash-lite-latest';
-    const paid = paidKey ? { apiKey: paidKey, model } : undefined;
+    const paid = paidKey ? { apiKey: paidKey, model, paid: true } : undefined;
     return freeKey ? { apiKey: freeKey, model, backup: paid } : (paid ?? null);
   }
-  if (paidKey) return { apiKey: paidKey, model: env('GEMINI_MODEL_BEST') || 'gemini-pro-latest' };
+  if (paidKey) return { apiKey: paidKey, model: env('GEMINI_MODEL_BEST') || 'gemini-pro-latest', paid: true };
   return freeKey ? { apiKey: freeKey, model: DEFAULT_GEMINI_MODEL } : null;
 }
 
@@ -174,7 +176,18 @@ export function parseRequest(body: unknown): PickMomentsRequest {
 // When a model is overloaded, out of quota or gone, step down to the next one rather than fail.
 const FALLBACK_CHAIN = ['gemini-pro-latest', DEFAULT_GEMINI_MODEL, 'gemini-flash-lite-latest'];
 
-export async function pickMoments(request: PickMomentsRequest, { apiKey, model, backup }: GeminiChoice): Promise<Moment[]> {
+/** Tokens one AI request used, for working out what it cost. */
+export interface AiUsage {
+  model: string;
+  paid: boolean;
+  input: number;
+  output: number;
+}
+
+export async function pickMoments(
+  request: PickMomentsRequest,
+  { apiKey, model, backup, paid = false }: GeminiChoice,
+): Promise<{ moments: Moment[]; usage: AiUsage }> {
   const after = FALLBACK_CHAIN.indexOf(model);
   const models = [model, ...(after >= 0 ? FALLBACK_CHAIN.slice(after + 1) : FALLBACK_CHAIN.slice(1))];
   let lastError: unknown;
@@ -182,7 +195,8 @@ export async function pickMoments(request: PickMomentsRequest, { apiKey, model, 
     // Overload (503) is usually brief: one quick retry on the same model first.
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        return await askGemini(request, apiKey, m);
+        const { moments, input, output } = await askGemini(request, apiKey, m);
+        return { moments, usage: { model: m, paid, input, output } };
       } catch (err) {
         lastError = err;
         if (!(err instanceof ModelProblem)) throw err;
@@ -205,7 +219,11 @@ class ModelProblem extends MomentsError {
   }
 }
 
-async function askGemini({ segments, count }: PickMomentsRequest, apiKey: string, model: string): Promise<Moment[]> {
+async function askGemini(
+  { segments, count }: PickMomentsRequest,
+  apiKey: string,
+  model: string,
+): Promise<{ moments: Moment[]; input: number; output: number }> {
   const transcript = segments.map((s, i) => `${i} [${clock(s.start)}]${s.energy ? ' (!)' : ''} ${s.text}`).join('\n');
   const length = clock(segments[segments.length - 1]!.end);
   const prompt = `Episode length: ${length}. Pick the ${count} best clips.\n\nTranscript:\n${transcript}`;
@@ -226,16 +244,23 @@ async function askGemini({ segments, count }: PickMomentsRequest, apiKey: string
     console.error('Gemini error', res.status, await res.text().catch(() => ''));
     throw new MomentsError('Our AI couldn’t read this episode. Please try again.', 502);
   }
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
+  };
+  const text = data.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? '').join('') ?? '';
+  const usage = data.usageMetadata ?? {};
+  const input = usage.promptTokenCount ?? 0;
+  // Thinking is billed as output.
+  const output = (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0);
   let raw: unknown;
   try {
     raw = (JSON.parse(text) as { moments?: unknown }).moments;
   } catch {
-    console.error('Gemini returned non-JSON', text.slice(0, 500));
+    console.error('Gemini returned non-JSON', model, input, output, text.slice(0, 500));
     throw new MomentsError('Our AI gave an answer we couldn’t read. Please try again.', 502);
   }
-  return toMoments(Array.isArray(raw) ? raw : [], segments, count);
+  return { moments: toMoments(Array.isArray(raw) ? raw : [], segments, count), input, output };
 }
 
 interface RawMoment {

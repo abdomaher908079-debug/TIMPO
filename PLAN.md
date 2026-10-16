@@ -33,11 +33,21 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   Pro clips on Free can be watched and edited but not exported. 4K export comes with paid plans (Part 6).
 - **Payments:** Paddle (merchant of record: handles worldwide sales tax/VAT, 5% + 50¢, no monthly fee, sellers
   from most countries). Lemon Squeezy is being folded into Stripe; Stripe doesn't take sellers from many countries.
-- **Limits:** enforced on the server when the AI picks moments (the only step that costs us). Free resets
-  Mondays (UTC); paid plans with their billing month. Retrying the same episode in a period is free.
-- **Hours:** Pro 20 h, Studio 60 h. Episode hours cost us almost nothing (speech and rendering run on the user's
-  computer; Gemini is about a cent per episode), so they're generous: a weekly 3-hour show fits Pro with room. The
-  costly part, cloud processing, keeps its own smaller caps.
+- **Limits:** enforced on the server, before anything that costs us money, in one locked database step per
+  workspace (`reserve_pick`, `reserve_cloud`), so requests sent at once can't slip past; given back when the AI
+  fails. Free resets Mondays (UTC); paid plans every month from the subscription's start day (yearly plans too).
+  - **Picks:** Pro 20 h / 40 episodes, Studio 40 h / 100 episodes a month. Each AI request costs about the same
+    whatever the episode's length, so the episode count caps the worst case. The same episode can be re-picked 3
+    times a month for free (4 picks in all); a longer transcript than before counts the extra time. An episode counts
+    as the longest of its file length, its last word, and its transcript at 40 characters a second.
+  - **Cloud listening:** counted per piece of audio actually heard, reserved just before it's sent to Gemini,
+    given back if Gemini fails. Listening again costs again. Each piece's real length is checked first with
+    Gemini's free token counter (32 tokens a second), so a piece can't hold more audio than it's counted as.
+  - **Costs:** every AI request's model and tokens are logged in `ai_calls`, to see each plan's real cost.
+  - **Worst case per month** (every limit used, top prices): Pro about $8.50 cost on $15, Studio about $19 on $29;
+    yearly plans keep a profit too. Once real `ai_calls` numbers are in, set a ceiling on the AI's output at twice
+    the largest real request, so no normal request is ever cut.
+- **Hours:** Pro 20 h, Studio 40 h (10 h a week, shared by a team of 3): enough for 4–5 weekly shows.
 - **AI quality:** Free gets Quick AI (Whisper base + Gemini Flash-Lite, all free). Pro and Studio get the same
   Best AI (Whisper small, ~3× slower so only with a graphics card, + Gemini's top model on a paid key). The site
   tells Free users plainly that Pro's AI is better. Gemini steps down Pro → Flash → Flash-Lite when a model is

@@ -433,9 +433,10 @@ export default function NewEpisode() {
         ) : (
           <>
             <Link to="/account">{plan.name} plan</Link> ·{' '}
-            {episodesLeft !== null
+            {episodesLeft !== null && plan.id === 'free'
               ? `${episodesLeft} of ${plan.episodesPerPeriod} episode${plan.episodesPerPeriod === 1 ? '' : 's'} left this ${plan.period}`
-              : `${formatDuration(remainingSeconds)} of ${plan.hours} hours left this ${plan.period}`}{' '}
+              : `${formatDuration(remainingSeconds)} of ${plan.hours} hours left this ${plan.period}` +
+                (episodesLeft !== null && episodesLeft <= 5 ? ` (${episodesLeft} episode${episodesLeft === 1 ? '' : 's'} left)` : '')}{' '}
             · resets {RESETS.format(period.end)}
           </>
         )}

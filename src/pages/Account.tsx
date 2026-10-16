@@ -38,7 +38,9 @@ export default function Account() {
   }, [activating, plan.id, refresh, setParams]);
 
   const hoursTotal = plan.hours * 3600;
-  const share = plan.episodesPerPeriod !== null ? usage.episodes / plan.episodesPerPeriod : usage.seconds / hoursTotal;
+  // Free counts episodes; paid plans count hours, with an episode count far above normal use.
+  const byEpisodes = plan.id === 'free' && plan.episodesPerPeriod !== null;
+  const share = Math.max(usage.seconds / hoursTotal, plan.episodesPerPeriod !== null ? usage.episodes / plan.episodesPerPeriod : 0);
   // Team members use the owner's plan but have no billing of their own.
   const member = !!workspace?.is_team_member;
   const paid = plan.id !== 'free' && !member;
@@ -98,9 +100,10 @@ export default function Account() {
           <i style={{ width: `${Math.min(1, share) * 100}%` }} className={share >= 1 ? 'full' : ''} />
         </div>
         <p className="usage-text">
-          {plan.episodesPerPeriod !== null
+          {byEpisodes
             ? `${usage.episodes} of ${plan.episodesPerPeriod} episode${plan.episodesPerPeriod === 1 ? '' : 's'} used`
-            : `${formatDuration(usage.seconds)} of ${plan.hours} hours used`}
+            : `${formatDuration(usage.seconds)} of ${plan.hours} hours used` +
+              (plan.episodesPerPeriod !== null ? ` · ${usage.episodes} of ${plan.episodesPerPeriod} episodes` : '')}
           <span className="muted"> · resets {DATE.format(period.end)}</span>
         </p>
         {cloudAvailable && !demo && (

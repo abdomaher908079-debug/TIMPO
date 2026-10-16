@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import {
   checkEpisode,
   currentPeriod,
+  limitProblem,
+  PICKS_PER_EPISODE,
   type LimitProblem,
   type Period,
   type ProfileRow,
@@ -40,6 +42,8 @@ interface EpisodeRow {
   fingerprint: string;
   seconds: number;
   period_start: string;
+  // AI picks of this episode in the period (missing in demo mode).
+  picks?: number;
 }
 interface DemoAccount {
   plan: PlanId;
@@ -110,7 +114,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     const period = currentPeriod(plan, new Date(), { start: ws?.current_period_start ?? null, end: ws?.current_period_end ?? null });
     const { data: rows, error: rowsError } = await supabase
       .from('episodes')
-      .select('fingerprint, seconds, period_start')
+      .select('fingerprint, seconds, period_start, picks')
       .eq('workspace_id', wsId)
       .eq('period_start', period.start.toISOString());
     if (rowsError) console.error('Usage unavailable', rowsError);
@@ -150,7 +154,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       cloudUsage,
       loading,
       refresh,
-      check: (seconds, fp) => (fp && inPeriod.some((e) => e.fingerprint === fp) ? null : checkEpisode(planId, usage, seconds)),
+      check: (seconds, fp) => {
+        // The same episode again is a re-pick: no new episode or time, but only a few per period.
+        const seen = fp ? inPeriod.find((e) => e.fingerprint === fp) : undefined;
+        if (!seen) return checkEpisode(planId, usage, seconds);
+        return (seen.picks ?? 1) >= PICKS_PER_EPISODE ? limitProblem(planId, 'no-repicks-left', seconds) : null;
+      },
       recordDemoEpisode(fp, seconds) {
         if (supabase) return;
         const demo = readDemo();

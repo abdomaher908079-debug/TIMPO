@@ -44,7 +44,7 @@ function momentsApi(env: Record<string, string>): Plugin {
       const quality = (body as { quality?: string } | null)?.quality === 'best' ? 'best' : 'quick';
       const gemini = geminiFor(quality, (name) => env[name]);
       if (!gemini) throw new MomentsError('Add GEMINI_API_KEY to .env.local and restart the dev server.', 503);
-      const moments = await pickMoments(parseRequest(body), gemini);
+      const { moments } = await pickMoments(parseRequest(body), gemini);
       send(200, { moments });
     } catch (err) {
       if (err instanceof MomentsError) return send(err.status, { error: err.message });

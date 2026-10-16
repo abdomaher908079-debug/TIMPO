@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BRAND_NAME, LEGAL } from '../lib/brand';
 import { PLANS } from '../lib/plans';
+import { PICKS_PER_EPISODE } from '../../supabase/functions/_shared/plans';
 
 // Plain-language legal pages. Paddle (our payment provider) requires Terms, Privacy and Refunds
 // pages before it approves the site. Have them checked before taking real payments.
@@ -124,7 +125,10 @@ export function Terms() {
       <p>
         The {free.name} plan is free. Paid plans are subscriptions billed monthly or yearly through Paddle, our reseller and
         merchant of record, and renew automatically until you cancel. Each plan's limits are shown on our{' '}
-        <Link to="/#pricing">pricing</Link>. Unused hours don't carry over. You can cancel any time in Account → Manage
+        <Link to="/#pricing">pricing</Link>: hours and episodes per month (counted from the day your subscription
+        started, also on yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
+        episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
+        over. You can cancel any time in Account → Manage
         billing; your plan stays active until the end of the period you paid for. Refunds follow our{' '}
         <Link to="/refunds">refund policy</Link>.
       </p>

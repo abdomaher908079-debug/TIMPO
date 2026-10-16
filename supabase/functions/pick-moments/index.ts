@@ -1,10 +1,11 @@
 // Supabase Edge Function: POST { segments, episode: { fingerprint, seconds } } → { moments }.
-// Keeps the Gemini keys on the server, checks the user's plan limits, and records usage.
+// Keeps the Gemini keys on the server, and checks and counts the plan's limits (see _shared/usage.ts).
 // Secrets: GEMINI_API_KEY (free tier, all plans); GEMINI_PAID_API_KEY (billing on, Pro/Studio's best AI).
 // Deploy: supabase functions deploy pick-moments
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { geminiFor, MomentsError, parseRequest, pickMoments } from '../_shared/moments.ts';
-import { checkEpisode, currentPeriod, LIMITS, type WorkspaceRow } from '../_shared/plans.ts';
+import { currentPeriod, LIMITS, type WorkspaceRow } from '../_shared/plans.ts';
+import { countedSeconds, logAiCall, releasePick, reservePick } from '../_shared/usage.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -34,46 +35,29 @@ Deno.serve(async (req) => {
     const request = parseRequest(body);
     const fingerprint = typeof body?.episode?.fingerprint === 'string' ? body.episode.fingerprint.slice(0, 128) : '';
     if (!fingerprint) throw new MomentsError('Missing episode details.', 400);
-    // The longer of the file's length and the speech heard, so a shortened transcript can't dodge limits.
-    const lastWord = request.segments[request.segments.length - 1]!.end;
-    const seconds = Math.max(lastWord, Number(body?.episode?.seconds) || 0);
+    const seconds = countedSeconds(request.segments, Number(body?.episode?.seconds));
 
-    const now = new Date();
     // Studio team members use the team's plan and share its hours.
     const { data: workspace, error: wsError } = await admin.rpc('workspace_of', { uid: user.id }).maybeSingle<WorkspaceRow>();
     if (wsError) throw wsError;
     const plan = workspace?.plan ?? 'free';
     const workspaceId = workspace?.owner_id ?? user.id;
-    const period = currentPeriod(plan, now, { start: workspace?.current_period_start ?? null, end: workspace?.current_period_end ?? null });
-    const periodStart = period.start.toISOString();
-
-    const { data: rows, error } = await admin
-      .from('episodes')
-      .select('fingerprint, seconds')
-      .eq('workspace_id', workspaceId)
-      .eq('period_start', periodStart);
-    if (error) throw error;
-    // Trying the same episode again this period is free.
-    const repeat = rows.some((r) => r.fingerprint === fingerprint);
-    if (!repeat) {
-      const usage = { episodes: rows.length, seconds: rows.reduce((n, r) => n + Number(r.seconds), 0) };
-      const problem = checkEpisode(plan, usage, seconds);
-      if (problem) return json({ error: problem.message, reason: problem.reason }, 403);
-    }
+    const period = currentPeriod(plan, new Date(), { start: workspace?.current_period_start ?? null, end: workspace?.current_period_end ?? null });
 
     const gemini = geminiFor(LIMITS[plan].quality, (name) => Deno.env.get(name));
     if (!gemini) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
-    const moments = await pickMoments({ ...request, count: LIMITS[plan].clipsFound }, gemini);
 
-    // Counted only once the moments are found, so failures don't use up the plan.
-    if (!repeat) {
-      const { error: insertError } = await admin
-        .from('episodes')
-        .upsert(
-          { user_id: user.id, workspace_id: workspaceId, fingerprint, seconds, period_start: periodStart },
-          { onConflict: 'workspace_id,fingerprint,period_start', ignoreDuplicates: true },
-        );
-      if (insertError) console.error('Usage not recorded', insertError);
+    // Checked and counted in one locked step, before the AI is asked; given back if it fails.
+    const pick = await reservePick(admin, { plan, workspaceId, userId: user.id, fingerprint, seconds, periodStart: period.start.toISOString() });
+    if (!pick.ok) return json({ error: pick.problem.message, reason: pick.problem.reason }, 403);
+    let moments;
+    try {
+      const result = await pickMoments({ ...request, count: LIMITS[plan].clipsFound }, gemini);
+      moments = result.moments;
+      await logAiCall(admin, { workspaceId, userId: user.id, kind: 'pick', usage: result.usage, seconds });
+    } catch (err) {
+      await releasePick(admin, workspaceId, pick);
+      throw err;
     }
     return json({ moments });
   } catch (err) {

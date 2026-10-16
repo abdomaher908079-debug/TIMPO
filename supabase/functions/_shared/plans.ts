@@ -15,7 +15,8 @@ export interface PlanLimits {
   hours: number;
   // Longest single episode, or null for any length.
   maxEpisodeSeconds: number | null;
-  // Episodes per period, or null for no count limit (only hours).
+  // Episodes per period, or null for no count limit (only hours). Each AI request costs about the
+  // same whatever the episode's length, so paid plans have a count too (far above normal use).
   episodesPerPeriod: number | null;
   clipsFound: number;
   clipsExportable: number;
@@ -48,7 +49,7 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
     period: 'month',
     hours: 20,
     maxEpisodeSeconds: null,
-    episodesPerPeriod: null,
+    episodesPerPeriod: 40,
     clipsFound: 20,
     clipsExportable: 20,
     watermark: false,
@@ -60,9 +61,9 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
   studio: {
     id: 'studio',
     period: 'month',
-    hours: 60,
+    hours: 40,
     maxEpisodeSeconds: null,
-    episodesPerPeriod: null,
+    episodesPerPeriod: 100,
     clipsFound: 30,
     clipsExportable: 30,
     watermark: false,
@@ -76,19 +77,41 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
 // Container durations often run a fraction of a second long; don't block a 30:00 episode over that.
 export const GRACE_SECONDS = 30;
 
+// Times the AI may pick the moments of one episode in a period: the first time plus 3 free re-picks.
+export const PICKS_PER_EPISODE = 4;
+
+// Faster than anyone speaks (about 15 characters a second is normal): an episode is counted as at least
+// its transcript's length divided by this, so a long transcript with made-up short times can't dodge limits.
+export const MAX_CHARS_PER_SECOND = 40;
+
+/** Adds whole months in UTC, keeping the day of the month (or the month's last day when it's shorter). */
+function addMonths(date: Date, months: number): Date {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + months;
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(date.getUTCDate(), last), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds(), date.getUTCMilliseconds()));
+}
+
 export interface Period {
   start: Date;
   end: Date;
 }
 
-/** The usage period containing `now`: the paid billing period if there is one, else the Free week. */
+/**
+ * The usage period containing `now`. Paid plans: a month counted from the subscription's billing
+ * start, so yearly plans also get their hours every month, and a late renewal doesn't start a fresh
+ * month early. Without billing dates (set by hand): the calendar month. Free: the week from Monday 00:00 UTC.
+ */
 export function currentPeriod(plan: PlanId, now: Date, billingPeriod?: { start: string | null; end: string | null }): Period {
-  if (plan !== 'free' && billingPeriod?.start && billingPeriod.end) {
-    const start = new Date(billingPeriod.start);
-    const end = new Date(billingPeriod.end);
-    if (start <= now && now < end) return { start, end };
-  }
   if (LIMITS[plan].period === 'month') {
+    const anchor = plan !== 'free' && billingPeriod?.start ? new Date(billingPeriod.start) : null;
+    if (anchor && !Number.isNaN(anchor.getTime())) {
+      // Months are always counted from the anchor itself, so short months don't shift later ones.
+      let k = (now.getUTCFullYear() - anchor.getUTCFullYear()) * 12 + (now.getUTCMonth() - anchor.getUTCMonth());
+      if (addMonths(anchor, k) > now) k--;
+      if (addMonths(anchor, k + 1) <= now) k++;
+      return { start: addMonths(anchor, k), end: addMonths(anchor, k + 1) };
+    }
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     return { start, end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)) };
   }
@@ -103,7 +126,7 @@ export interface Usage {
   seconds: number;
 }
 
-export type LimitReason = 'too-long' | 'no-episodes-left' | 'no-hours-left';
+export type LimitReason = 'too-long' | 'no-episodes-left' | 'no-hours-left' | 'no-repicks-left';
 
 export interface LimitProblem {
   reason: LimitReason;
@@ -115,22 +138,38 @@ function hm(seconds: number): string {
   return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m} min`;
 }
 
-/** Whether an episode of `seconds` fits the plan's limits, given this period's usage. */
+/** The message for a limit the episode doesn't fit. `left` is the time left this period (for no-hours-left). */
+export function limitProblem(plan: PlanId, reason: LimitReason, seconds: number, left = 0): LimitProblem {
+  const l = LIMITS[plan];
+  switch (reason) {
+    case 'too-long':
+      return { reason, message: `Episodes on your plan can be up to ${hm(l.maxEpisodeSeconds ?? 0)} long. This one is ${hm(seconds)}.` };
+    case 'no-episodes-left':
+      return {
+        reason,
+        message: `You've used your ${l.episodesPerPeriod === 1 ? 'episode' : `${l.episodesPerPeriod} episodes`} for this ${l.period}.`,
+      };
+    case 'no-hours-left':
+      return { reason, message: `This episode is ${hm(seconds)} and you have ${hm(Math.max(0, left))} left this ${l.period}.` };
+    case 'no-repicks-left':
+      return {
+        reason,
+        message: `The AI has already picked this episode's moments ${PICKS_PER_EPISODE} times this ${l.period}. Your clips from those picks are still yours to edit.`,
+      };
+  }
+}
+
+/**
+ * Whether an episode of `seconds` fits the plan's limits, given this period's usage. A quick check
+ * for the page and before cloud listening; the server's reserve_pick (in the database) is the one that
+ * counts, in a single locked step.
+ */
 export function checkEpisode(plan: PlanId, usage: Usage, seconds: number): LimitProblem | null {
   const l = LIMITS[plan];
-  if (l.maxEpisodeSeconds !== null && seconds > l.maxEpisodeSeconds + GRACE_SECONDS) {
-    return { reason: 'too-long', message: `Episodes on your plan can be up to ${hm(l.maxEpisodeSeconds)} long. This one is ${hm(seconds)}.` };
-  }
-  if (l.episodesPerPeriod !== null && usage.episodes >= l.episodesPerPeriod) {
-    return {
-      reason: 'no-episodes-left',
-      message: `You've used your ${l.episodesPerPeriod === 1 ? 'episode' : `${l.episodesPerPeriod} episodes`} for this ${l.period}.`,
-    };
-  }
+  if (l.maxEpisodeSeconds !== null && seconds > l.maxEpisodeSeconds + GRACE_SECONDS) return limitProblem(plan, 'too-long', seconds);
+  if (l.episodesPerPeriod !== null && usage.episodes >= l.episodesPerPeriod) return limitProblem(plan, 'no-episodes-left', seconds);
   const left = l.hours * 3600 - usage.seconds;
-  if (seconds > left + GRACE_SECONDS) {
-    return { reason: 'no-hours-left', message: `This episode is ${hm(seconds)} and you have ${hm(Math.max(0, left))} left this ${l.period}.` };
-  }
+  if (seconds > left + GRACE_SECONDS) return limitProblem(plan, 'no-hours-left', seconds, left);
   return null;
 }
 
@@ -168,21 +207,22 @@ export function effectivePlan(profile: ProfileRow | null): PlanId {
   return status === 'active' || status === 'trialing' || status === 'past_due' ? profile.plan : 'free';
 }
 
-/** Whether an episode of `seconds` fits the plan's cloud listening this period (mirrors checkEpisode). */
-export function checkCloud(plan: PlanId, usage: Usage, seconds: number): LimitProblem | null {
+/**
+ * Whether an episode of `seconds` fits the plan's cloud listening this period (mirrors checkEpisode).
+ * Listening the same episode again doesn't count as another episode, but its time does: every piece of
+ * audio heard is counted (reserve_cloud in the database), so the check needs the time left either way.
+ */
+export function checkCloud(plan: PlanId, usage: Usage, seconds: number, repeat = false): LimitProblem | null {
   const l = LIMITS[plan];
-  if (l.cloudJobsPerPeriod !== null && usage.episodes >= l.cloudJobsPerPeriod) {
-    return {
-      reason: 'no-episodes-left',
-      message: `You've used your cloud listening for this ${l.period}. You can still listen on this device, or upgrade for more.`,
-    };
-  }
+  if (!repeat && l.cloudJobsPerPeriod !== null && usage.episodes >= l.cloudJobsPerPeriod) return cloudProblem(plan, 'no-episodes-left', seconds);
   const left = l.cloudSeconds - usage.seconds;
-  if (seconds > left + GRACE_SECONDS) {
-    return {
-      reason: 'no-hours-left',
-      message: `This episode needs ${hm(seconds)} of cloud listening and you have ${hm(Math.max(0, left))} left this ${l.period}.`,
-    };
-  }
+  if (seconds > left + GRACE_SECONDS) return cloudProblem(plan, 'no-hours-left', seconds, left);
   return null;
+}
+
+export function cloudProblem(plan: PlanId, reason: 'no-episodes-left' | 'no-hours-left', seconds: number, left = 0): LimitProblem {
+  const l = LIMITS[plan];
+  return reason === 'no-episodes-left'
+    ? { reason, message: `You've used your cloud listening for this ${l.period}. You can still listen on this device, or upgrade for more.` }
+    : { reason, message: `This episode needs ${hm(seconds)} of cloud listening and you have ${hm(Math.max(0, left))} left this ${l.period}. You can still listen on this device.` };
 }

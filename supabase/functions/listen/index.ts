@@ -11,8 +11,9 @@
 // Secrets: GEMINI_API_KEY (and GEMINI_PAID_API_KEY). Deploy: supabase functions deploy listen --no-verify-jwt
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { geminiFor, MomentsError, pickMoments, type Segment } from '../_shared/moments.ts';
-import { checkCloud, checkEpisode, currentPeriod, LIMITS, type PlanId, type WorkspaceRow } from '../_shared/plans.ts';
-import { listen, listenerFor, PIECE_SECONDS } from '../_shared/transcribe.ts';
+import { checkCloud, checkEpisode, cloudProblem, currentPeriod, LIMITS, type PlanId, type WorkspaceRow } from '../_shared/plans.ts';
+import { AudioTooLong, listen, listenerFor, PIECE_SECONDS } from '../_shared/transcribe.ts';
+import { countedSeconds, logAiCall, releaseCloud, releasePick, reserveCloud, reservePick } from '../_shared/usage.ts';
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
@@ -92,20 +93,12 @@ async function create(userId: string, body: { seconds?: unknown; fingerprint?: u
   if (cloud.error) throw cloud.error;
   if (episodes.error) throw episodes.error;
   const used = (rows: { seconds: number }[]) => ({ episodes: rows.length, seconds: rows.reduce((n, r) => n + Number(r.seconds), 0) });
-  // Trying the same episode again this period is free.
-  if (!cloud.data.some((r) => r.fingerprint === fingerprint)) {
-    const problem =
-      (episodes.data.some((r) => r.fingerprint === fingerprint) ? null : checkEpisode(plan, used(episodes.data), seconds)) ??
-      checkCloud(plan, used(cloud.data), seconds);
-    if (problem) return { error: problem.message, reason: problem.reason, status: 403 };
-    const { error } = await admin
-      .from('cloud_jobs')
-      .upsert(
-        { user_id: userId, workspace_id: workspaceId, fingerprint, seconds, period_start: periodStart },
-        { onConflict: 'workspace_id,fingerprint,period_start', ignoreDuplicates: true },
-      );
-    if (error) throw error;
-  }
+  // A quick check so people hear about a limit before uploading. What counts is reserve_cloud, piece by
+  // piece as the audio is heard, and reserve_pick when the moments are picked.
+  const problem =
+    (episodes.data.some((r) => r.fingerprint === fingerprint) ? null : checkEpisode(plan, used(episodes.data), seconds)) ??
+    checkCloud(plan, used(cloud.data), seconds, cloud.data.some((r) => r.fingerprint === fingerprint));
+  if (problem) return { error: problem.message, reason: problem.reason, status: 403 };
 
   const list = pieces(seconds);
   const { data: job, error } = await admin
@@ -147,16 +140,28 @@ async function work(jobId: string) {
   const started = Date.now();
   const { data: job } = await admin.from('listen_jobs').select('*').eq('id', jobId).maybeSingle<Job>();
   if (!job || (job.status !== 'listening' && job.status !== 'uploading')) return;
-  const { plan } = await workspaceOf(job.user_id);
+  const { plan, workspaceId, periodStart } = await workspaceOf(job.user_id);
   const listener = listenerFor(LIMITS[plan].quality, (name) => Deno.env.get(name));
   if (!listener) return fail(job, 'The AI isn’t set up on the server yet.');
+  const charge = { workspaceId, fingerprint: job.fingerprint, periodStart };
+  let stopped = false;
 
-  while (Date.now() - started < STEP_MS) {
+  while (Date.now() - started < STEP_MS && !stopped) {
+    // Canceled or failed meanwhile: hear nothing more.
+    const { data: now } = await admin.from('listen_jobs').select('status').eq('id', job.id).maybeSingle<{ status: string }>();
+    if (now?.status !== 'listening' && now?.status !== 'uploading') return;
     const { data: claimed, error } = await admin.rpc('claim_listen_pieces', { p_job: job.id, p_n: PARALLEL });
     if (error) throw error;
     if (!claimed?.length) break;
     await Promise.all(
       (claimed as { idx: number; start: number; length: number; attempts: number }[]).map(async (piece) => {
+        const seconds = Number(piece.length);
+        // Counted before the AI hears it, given back if it can't.
+        if (!(await reserveCloud(admin, { plan, userId: job.user_id, seconds, ...charge }))) {
+          stopped = true;
+          await admin.from('listen_pieces').update({ status: 'pending' }).eq('job_id', job.id).eq('idx', piece.idx);
+          return fail(job, cloudProblem(plan, 'no-hours-left', Number(job.seconds), 0).message);
+        }
         try {
           const { data: blob, error: dlError } = await admin.storage.from(BUCKET).download(audioPath(job, piece.idx));
           if (dlError || !blob) throw dlError ?? new Error('missing audio');
@@ -168,11 +173,16 @@ async function work(jobId: string) {
             listener,
             Deno.env.get('GEMINI_PAID_API_KEY'),
           );
+          await logAiCall(admin, { workspaceId, userId: job.user_id, kind: 'listen', usage, seconds });
           await admin.from('listen_pieces').update({ status: 'done', segments, usage }).eq('job_id', job.id).eq('idx', piece.idx);
           await admin.storage.from(BUCKET).remove([audioPath(job, piece.idx)]);
         } catch (err) {
           console.error(`job ${job.id} piece ${piece.idx}:`, err);
-          if (piece.attempts >= MAX_ATTEMPTS) {
+          await releaseCloud(admin, { ...charge, seconds });
+          if (err instanceof AudioTooLong) {
+            stopped = true;
+            await fail(job, err.message);
+          } else if (piece.attempts >= MAX_ATTEMPTS) {
             await fail(job, err instanceof MomentsError ? err.message : 'We couldn’t listen to part of this episode. Please try again.');
           } else {
             await admin.from('listen_pieces').update({ status: 'pending' }).eq('job_id', job.id).eq('idx', piece.idx);
@@ -218,14 +228,18 @@ async function finish(job: Job, plan: PlanId) {
     try {
       const gemini = geminiFor(LIMITS[plan].quality, (name) => Deno.env.get(name));
       if (!gemini) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
-      moments = await pickMoments({ segments, count: LIMITS[plan].clipsFound }, gemini);
-      const { periodStart } = await workspaceOf(job.user_id);
-      await admin
-        .from('episodes')
-        .upsert(
-          { user_id: job.user_id, workspace_id: job.workspace_id, fingerprint: job.fingerprint, seconds: Math.max(job.seconds, segments[segments.length - 1]!.end), period_start: periodStart },
-          { onConflict: 'workspace_id,fingerprint,period_start', ignoreDuplicates: true },
-        );
+      const { workspaceId, periodStart } = await workspaceOf(job.user_id);
+      const seconds = countedSeconds(segments, Number(job.seconds));
+      const pick = await reservePick(admin, { plan, workspaceId, userId: job.user_id, fingerprint: job.fingerprint, seconds, periodStart });
+      if (!pick.ok) throw new MomentsError(pick.problem.message, 403);
+      try {
+        const result = await pickMoments({ segments, count: LIMITS[plan].clipsFound }, gemini);
+        moments = result.moments;
+        await logAiCall(admin, { workspaceId, userId: job.user_id, kind: 'pick', usage: result.usage, seconds });
+      } catch (err) {
+        await releasePick(admin, workspaceId, pick);
+        throw err;
+      }
     } catch (err) {
       console.error(`job ${job.id} moments:`, err);
       // The transcript is kept; the page can try picking the moments again.

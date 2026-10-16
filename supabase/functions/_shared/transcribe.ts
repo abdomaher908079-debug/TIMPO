@@ -23,6 +23,18 @@ If nobody speaks, write nothing.`;
 
 const LITE = 'gemini-flash-lite-latest';
 
+// Gemini counts every second of audio as 32 tokens, whatever the file's quality.
+const AUDIO_TOKENS_PER_SECOND = 32;
+// Room for the file's own rounding and a few tokens of overhead.
+const AUDIO_SLACK_SECONDS = 20;
+
+/** The piece's audio is longer than the time it was counted as: refused, and not tried again. */
+export class AudioTooLong extends MomentsError {
+  constructor() {
+    super('This audio is longer than expected. Please start the episode again.', 422);
+  }
+}
+
 export interface Attempt {
   apiKey: string;
   model: string;
@@ -109,6 +121,15 @@ export async function listen(
   paidKey?: string,
 ): Promise<{ segments: Segment[]; usage: Usage }> {
   const data = toBase64(audio);
+  // The page says how long each piece is and that's what is counted, so check the audio really is
+  // no longer before paying to listen to it (counting tokens is free).
+  const first = attempts[0];
+  if (!first) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
+  const tokens = await countTokens(first.model, first.apiKey, type, data);
+  if (tokens > (length + AUDIO_SLACK_SECONDS) * AUDIO_TOKENS_PER_SECOND) {
+    console.error(`Audio piece of ${length} s holds about ${Math.round(tokens / AUDIO_TOKENS_PER_SECOND)} s`);
+    throw new AudioTooLong();
+  }
   for (const { apiKey, model } of attempts) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -122,6 +143,23 @@ export async function listen(
     }
   }
   throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+}
+
+/** How many tokens the audio alone is, from Gemini's free token counter. */
+async function countTokens(model: string, apiKey: string, type: string, data: string): Promise<number> {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:countTokens`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: type, data } }] }] }),
+  });
+  if (!res.ok) {
+    console.error('Gemini countTokens', res.status, await res.text().catch(() => ''));
+    // Not checked means not heard: the piece is tried again later.
+    throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+  }
+  const body = (await res.json()) as { totalTokens?: number };
+  if (!Number.isFinite(body.totalTokens)) throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+  return body.totalTokens!;
 }
 
 // Models that turned down the "minimal thinking" setting (older ones): asked without it from then on.
