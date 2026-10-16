@@ -12,6 +12,6 @@ export const LOGO_ORANGE = '#ff6a13';
 export const LEGAL = {
   // The person or company that runs Hookcut.
   owner: (import.meta.env.VITE_LEGAL_NAME as string | undefined) || BRAND_NAME,
-  email: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'support@hookcut.app',
+  email: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'hookcutofficial@gmail.com',
   updated: 'October 15, 2026',
 };
