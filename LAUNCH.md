@@ -9,15 +9,15 @@ Everything Hookcut needs to go live, in order. Free to run until paying users ar
 - [ ] Set up a support email address on it (e.g. `support@…`; Zoho Mail or Cloudflare Email Routing are free).
 
 ## 2. Supabase (accounts and usage)
-- [ ] Create a project at supabase.com (free).
-- [ ] Run the files in `supabase/migrations/` in order (SQL editor, or `supabase db push`).
+- [x] Create a project at supabase.com (free).
+- [x] Run the files in `supabase/migrations/` in order (SQL editor, or `supabase db push`).
 - [ ] Authentication → URL Configuration: Site URL = your domain; add `https://<domain>/new` and
       `https://<domain>/account` to Redirect URLs.
-- [ ] Authentication → Providers → Google: turn on "Continue with Google" (needs a Google Cloud OAuth client).
+- [x] Authentication → Providers → Google: turn on "Continue with Google" (needs a Google Cloud OAuth client).
 - [ ] Deploy the functions and secrets (README → "Set up Paddle", step 6), including `GEMINI_API_KEY`.
 
 ## 3. Gemini
-- [ ] Create a free API key at https://aistudio.google.com/apikey and set it as `GEMINI_API_KEY` on Supabase.
+- [x] Create a free API key at https://aistudio.google.com/apikey and set it as `GEMINI_API_KEY` on Supabase.
 - [ ] In AI Studio, check the key's daily request limits. Each episode is one request.
 - [ ] Later, once subscriptions pay for it: a key from a Google Cloud project **with billing on**, set as
       `GEMINI_PAID_API_KEY`. Paid plans then get Gemini's top model and their transcripts stay private.
@@ -53,7 +53,7 @@ Cloudflare Pages accepts files up to 25 MB and the speech runtime file is 27 MB,
 - [ ] After upgrading the speech library (`npm update`), upload the new file too.
 
 ## 6. Cloud listening (phones)
-- [ ] Deploy the `transcribe` function (`supabase functions deploy transcribe`). It uses the same `GEMINI_API_KEY`.
+- [x] Deploy the `listen` function (`supabase functions deploy listen --no-verify-jwt`). It uses the same `GEMINI_API_KEY`.
 
 ## 7. Before announcing
 - [ ] Have the Terms, Privacy and Refund pages checked (they're plain-language templates, not legal advice).
