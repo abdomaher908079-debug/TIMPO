@@ -38,20 +38,24 @@ pricing buttons switch plans for free so you can try what each plan unlocks.
 1. Create a Paddle account (start with a [sandbox](https://sandbox-vendors.paddle.com) account for testing) and
    check your country is supported for payouts.
 2. **Catalog → Products:** create Pro and Studio, each with a monthly and a yearly price
-   ($15 / $144 and $29 / $288). Put the four price IDs in `.env.local` (see `.env.example`) and as Supabase secrets.
+   ($15 / $144 and $29 / $288). Also "Hookcut extra hours" (one-time $8, quantity 1) and "Hookcut Studio extra seat"
+   ($8 a month and $80 a year). Put the price IDs in `.env.local` (see `.env.example`) and as Supabase secrets.
 3. **Developer tools → Authentication:** create a client-side token (`VITE_PADDLE_CLIENT_TOKEN`) and an API key.
 4. **Checkout → Checkout settings:** set the default payment link to `https://your-site/checkout.html`, and add your
    domain under approved domains.
 5. **Developer tools → Notifications:** add a destination
-   `https://<project>.supabase.co/functions/v1/paddle-webhook` for the `subscription.*` events, and copy its secret.
+   `https://<project>.supabase.co/functions/v1/paddle-webhook` for the `subscription.*`, `transaction.completed`
+   and `adjustment.*` events, and copy its secret.
 6. Set the server secrets and deploy:
 
    ```bash
    supabase secrets set PADDLE_ENV=sandbox PADDLE_API_KEY=... PADDLE_WEBHOOK_SECRET=... \
      PADDLE_PRICE_PRO_MONTHLY=pri_... PADDLE_PRICE_PRO_YEARLY=pri_... \
-     PADDLE_PRICE_STUDIO_MONTHLY=pri_... PADDLE_PRICE_STUDIO_YEARLY=pri_...
+     PADDLE_PRICE_STUDIO_MONTHLY=pri_... PADDLE_PRICE_STUDIO_YEARLY=pri_... PADDLE_PRICE_HOURS_PACK=pri_... \
+     PADDLE_PRICE_SEAT_MONTHLY=pri_... PADDLE_PRICE_SEAT_YEARLY=pri_...
    supabase functions deploy pick-moments
    supabase functions deploy billing-portal
+   supabase functions deploy team-seats
    supabase functions deploy paddle-webhook --no-verify-jwt
    ```
 

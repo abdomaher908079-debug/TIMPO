@@ -5,7 +5,8 @@ import Pricing from '../components/Pricing';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { openBillingPortal } from '../lib/billing';
+import { openBillingPortal, PACK_PRICE_ID, startPackCheckout } from '../lib/billing';
+import { PACK } from '../../supabase/functions/_shared/plans';
 import { cloudAvailable } from '../lib/cloud';
 import { formatDuration } from '../lib/format';
 
@@ -13,12 +14,32 @@ const DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'long
 
 export default function Account() {
   const { user, demo } = useAuth();
-  const { plan, profile, workspace, period, usage, cloudUsage, loading, refresh } = useAccount();
+  const { plan, profile, workspace, period, usage, cloudUsage, packs, loading, refresh } = useAccount();
   const [params, setParams] = useSearchParams();
   const [billingError, setBillingError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   // Back from checkout: the plan changes once Paddle tells our server, usually within seconds.
   const [activating, setActivating] = useState(params.get('upgraded') === '1');
+  // Back from buying an hour pack: it shows up the same way.
+  const [packPending, setPackPending] = useState(params.get('pack') === '1');
+  const [packStart] = useState(packs.seconds);
+
+  useEffect(() => {
+    if (!packPending) return;
+    if (packs.seconds > packStart) {
+      setPackPending(false);
+      setParams({}, { replace: true });
+      return;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > 60_000) {
+        clearInterval(timer);
+        setPackPending(false);
+      } else void refresh();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [packPending, packs.seconds, packStart, refresh, setParams]);
 
   useEffect(() => {
     if (!activating) return;
@@ -106,6 +127,29 @@ export default function Account() {
               (plan.episodesPerPeriod !== null ? ` · ${usage.episodes} of ${plan.episodesPerPeriod} episodes` : '')}
           <span className="muted"> · resets {DATE.format(period.end)}</span>
         </p>
+        {plan.id !== 'free' && !demo && (
+          <div className="pack-box">
+            <p className="usage-text">
+              <b>Extra hours:</b>{' '}
+              {packs.seconds > 0 || packs.episodes > 0
+                ? `${formatDuration(packs.seconds)} and ${packs.episodes} episode${packs.episodes === 1 ? '' : 's'} left` +
+                  (packs.expires ? `, until ${DATE.format(packs.expires)}` : '')
+                : 'none'}
+            </p>
+            {packPending && <p className="notice" role="status">Thanks! Adding your extra hours… this usually takes a few seconds.</p>}
+            <p className="muted small">
+              Ran out before the month ends? Get +{PACK.hours} hours and +{PACK.episodes} episodes for ${PACK.price}, one time,
+              usable for {PACK.days} days. They're used only after your monthly hours or episodes run out. Episodes come with
+              the hours because each AI pick costs about the same whatever an episode's length, so lots of short files count
+              as episodes rather than hours. Cloud listening isn't included.
+            </p>
+            {!member && PACK_PRICE_ID && (
+              <button type="button" className="btn btn-outline btn-inline" onClick={startPackCheckout}>
+                Get +{PACK.hours} hours · ${PACK.price}
+              </button>
+            )}
+          </div>
+        )}
         {cloudAvailable && !demo && (
           <p className="usage-text">
             Cloud listening:{' '}

@@ -65,7 +65,7 @@ function problemWith(info: EpisodeInfo): string | null {
 const RESETS = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 
 export default function NewEpisode() {
-  const { plan, usage, period, check, recordDemoEpisode, refresh, loading: accountLoading } = useAccount();
+  const { plan, usage, period, packs, check, recordDemoEpisode, refresh, loading: accountLoading } = useAccount();
   const [state, setState] = useState<State>({ kind: 'empty' });
   const { user } = useAuth();
   const userId = user?.id ?? 'demo';
@@ -436,7 +436,8 @@ export default function NewEpisode() {
             {episodesLeft !== null && plan.id === 'free'
               ? `${episodesLeft} of ${plan.episodesPerPeriod} episode${plan.episodesPerPeriod === 1 ? '' : 's'} left this ${plan.period}`
               : `${formatDuration(remainingSeconds)} of ${plan.hours} hours left this ${plan.period}` +
-                (episodesLeft !== null && episodesLeft <= 5 ? ` (${episodesLeft} episode${episodesLeft === 1 ? '' : 's'} left)` : '')}{' '}
+                (episodesLeft !== null && episodesLeft <= 5 ? ` (${episodesLeft} episode${episodesLeft === 1 ? '' : 's'} left)` : '') +
+                (plan.id !== 'free' && packs.seconds > 0 ? ` + ${formatDuration(packs.seconds)} extra` : '')}{' '}
             · resets {RESETS.format(period.end)}
           </>
         )}

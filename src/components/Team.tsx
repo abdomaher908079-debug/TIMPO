@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { invite, joinTeam, listTeam, removeMember, TEAM_SIZE, type TeamMember } from '../lib/team';
+import { setExtraSeats } from '../lib/billing';
+import { invite, joinTeam, listTeam, removeMember, MAX_EXTRA_SEATS, SEAT_PRICE, TEAM_SIZE, type TeamMember } from '../lib/team';
 
 // Studio teams on the Account page: the owner invites up to 2 people, who share the plan's hours,
 // brand kits and Best AI. Invited people join from here too.
 export default function Team() {
   const { user, demo } = useAuth();
-  const { plan, workspace, refresh } = useAccount();
+  const { plan, profile, workspace, refresh } = useAccount();
   const [rows, setRows] = useState<TeamMember[] | null>(null);
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -50,6 +51,20 @@ export default function Team() {
   const invitesToMe = rows.filter((r) => r.status === 'invited' && r.email === myEmail && r.owner_id !== user.id);
   const myTeam = rows.filter((r) => r.owner_id === user.id);
   const isOwner = plan.id === 'studio' && !workspace?.is_team_member;
+  const extraSeats = profile?.extra_seats ?? 0;
+  const teamSize = TEAM_SIZE + extraSeats;
+  const yearly = profile?.billing === 'yearly';
+  const seatPrice = yearly ? `$${SEAT_PRICE.yearly} a year` : `$${SEAT_PRICE.monthly} a month`;
+
+  function changeSeats(n: number) {
+    const adding = n > extraSeats;
+    const ok = window.confirm(
+      adding
+        ? `Add a seat for ${seatPrice}? You'll be charged now for the rest of this billing period, then with your plan.`
+        : `Remove a seat? You'll get credit for the rest of this billing period.`,
+    );
+    if (ok) void act(() => setExtraSeats(n));
+  }
 
   return (
     <section className="card account-card" id="team" aria-labelledby="team-title">
@@ -93,7 +108,7 @@ export default function Team() {
       ) : isOwner ? (
         <>
           <p className="muted small">
-            Studio includes {TEAM_SIZE} people: you and {TEAM_SIZE - 1} others. Your team shares the plan's {plan.hours} hours, brand
+            Your team: {teamSize} people (you and {teamSize - 1} others{extraSeats ? `, including ${extraSeats} extra seat${extraSeats === 1 ? '' : 's'}` : ''}). Your team shares the plan's {plan.hours} hours, brand
             kits, cloud listening and Best AI.
           </p>
           <ul className="team-list">
@@ -134,7 +149,28 @@ export default function Team() {
               </li>
             ))}
           </ul>
-          {myTeam.length < TEAM_SIZE - 1 && (
+          <div className="seat-row">
+            <span className="muted small">
+              Studio includes {TEAM_SIZE} people. Each extra person is {seatPrice}, sharing the same hours.
+            </span>
+            {extraSeats < MAX_EXTRA_SEATS && !profile?.cancel_at && (
+              <button type="button" className="btn btn-outline btn-inline" disabled={busy} onClick={() => changeSeats(extraSeats + 1)}>
+                Add a seat
+              </button>
+            )}
+            {extraSeats > 0 && (
+              <button
+                type="button"
+                className="link-button"
+                disabled={busy || myTeam.length > teamSize - 2}
+                title={myTeam.length > teamSize - 2 ? 'Remove someone first' : undefined}
+                onClick={() => changeSeats(extraSeats - 1)}
+              >
+                Remove a seat
+              </button>
+            )}
+          </div>
+          {myTeam.length < teamSize - 1 && (
             <form
               className="team-invite-form"
               onSubmit={(e: FormEvent) => {

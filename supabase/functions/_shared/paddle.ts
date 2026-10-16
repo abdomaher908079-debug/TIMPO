@@ -16,3 +16,12 @@ export function planForPrice(priceId: string | undefined): { plan: PlanId; billi
   }
   return priceId ? (prices[priceId] ?? null) : null;
 }
+
+/** Extra Studio seats: an item on the Studio subscription, billed like the plan (monthly or yearly). */
+export function seatPrice(billing: Billing): string | undefined {
+  return Deno.env.get(`PADDLE_PRICE_SEAT_${billing.toUpperCase()}`) || undefined;
+}
+
+export function isSeatPrice(priceId: string | undefined): boolean {
+  return !!priceId && (priceId === seatPrice('monthly') || priceId === seatPrice('yearly'));
+}

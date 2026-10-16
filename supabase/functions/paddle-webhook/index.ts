@@ -1,9 +1,11 @@
 // Supabase Edge Function: receives Paddle subscription events and keeps each user's plan in sync.
 // Deploy without JWT checks (Paddle signs its requests instead):
 //   supabase functions deploy paddle-webhook --no-verify-jwt
-// Secrets: PADDLE_WEBHOOK_SECRET, PADDLE_ENV, PADDLE_PRICE_{PRO,STUDIO}_{MONTHLY,YEARLY}
+// Events: subscription.*, transaction.completed (hour packs), adjustment.* (refunds of hour packs).
+// Secrets: PADDLE_WEBHOOK_SECRET, PADDLE_ENV, PADDLE_PRICE_{PRO,STUDIO,SEAT}_{MONTHLY,YEARLY}, PADDLE_PRICE_HOURS_PACK
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { planForPrice } from '../_shared/paddle.ts';
+import { isSeatPrice, planForPrice } from '../_shared/paddle.ts';
+import { PACK } from '../_shared/plans.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false },
@@ -38,7 +40,7 @@ interface Subscription {
   customer_id: string;
   updated_at: string;
   custom_data?: { user_id?: string } | null;
-  items?: { price?: { id?: string } }[];
+  items?: { price?: { id?: string }; quantity?: number }[];
   current_billing_period?: { starts_at: string; ends_at: string } | null;
   scheduled_change?: { action: string; effective_at: string } | null;
 }
@@ -51,9 +53,11 @@ Deno.serve(async (req) => {
     return new Response('Invalid signature', { status: 401 });
   }
 
-  const event = JSON.parse(body) as { event_type: string; data: Subscription };
+  const event = JSON.parse(body) as { event_type: string; data: unknown };
+  if (event.event_type === 'transaction.completed') return packBought(event.data as Transaction);
+  if (event.event_type === 'adjustment.created' || event.event_type === 'adjustment.updated') return refunded(event.data as Adjustment);
   if (!event.event_type.startsWith('subscription.')) return new Response('Ignored');
-  const sub = event.data;
+  const sub = event.data as Subscription;
 
   // The checkout passes our user id; later events are matched by subscription id.
   const userId = sub.custom_data?.user_id;
@@ -79,12 +83,15 @@ Deno.serve(async (req) => {
     console.error('Second subscription for one account', match.value, 'was', profile.paddle_subscription_id, 'now', sub.id);
   }
 
-  const price = planForPrice(sub.items?.[0]?.price?.id);
-  if (!price) console.error('Unknown Paddle price', sub.items?.[0]?.price?.id);
+  // The plan's item, and any extra Studio seats added to the same subscription.
+  const items = sub.items ?? [];
+  const price = items.map((i) => planForPrice(i.price?.id)).find((p) => p) ?? null;
+  if (!price) console.error('No plan price in subscription', sub.id, items.map((i) => i.price?.id));
+  const seats = items.filter((i) => isSeatPrice(i.price?.id)).reduce((n, i) => n + (i.quantity ?? 1), 0);
   const { error } = await admin
     .from('profiles')
     .update({
-      ...(price ? { plan: price.plan, billing: price.billing } : {}),
+      ...(price ? { plan: price.plan, billing: price.billing, extra_seats: price.plan === 'studio' ? Math.min(7, seats) : 0 } : {}),
       paddle_customer_id: sub.customer_id,
       paddle_subscription_id: sub.id,
       subscription_status: sub.status,
@@ -101,3 +108,65 @@ Deno.serve(async (req) => {
   }
   return new Response('OK');
 });
+
+interface Transaction {
+  id: string;
+  status: string;
+  subscription_id?: string | null;
+  custom_data?: { user_id?: string } | null;
+  items?: { price?: { id?: string }; quantity?: number }[];
+}
+
+interface Adjustment {
+  id: string;
+  action: string;
+  status: string;
+  transaction_id: string;
+}
+
+/** An hour pack was paid for: add it to the buyer's workspace (once, even if Paddle sends it again). */
+async function packBought(txn: Transaction): Promise<Response> {
+  const packPrice = Deno.env.get('PADDLE_PRICE_HOURS_PACK');
+  const quantity = (txn.items ?? []).filter((i) => packPrice && i.price?.id === packPrice).reduce((n, i) => n + (i.quantity ?? 1), 0);
+  if (!quantity) return new Response('Ignored');
+  const userId = txn.custom_data?.user_id;
+  if (!userId) {
+    console.error('Hour pack without a user', txn.id);
+    return new Response('No user');
+  }
+  const seconds = quantity * PACK.hours * 3600;
+  const episodes = quantity * PACK.episodes;
+  const { error } = await admin.from('hour_packs').upsert(
+    {
+      workspace_id: userId,
+      transaction_id: txn.id,
+      seconds,
+      episodes,
+      seconds_left: seconds,
+      episodes_left: episodes,
+      expires_at: new Date(Date.now() + PACK.days * 86_400_000).toISOString(),
+    },
+    { onConflict: 'transaction_id', ignoreDuplicates: true },
+  );
+  if (error) {
+    console.error('Hour pack not saved', txn.id, error);
+    // An unknown user will never match; anything else is worth Paddle trying again.
+    return error.code === '23503' ? new Response('No matching user') : new Response('Database error', { status: 500 });
+  }
+  return new Response('OK');
+}
+
+/** A refund or chargeback went through: an hour pack bought in that transaction can't be used any more. */
+async function refunded(adj: Adjustment): Promise<Response> {
+  if ((adj.action !== 'refund' && adj.action !== 'chargeback') || adj.status !== 'approved') return new Response('Ignored');
+  const { error } = await admin
+    .from('hour_packs')
+    .update({ refunded_at: new Date().toISOString(), seconds_left: 0, episodes_left: 0 })
+    .eq('transaction_id', adj.transaction_id);
+  if (error) {
+    console.error(error);
+    return new Response('Database error', { status: 500 });
+  }
+  return new Response('OK');
+}
+

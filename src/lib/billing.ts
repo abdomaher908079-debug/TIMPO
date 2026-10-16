@@ -13,11 +13,24 @@ export const PRICE_IDS: Record<Exclude<PlanId, 'free'>, Record<Billing, string |
   },
 };
 
+// The one-time hour pack (+10 hours and +20 episodes).
+export const PACK_PRICE_ID = import.meta.env.VITE_PADDLE_PRICE_HOURS_PACK as string | undefined;
+
 export const paymentsReady = !!supabase && !!import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
 
 /** Opens Paddle's checkout for a plan, on its own page (see checkout.html). */
 export function startCheckout(plan: Exclude<PlanId, 'free'>, billing: Billing) {
   window.location.assign(`/checkout.html?plan=${plan}&billing=${billing}`);
+}
+
+/** Opens Paddle's checkout for an hour pack. */
+export function startPackCheckout() {
+  window.location.assign('/checkout.html?pack=hours');
+}
+
+/** Sets how many people a Studio owner can add beyond the 3 included; Paddle bills the difference now. */
+export async function setExtraSeats(extraSeats: number): Promise<void> {
+  await callFunction<{ extraSeats: number }>('team-seats', { extraSeats });
 }
 
 /** Opens Paddle's customer portal: card, invoices, monthly ↔ yearly, cancel. */

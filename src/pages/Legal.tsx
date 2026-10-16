@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BRAND_NAME, LEGAL } from '../lib/brand';
 import { PLANS } from '../lib/plans';
-import { PICKS_PER_EPISODE } from '../../supabase/functions/_shared/plans';
+import { PACK, PICKS_PER_EPISODE } from '../../supabase/functions/_shared/plans';
 
 // Plain-language legal pages. Paddle (our payment provider) requires Terms, Privacy and Refunds
 // pages before it approves the site. Have them checked before taking real payments.
@@ -128,7 +128,9 @@ export function Terms() {
         <Link to="/#pricing">pricing</Link>: hours and episodes per month (counted from the day your subscription
         started, also on yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
-        over. You can cancel any time in Account → Manage
+        over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run
+        out, and only while you're on a paid plan. Extra Studio seats are added to your subscription and billed with it; adding
+        or removing one is charged or credited for the rest of the billing period. You can cancel any time in Account → Manage
         billing; your plan stays active until the end of the period you paid for. Refunds follow our{' '}
         <Link to="/refunds">refund policy</Link>.
       </p>
@@ -160,7 +162,7 @@ export function Refunds() {
       <p>
         If you're not happy with a paid plan, ask for a full refund within <b>14 days of your first payment</b> and you'll get
         your money back, no questions asked. Renewals can be refunded within 14 days if you haven't processed any episodes since
-        the renewal.
+        the renewal. Extra hour packs can be refunded within 14 days if none of their hours or episodes have been used.
       </p>
       <h2>How to ask</h2>
       <p>

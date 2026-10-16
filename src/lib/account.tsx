@@ -25,6 +25,8 @@ interface AccountValue {
   usage: Usage;
   // Cloud listening used this period (the transcribe function).
   cloudUsage: Usage;
+  // What's left in the workspace's hour packs (paid plans), and when the soonest one expires.
+  packs: Usage & { expires: Date | null };
   loading: boolean;
   refresh(): Promise<void>;
   /** Whether an episode of this length fits what's left this period (the server checks again). */
@@ -83,6 +85,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<WorkspaceRow | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeRow[]>([]);
   const [cloudUsage, setCloudUsage] = useState<Usage>({ episodes: 0, seconds: 0 });
+  const [packs, setPacks] = useState<Usage & { expires: Date | null }>({ episodes: 0, seconds: 0, expires: null });
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -123,6 +126,21 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .select('seconds')
       .eq('workspace_id', wsId)
       .eq('period_start', period.start.toISOString());
+    const { data: packRows } = await supabase
+      .from('hour_packs')
+      .select('seconds_left, episodes_left, expires_at')
+      .eq('workspace_id', wsId)
+      .is('refunded_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('expires_at');
+    const live = ((packRows as { seconds_left: number; episodes_left: number; expires_at: string }[] | null) ?? []).filter(
+      (r) => Number(r.seconds_left) > 0 || r.episodes_left > 0,
+    );
+    setPacks({
+      seconds: live.reduce((n, r) => n + Number(r.seconds_left), 0),
+      episodes: live.reduce((n, r) => n + r.episodes_left, 0),
+      expires: live.length ? new Date(live[0]!.expires_at) : null,
+    });
     const cloud = (cloudRows as { seconds: number }[] | null) ?? [];
     setCloudUsage({ episodes: cloud.length, seconds: cloud.reduce((n, r) => n + Number(r.seconds), 0) });
     setProfile(p ?? null);
@@ -152,12 +170,13 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       period,
       usage,
       cloudUsage,
+      packs,
       loading,
       refresh,
       check: (seconds, fp) => {
         // The same episode again is a re-pick: no new episode or time, but only a few per period.
         const seen = fp ? inPeriod.find((e) => e.fingerprint === fp) : undefined;
-        if (!seen) return checkEpisode(planId, usage, seconds);
+        if (!seen) return checkEpisode(planId, usage, seconds, packs);
         return (seen.picks ?? 1) >= PICKS_PER_EPISODE ? limitProblem(planId, 'no-repicks-left', seconds) : null;
       },
       recordDemoEpisode(fp, seconds) {
@@ -175,7 +194,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         void refresh();
       },
     };
-  }, [profile, workspace, episodes, cloudUsage, loading, refresh]);
+  }, [profile, workspace, episodes, cloudUsage, packs, loading, refresh]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

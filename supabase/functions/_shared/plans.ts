@@ -77,6 +77,11 @@ export const LIMITS: Record<PlanId, PlanLimits> = {
 // Container durations often run a fraction of a second long; don't block a 30:00 episode over that.
 export const GRACE_SECONDS = 30;
 
+// Hour packs: one-time, for Pro and Studio, used once the month's own hours or episodes run out. They add
+// episodes too (2 per hour, like Pro), since each AI pick costs about the same whatever the episode's length.
+export const PACK = { hours: 10, episodes: 20, days: 90, price: 8 };
+const PACK_HINT = `Need more? Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price} on your Account page.`;
+
 // Times the AI may pick the moments of one episode in a period: the first time plus 3 free re-picks.
 export const PICKS_PER_EPISODE = 4;
 
@@ -147,10 +152,15 @@ export function limitProblem(plan: PlanId, reason: LimitReason, seconds: number,
     case 'no-episodes-left':
       return {
         reason,
-        message: `You've used your ${l.episodesPerPeriod === 1 ? 'episode' : `${l.episodesPerPeriod} episodes`} for this ${l.period}.`,
+        message:
+          `You've used your ${l.episodesPerPeriod === 1 ? 'episode' : `${l.episodesPerPeriod} episodes`} for this ${l.period}.` +
+          (plan === 'free' ? '' : ` ${PACK_HINT}`),
       };
     case 'no-hours-left':
-      return { reason, message: `This episode is ${hm(seconds)} and you have ${hm(Math.max(0, left))} left this ${l.period}.` };
+      return {
+        reason,
+        message: `This episode is ${hm(seconds)} and you have ${hm(Math.max(0, left))} left this ${l.period}.` + (plan === 'free' ? '' : ` ${PACK_HINT}`),
+      };
     case 'no-repicks-left':
       return {
         reason,
@@ -160,21 +170,25 @@ export function limitProblem(plan: PlanId, reason: LimitReason, seconds: number,
 }
 
 /**
- * Whether an episode of `seconds` fits the plan's limits, given this period's usage. A quick check
+ * Whether an episode of `seconds` fits the plan's limits, given this period's usage and what's left in
+ * hour packs (`packs`, paid plans only). A quick check
  * for the page and before cloud listening; the server's reserve_pick (in the database) is the one that
  * counts, in a single locked step.
  */
-export function checkEpisode(plan: PlanId, usage: Usage, seconds: number): LimitProblem | null {
+export function checkEpisode(plan: PlanId, usage: Usage, seconds: number, packs: Usage = { episodes: 0, seconds: 0 }): LimitProblem | null {
   const l = LIMITS[plan];
+  if (plan === 'free') packs = { episodes: 0, seconds: 0 };
   if (l.maxEpisodeSeconds !== null && seconds > l.maxEpisodeSeconds + GRACE_SECONDS) return limitProblem(plan, 'too-long', seconds);
-  if (l.episodesPerPeriod !== null && usage.episodes >= l.episodesPerPeriod) return limitProblem(plan, 'no-episodes-left', seconds);
-  const left = l.hours * 3600 - usage.seconds;
+  if (l.episodesPerPeriod !== null && usage.episodes >= l.episodesPerPeriod + packs.episodes) return limitProblem(plan, 'no-episodes-left', seconds);
+  const left = Math.max(0, l.hours * 3600 - usage.seconds) + packs.seconds;
   if (seconds > left + GRACE_SECONDS) return limitProblem(plan, 'no-hours-left', seconds, left);
   return null;
 }
 
 export interface ProfileRow {
   plan: PlanId;
+  // Studio seats beyond the 3 included (missing in demo mode).
+  extra_seats?: number;
   billing: Billing | null;
   subscription_status: string | null;
   current_period_start: string | null;

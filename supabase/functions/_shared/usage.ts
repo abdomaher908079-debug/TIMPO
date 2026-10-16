@@ -15,9 +15,12 @@ export function countedSeconds(segments: Segment[], fileSeconds: number): number
   return Math.max(lastWord, Number.isFinite(fileSeconds) ? fileSeconds : 0, chars / MAX_CHARS_PER_SECOND, 0);
 }
 
-export type Pick = { ok: true; id: number; isNew: boolean; oldSeconds: number } | { ok: false; problem: LimitProblem };
+export type Pick = { ok: true; id: number; isNew: boolean; oldSeconds: number; token: string | null } | { ok: false; problem: LimitProblem };
 
-/** Takes one AI pick for the episode if the plan allows it (see reserve_pick). */
+/**
+ * Takes one AI pick for the episode if the plan allows it (see reserve_pick). Once the period's own
+ * hours or episodes are used up, paid plans draw on their hour packs.
+ */
 export async function reservePick(
   admin: SupabaseClient,
   p: { plan: PlanId; workspaceId: string; userId: string; fingerprint: string; seconds: number; periodStart: string },
@@ -34,17 +37,24 @@ export async function reservePick(
     p_max_episode_seconds: l.maxEpisodeSeconds,
     p_max_picks: PICKS_PER_EPISODE,
     p_grace: GRACE_SECONDS,
+    p_use_packs: p.plan !== 'free',
   });
   if (error) throw error;
-  const r = data as { ok: boolean; id?: number; new?: boolean; old_seconds?: number; reason?: LimitReason; left?: number };
+  const r = data as { ok: boolean; id?: number; new?: boolean; old_seconds?: number; token?: string; reason?: LimitReason; left?: number };
   if (!r.ok) return { ok: false, problem: limitProblem(p.plan, r.reason ?? 'no-hours-left', p.seconds, Number(r.left ?? 0)) };
-  return { ok: true, id: Number(r.id), isNew: !!r.new, oldSeconds: Number(r.old_seconds ?? 0) };
+  return { ok: true, id: Number(r.id), isNew: !!r.new, oldSeconds: Number(r.old_seconds ?? 0), token: r.token ?? null };
 }
 
 /** Gives back a pick the AI couldn't make. Never throws: the original error is what matters. */
 export async function releasePick(admin: SupabaseClient, workspaceId: string, pick: Pick): Promise<void> {
   if (!pick.ok) return;
-  const { error } = await admin.rpc('release_pick', { p_workspace: workspaceId, p_id: pick.id, p_new: pick.isNew, p_old_seconds: pick.oldSeconds });
+  const { error } = await admin.rpc('release_pick', {
+    p_workspace: workspaceId,
+    p_id: pick.id,
+    p_new: pick.isNew,
+    p_old_seconds: pick.oldSeconds,
+    p_token: pick.token,
+  });
   if (error) console.error('Pick not given back', error);
 }
 

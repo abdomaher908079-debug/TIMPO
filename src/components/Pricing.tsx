@@ -4,9 +4,12 @@ import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { openBillingPortal, paymentsReady, startCheckout } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
+import { SEAT_PRICE } from '../lib/team';
+import { PACK } from '../../supabase/functions/_shared/plans';
 
 export default function Pricing() {
-  const [yearly, setYearly] = useState(false);
+  // Yearly first: paid upfront, and people stay longer.
+  const [yearly, setYearly] = useState(true);
   return (
     <section className="pricing" id="pricing" aria-labelledby="pricing-title">
       <h2 id="pricing-title" className="section-heading">Simple pricing</h2>
@@ -15,7 +18,7 @@ export default function Pricing() {
           Monthly
         </button>
         <button type="button" className={yearly ? 'on' : ''} aria-pressed={yearly} onClick={() => setYearly(true)}>
-          Yearly <span className="save">save 20%</span>
+          Yearly <span className="save">2 months free</span>
         </button>
       </div>
       <div className="plans">
@@ -39,7 +42,27 @@ export default function Pricing() {
           );
         })}
       </div>
-      <p className="muted small pricing-note">Prices in US dollars. Taxes are added at checkout where they apply. Cancel any time.</p>
+      <div className="card pricing-extras">
+        <h3>Need more?</h3>
+        <p>
+          <b>
+            Extra hours: +{PACK.hours} hours and +{PACK.episodes} episodes for ${PACK.price}
+          </b>
+          , one time, for Pro and Studio. Usable for {PACK.days} days, after your monthly hours or episodes run out. Why episodes
+          too? Each time our AI picks an episode's best moments costs about the same whatever its length, so plans count
+          both hours and episodes, and packs add both.
+        </p>
+        <p>
+          <b>
+            Bigger teams: ${SEAT_PRICE.monthly} a month (${SEAT_PRICE.yearly} a year) per extra person
+          </b>{' '}
+          on Studio, up to 10 people. Everyone shares the plan's hours.
+        </p>
+      </div>
+      <p className="muted small pricing-note">
+        Prices in US dollars. Tax is included in most countries; in the US and Canada, sales tax is added at checkout where it
+        applies. Cancel any time.
+      </p>
     </section>
   );
 }

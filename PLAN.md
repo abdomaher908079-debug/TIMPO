@@ -48,6 +48,14 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
     yearly plans keep a profit too. Once real `ai_calls` numbers are in, set a ceiling on the AI's output at twice
     the largest real request, so no normal request is ever cut.
 - **Hours:** Pro 20 h, Studio 40 h (10 h a week, shared by a team of 3): enough for 4–5 weekly shows.
+- **Hour packs:** +10 h and +20 episodes for $8, one time, Pro and Studio owners, usable for 90 days after the
+  month's own hours or episodes run out (`hour_packs`, drawn by `reserve_pick`, given back if the AI fails, emptied
+  by a refund). About $0.80 an hour, a little above the plans, so heavy users are nudged to upgrade.
+- **Extra Studio seats:** $8 a month / $80 a year per person beyond 3, up to 10, as a second item on the Studio
+  subscription (`team-seats` function, prorated now). Seats share the plan's hours, so they cost us almost nothing.
+- **Yearly first:** the pricing page opens on yearly ("2 months free").
+- **Normal-month money** (1,000 Pro, 300 Studio, 13,000 Free, 25% use, 70% monthly): about $16,650 profit on
+  $22,350 of prices (75%) after tax, Paddle, refunds, AI and hosting.
 - **AI quality:** Free gets Quick AI (Whisper base + Gemini Flash-Lite, all free). Pro and Studio get the same
   Best AI (Whisper small, ~3× slower so only with a graphics card, + Gemini's top model on a paid key). The site
   tells Free users plainly that Pro's AI is better. Gemini steps down Pro → Flash → Flash-Lite when a model is

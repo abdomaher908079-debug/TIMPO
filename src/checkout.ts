@@ -1,7 +1,7 @@
 // Checkout page: opens Paddle's checkout for the plan in the URL, as the signed-in user.
 // Paddle charges the card and handles tax; its webhook then updates the plan (paddle-webhook).
 import { effectivePlan, type Billing, type ProfileRow } from '../supabase/functions/_shared/plans';
-import { PRICE_IDS } from './lib/billing';
+import { PACK_PRICE_ID, PRICE_IDS } from './lib/billing';
 import { supabase } from './lib/supabase';
 
 interface PaddleJs {
@@ -27,7 +27,9 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const plan = params.get('plan');
   const billing = (params.get('billing') === 'yearly' ? 'yearly' : 'monthly') as Billing;
-  const priceId = plan === 'pro' || plan === 'studio' ? PRICE_IDS[plan][billing] : undefined;
+  // ?pack=hours: a one-time hour pack, for Pro and Studio owners.
+  const pack = params.get('pack') === 'hours';
+  const priceId = pack ? PACK_PRICE_ID : plan === 'pro' || plan === 'studio' ? PRICE_IDS[plan][billing] : undefined;
   const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN as string | undefined;
   const Paddle = (window as unknown as { Paddle?: PaddleJs }).Paddle;
   if (!supabase || !token || !priceId) return fail('Payments aren’t set up yet.');
@@ -39,10 +41,14 @@ async function main() {
     location.replace('/signup');
     return;
   }
-  // Already subscribed: changing plan happens in Paddle's billing page, never with a second subscription.
   const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>();
   if (error) return fail('We couldn’t check your account. Please try again.');
-  if (effectivePlan(profile) !== 'free') {
+  if (pack && effectivePlan(profile) === 'free') {
+    status.innerHTML = 'Extra hours are for Pro and Studio. <a href="/#pricing">See plans</a>';
+    return;
+  }
+  // Already subscribed: changing plan happens in Paddle's billing page, never with a second subscription.
+  if (!pack && effectivePlan(profile) !== 'free') {
     status.innerHTML = 'You already have a plan. To change it, open <a href="/account">your account</a> and choose Manage billing.';
     return;
   }
@@ -57,9 +63,9 @@ async function main() {
   Paddle.Checkout.open({
     items: [{ priceId, quantity: 1 }],
     customer: user.email ? { email: user.email } : undefined,
-    // Tells our webhook which account the new subscription belongs to.
+    // Tells our webhook which account the subscription or hour pack belongs to.
     customData: { user_id: user.id },
-    settings: { displayMode: 'overlay', theme: 'dark', successUrl: `${location.origin}/account?upgraded=1` },
+    settings: { displayMode: 'overlay', theme: 'dark', successUrl: `${location.origin}/account?${pack ? 'pack=1' : 'upgraded=1'}` },
   });
   status.textContent = 'Complete your payment in the checkout window.';
 }
