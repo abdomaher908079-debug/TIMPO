@@ -115,7 +115,9 @@ export function clipsFromMoments(moments: Moment[]): Clip[] {
     ...m,
     original: { start: m.start, end: m.end },
     cropX: 50,
-    layout: 'fill',
+    // The whole picture until auto framing finds a face to follow: a crop of slides or a screen
+    // would cut off the text.
+    layout: 'fit',
     captionStyle: 'bold',
   }));
 }

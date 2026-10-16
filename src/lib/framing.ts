@@ -28,7 +28,7 @@ function faceDetector(): Promise<FaceDetector> {
     return FaceDetector.createFromOptions(
       { wasmLoaderPath: loaderUrl, wasmBinaryPath: wasmUrl },
       // The processor, not the graphics chip: heavy GPU work can hang phones.
-      { baseOptions: { modelAssetPath: '/models/blaze_face_short_range.tflite', delegate: 'CPU' }, runningMode: 'IMAGE', minDetectionConfidence: 0.5 },
+      { baseOptions: { modelAssetPath: '/models/blaze_face_short_range.tflite', delegate: 'CPU' }, runningMode: 'IMAGE', minDetectionConfidence: 0.6 },
     );
   })();
   detector.catch(() => (detector = null));

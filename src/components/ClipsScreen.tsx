@@ -150,7 +150,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     const abort = new AbortController();
     frameClips(unframed.split(',').map(Number), abort.signal).catch((err) => {
       if (abort.signal.aborted) return;
-      console.warn('Auto framing failed; clips stay centered.', err);
+      console.warn('Auto framing failed; clips keep the whole picture.', err);
       // Don't keep trying: centered framing still works, and people can frame clips by hand.
       const next = clipsRef.current.map((c) => (c.framed ? c : { ...c, framed: true }));
       clipsRef.current = next;
