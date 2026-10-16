@@ -17,7 +17,11 @@ import { breathe } from './device';
 import { drawCaption, drawLogo, drawWatermark } from './draw';
 
 // Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
-export const SIZES = { '1080p': { width: 1080, height: 1920 }, '4k': { width: 2160, height: 3840 } } as const;
+export const SIZES = {
+  '720p': { width: 720, height: 1280 },
+  '1080p': { width: 1080, height: 1920 },
+  '4k': { width: 2160, height: 3840 },
+} as const;
 export type ExportSize = keyof typeof SIZES;
 
 export interface RenderedClip {

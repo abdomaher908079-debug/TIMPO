@@ -12,13 +12,15 @@ import { cloudAvailable, deviceLooksSlow } from '../lib/cloud';
 import type { Segment } from '../lib/speech';
 import { ApiError } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
+import { useWakeLock } from '../lib/wakeLock';
 import { forgetEpisode, loadEpisode, saveEpisode, saveVideo, type SavedEpisode } from '../lib/saved';
 
 const MIN_SECONDS = 60;
 
 type State =
   | { kind: 'empty' }
-  | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number }
+  // `cloud`: listening on our server (`jobId` once the audio is sent), so leaving the page is fine.
+  | { kind: 'processing'; file: File; info: EpisodeInfo; steps: Step[]; percent: number; cloud?: boolean; jobId?: string }
   | { kind: 'done'; file: File; info: EpisodeInfo; segments: Segment[]; clips: Clip[] }
   // Transcribing worked but picking moments didn't: keep the transcript so a retry is quick.
   // `limit` means the plan's limits stopped it, so trying again won't help.
@@ -26,13 +28,26 @@ type State =
   | { kind: 'reading'; file: File }
   // Saved clips whose video this browser couldn't keep: choosing the same video again reopens them.
   | { kind: 'reopen'; episode: SavedEpisode }
-  | { kind: 'ready'; file: File; info: EpisodeInfo }
+  // `notice`: why cloud listening wasn't possible (e.g. the plan's limit).
+  | { kind: 'ready'; file: File; info: EpisodeInfo; notice?: string }
   // `detail`: the technical reason, shown small so people can send it to us.
   | { kind: 'error'; message: string; detail?: string };
 
 function restored(episode: SavedEpisode, file: File): State {
   const { info, segments, clips } = episode;
   return clips.length ? { kind: 'done', file, info, segments, clips } : { kind: 'moments-failed', file, info, segments, message: 'Finding the best moments stopped.', limit: false };
+}
+
+function cloudSteps(phase: 0 | 1 | 2, detail?: string): Step[] {
+  return [
+    { label: 'Sending the audio', state: phase > 0 ? 'done' : 'active', detail: phase === 0 ? detail : undefined },
+    {
+      label: 'Listening to every word, in the cloud',
+      state: phase > 1 ? 'done' : phase === 1 ? 'active' : 'waiting',
+      detail: phase === 1 ? `${detail} · you can leave this page, we'll keep going` : undefined,
+    },
+    { label: 'Finding the best moments', state: phase === 2 ? 'active' : 'waiting' },
+  ];
 }
 
 function problemWith(info: EpisodeInfo): string | null {
@@ -59,12 +74,10 @@ export default function NewEpisode() {
     void loadEpisode(userId).then((saved) => {
       if (!live || !saved) return;
       const { episode, file } = saved;
-      setState((st) => {
-        if (st.kind !== 'empty') return st;
-        if (!file) return { kind: 'reopen', episode };
-        fingerprints.current.set(file, episode.fingerprint);
-        return restored(episode, file);
-      });
+      if (stateRef.current.kind !== 'empty') return;
+      if (!file) return setState({ kind: 'reopen', episode });
+      fingerprints.current.set(file, episode.fingerprint);
+      reopen(episode, file);
     });
     return () => {
       live = false;
@@ -85,6 +98,7 @@ export default function NewEpisode() {
         segments: state.segments,
         clips: state.kind === 'done' ? state.clips : [],
         savedAt: Date.now(),
+        cloud: false,
       });
       if (savedVideo.current !== state.file) {
         savedVideo.current = state.file;
@@ -94,14 +108,17 @@ export default function NewEpisode() {
     return () => clearTimeout(id);
   }, [state, userId]);
 
-  // Leaving while an episode is being listened to would lose that work.
+  // Leaving while an episode is being listened to on this device would lose that work (in the
+  // cloud it carries on, once the audio is sent).
   const processing = state.kind === 'processing';
+  useWakeLock(processing);
+  const mustStay = processing && !(state.kind === 'processing' && state.jobId);
   useEffect(() => {
-    if (!processing) return;
+    if (!mustStay) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [processing]);
+  }, [mustStay]);
   // Phones and computers without a graphics card get cloud listening by default.
   const [slowDevice, setSlowDevice] = useState(false);
   useEffect(() => {
@@ -114,6 +131,14 @@ export default function NewEpisode() {
   const inputRef = useRef<HTMLInputElement>(null);
   // Ignores results from an earlier file if the user picks another one quickly.
   const latest = useRef(0);
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  // Saved work: clips open as they were; an episode still with the cloud continues there.
+  function reopen(episode: SavedEpisode, file: File) {
+    if (episode.cloud && !episode.segments.length) void findClipsInCloud(file, episode.info);
+    else setState(restored(episode, file));
+  }
 
   const reopening = useRef<SavedEpisode | null>(null);
   reopening.current = state.kind === 'reopen' ? state.episode : null;
@@ -136,7 +161,7 @@ export default function NewEpisode() {
       if (id !== latest.current) return;
       // The video of saved clips, chosen again: reopen them.
       if (reopening.current?.fingerprint === fp) {
-        setState(restored(reopening.current, file));
+        reopen(reopening.current, file);
         return;
       }
       const problem = problemWith(info);
@@ -215,45 +240,74 @@ export default function NewEpisode() {
     await pickBest(file, info, segments, abort);
   }
 
-  // For devices too slow to listen in the browser: only the audio is sent, a few minutes at a time,
-  // to Gemini, and isn't kept. Captions' word timing still happens on the device when exporting.
+  // For devices too slow to listen in the browser: only the audio is uploaded, a few minutes at a
+  // time; our server listens and picks the moments on its own, so people can leave the page once
+  // the audio is sent. Captions' word timing still happens on the device when exporting.
   async function findClipsInCloud(file: File, info: EpisodeInfo) {
     const abort = new AbortController();
     abortRef.current = abort;
-    const total = info.durationSeconds;
-    let detail = 'Only the audio is sent, never the video';
-    const steps = (phase: 1 | 2): Step[] => [
-      { label: 'Listening to every word, in the cloud', state: phase > 1 ? 'done' : 'active', detail },
-      { label: 'Finding the best moments', state: phase === 2 ? 'active' : 'waiting' },
-    ];
-    const update = (phase: 1 | 2, percent: number) =>
-      setState((st) => (st.kind === 'processing' && abortRef.current === abort ? { ...st, steps: steps(phase), percent } : st));
-
-    setState({ kind: 'processing', file, info, steps: steps(1), percent: 0 });
-    let segments: Segment[];
+    const fp = fingerprints.current.get(file)!;
+    setState({ kind: 'processing', file, info, steps: cloudSteps(0, 'Only the audio, never the video'), percent: 0, cloud: true });
+    // Saved right away, so a closed tab or a refresh comes back to this episode and continues.
+    void saveEpisode(userId, { fingerprint: fp, fileName: file.name, info, segments: [], clips: [], savedAt: Date.now(), cloud: true });
+    savedVideo.current = file;
+    void saveVideo(userId, fp, file);
+    let jobId: string;
     try {
-      const { transcribeInCloud } = await import('../lib/cloud');
-      segments = await transcribeInCloud(file, total, fingerprints.current.get(file)!, {
+      const { sendToCloud } = await import('../lib/cloud');
+      jobId = await sendToCloud(file, info.durationSeconds, fp, {
         signal: abort.signal,
-        onProgress: (p) => {
-          if (p > 0) detail = `${formatDuration(p * total)} of ${formatDuration(total)}`;
-          update(1, 2 + p * 88);
+        onProgress: (p) => update(abort, cloudSteps(0, `${Math.round(p * 100)}% · keep this page open for a moment`), p * 20),
+      });
+    } catch (err) {
+      return cloudFailed(abort, err);
+    }
+    setState((st) => (st.kind === 'processing' && abortRef.current === abort ? { ...st, jobId } : st));
+    await followCloud(file, info, jobId, abort);
+  }
+
+  async function followCloud(file: File, info: EpisodeInfo, jobId: string, abort: AbortController) {
+    let job;
+    try {
+      const { followJob } = await import('../lib/cloud');
+      job = await followJob(jobId, {
+        signal: abort.signal,
+        onUpdate: (j) => {
+          if (j.status === 'finishing') return update(abort, cloudSteps(2), 95);
+          const p = j.pieces ? j.pieces_done / j.pieces : 0;
+          update(abort, cloudSteps(1, `${formatDuration(p * info.durationSeconds)} of ${formatDuration(info.durationSeconds)}`), 20 + p * 72);
         },
       });
     } catch (err) {
-      if (abort.signal.aborted) return;
-      console.error(err);
-      setState({ kind: 'error', message: err instanceof Error ? err.message : 'Cloud listening stopped. Please try again.' });
-      return;
+      return cloudFailed(abort, err);
     }
-    if (!segments.length) {
-      setState({ kind: 'error', message: "We didn't hear anyone speaking in this episode. Check that it has the podcast's audio." });
-      return;
+    if (abort.signal.aborted) return;
+    if (job.status === 'done' && job.moments?.length && job.segments?.length) {
+      setState({ kind: 'done', file, info, segments: job.segments, clips: clipsFromMoments(job.moments) });
+      recordDemoEpisode(fingerprints.current.get(file)!, info.durationSeconds);
+      void refresh();
+    } else if (job.status === 'done' && job.segments?.length) {
+      // Heard, but picking the moments stopped (often a busy AI): try once more from here.
+      update(abort, cloudSteps(2), 95);
+      await pickBest(file, info, job.segments, abort);
+    } else {
+      cloudFailed(abort, new Error(job.error ?? 'Cloud listening stopped. Please try again.'));
     }
-    detail = `${segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0).toLocaleString()} words heard`;
-    update(2, 92);
-    await pickBest(file, info, segments, abort);
   }
+
+  function cloudFailed(abort: AbortController, err: unknown) {
+    if (abort.signal.aborted) return;
+    console.error(err);
+    void forgetEpisode(userId);
+    if (err instanceof ApiError && err.status === 403) {
+      setState((st) => (st.kind === 'processing' ? { kind: 'ready', file: st.file, info: st.info, notice: err.message } : st));
+      return;
+    }
+    setState({ kind: 'error', message: err instanceof Error ? err.message : 'Cloud listening stopped. Please try again.' });
+  }
+
+  const update = (abort: AbortController, steps: Step[], percent: number) =>
+    setState((st) => (st.kind === 'processing' && abortRef.current === abort ? { ...st, steps, percent } : st));
 
   async function pickBest(file: File, info: EpisodeInfo, segments: Segment[], abort: AbortController) {
     abortRef.current = abort;
@@ -292,6 +346,10 @@ export default function NewEpisode() {
 
   function cancel() {
     abortRef.current?.abort();
+    if (state.kind === 'processing' && state.cloud) {
+      if (state.jobId) void import('../lib/cloud').then(({ cancelJob }) => cancelJob(state.jobId!));
+      void forgetEpisode(userId);
+    }
     setState((st) => (st.kind === 'processing' ? { kind: 'ready', file: st.file, info: st.info } : st));
   }
 
@@ -337,6 +395,7 @@ export default function NewEpisode() {
               planName={plan.name}
               watermark={plan.watermark}
               // 4K is too heavy for phones: it can freeze the whole device.
+              pro4k={plan.maxExport === '4k'}
               allow4k={plan.maxExport === '4k' && !isPhone}
               quality={plan.quality}
             />
@@ -460,11 +519,13 @@ export default function NewEpisode() {
             </div>
           </dl>
           {limitProblem && <UpgradeNotice message={limitProblem.message} planName={plan.name} />}
+          {!limitProblem && ready.notice && <UpgradeNotice message={ready.notice} planName={plan.name} />}
           {cloudAvailable && slowDevice ? (
             <>
               <p className="notice">
                 This device would take a long time to listen to a full episode, so we'll listen in the cloud: only the audio
-                (never the video) is sent to Google's Gemini AI to write down what's said, and we don't keep it.
+                (never the video) is sent to Google's Gemini AI to write down what's said, and we delete it right after. Once
+                the audio is sent you can leave this page; your clips will be waiting here.
               </p>
               <button
                 type="button"

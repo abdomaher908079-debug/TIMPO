@@ -1,16 +1,15 @@
 import { ALL_FORMATS, AdtsOutputFormat, BlobSource, BufferTarget, Conversion, getFirstEncodableAudioCodec, Input, OggOutputFormat, Output } from 'mediabunny';
+import type { Moment } from './moments';
 import type { Segment } from './speech';
 import { ApiError, getAccessToken, supabase } from './supabase';
 
-// Cloud listening runs on the `transcribe` Supabase Edge Function (Gemini), so it needs Supabase.
+// Cloud listening runs on the `listen` Supabase Edge Function (Gemini), so it needs Supabase.
 export const cloudAvailable = !!supabase;
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '');
 const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-// Must match PIECE_SECONDS in supabase/functions/_shared/transcribe.ts.
-const PIECE_SECONDS = 5 * 60;
-// Pieces in flight at once: while some are with the AI, the phone prepares the next ones.
-const PARALLEL = 4;
+// Pieces prepared and uploaded at once.
+const PARALLEL = 3;
 
 /**
  * Whether this device is likely too slow to transcribe in the browser: no graphics card for
@@ -26,46 +25,109 @@ export async function deviceLooksSlow(): Promise<boolean> {
   }
 }
 
+export interface CloudJob {
+  id: string;
+  // uploading → listening → finishing → done, or error
+  status: 'uploading' | 'listening' | 'finishing' | 'done' | 'error';
+  pieces: number;
+  pieces_done: number;
+  segments: Segment[] | null;
+  moments: Moment[] | null;
+  error: string | null;
+  updated_at: string;
+}
+
 /**
- * Transcribes an episode in the cloud: only the audio (never the video) is cut into pieces of a few
- * minutes, and each piece goes to Gemini through our server, which doesn't keep it. `onProgress`
- * gets 0..1. Word timing for captions still happens on the device, clip by clip, when exporting.
+ * Starts listening to an episode in the cloud: only the audio (never the video) is cut into pieces
+ * of a few minutes and uploaded; our server then transcribes them and picks the moments on its own,
+ * so the page can be left once this returns. The same episode again continues where it stopped
+ * (only missing pieces are uploaded). `onProgress` gets 0..1 of the upload. Returns the job's id.
  */
-export async function transcribeInCloud(
+export async function sendToCloud(
   file: File,
   seconds: number,
   fingerprint: string,
   { signal: outer, onProgress }: { signal: AbortSignal; onProgress: (p: number) => void },
-): Promise<Segment[]> {
-  if (!cloudAvailable) throw new Error('Cloud listening isn’t available.');
+): Promise<string> {
+  if (!supabase) throw new Error('Cloud listening isn’t available.');
+  const { job, waiting } = await call<{ job: string; waiting: { idx: number; start: number; length: number }[] }>(
+    { action: 'create', seconds, fingerprint, fileName: file.name },
+    outer,
+  );
+  if (!waiting.length) return job;
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id;
+  if (!userId) throw new ApiError('Please sign in again.', 401);
+  const format = await audioFormat();
   // When one piece fails, the others stop too.
   const stop = new AbortController();
   const signal = AbortSignal.any([outer, stop.signal]);
-  const format = await audioFormat();
-  // A last piece shorter than about a minute and a half joins the one before it.
-  const count = Math.max(1, Math.round(seconds / PIECE_SECONDS + 0.2));
-  const results: Segment[][] = [];
   let done = 0;
-  const run = async (i: number) => {
-    const start = i * PIECE_SECONDS;
-    const end = i === count - 1 ? seconds : start + PIECE_SECONDS;
-    const audio = await extractAudio(file, start, end, format, signal);
-    results[i] = await send(audio, { start, length: end - start, seconds, fingerprint }, signal);
-    onProgress(++done / count);
-  };
-  onProgress(0);
-  // The plan's limits are checked once, up front, so no audio is prepared for nothing.
-  await call(new FormData(), { seconds, fingerprint }, signal);
   let next = 0;
+  onProgress(0);
   const worker = async () => {
-    while (next < count) await run(next++);
+    while (next < waiting.length) {
+      const { idx, start, length } = waiting[next++]!;
+      const audio = await extractAudio(file, start, start + length, format, signal);
+      await uploadPiece(`${userId}/${job}/${idx}.ogg`, audio, signal);
+      await call({ action: 'uploaded', job, idx }, signal);
+      onProgress(++done / waiting.length);
+    }
   };
   try {
-    await Promise.all(Array.from({ length: Math.min(PARALLEL, count) }, worker));
-  } finally {
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, waiting.length) }, worker));
+  } catch (err) {
     stop.abort();
+    throw err;
   }
-  return results.flat();
+  return job;
+}
+
+export async function getJob(id: string): Promise<CloudJob | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('listen_jobs')
+    .select('id, status, pieces, pieces_done, segments, moments, error, updated_at')
+    .eq('id', id)
+    .maybeSingle<CloudJob>();
+  if (error) throw error;
+  return data;
+}
+
+export function cancelJob(id: string) {
+  void call({ action: 'cancel', job: id }).catch(() => {});
+}
+
+/**
+ * Checks back on a job until it's done (or failed), calling `onUpdate` as it moves. Nudges the
+ * server if a job seems stalled (e.g. a step of its work stopped).
+ */
+export async function followJob(id: string, { signal, onUpdate }: { signal: AbortSignal; onUpdate: (job: CloudJob) => void }): Promise<CloudJob> {
+  let lastKick = 0;
+  for (;;) {
+    if (signal.aborted) throw new DOMException('Canceled', 'AbortError');
+    const job = await getJob(id);
+    if (!job) throw new Error('This episode’s cloud listening has expired. Please start again.');
+    onUpdate(job);
+    if (job.status === 'done' || job.status === 'error') return job;
+    const quiet = Date.now() - new Date(job.updated_at).getTime();
+    if (job.status !== 'uploading' && quiet > 60_000 && Date.now() - lastKick > 60_000) {
+      lastKick = Date.now();
+      void call({ action: 'kick', job: id }).catch(() => {});
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
+
+async function uploadPiece(path: string, audio: Blob, signal: AbortSignal) {
+  for (let attempt = 0; ; attempt++) {
+    if (signal.aborted) throw new DOMException('Canceled', 'AbortError');
+    const { error } = await supabase!.storage.from('listen-audio').upload(path, audio, { contentType: audio.type });
+    // Already there from an earlier try: fine.
+    if (!error || /exists|duplicate/i.test(error.message)) return;
+    if (attempt >= 2) throw new Error('The upload failed. Check your internet connection and try again.');
+    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+  }
 }
 
 interface AudioFormat {
@@ -111,35 +173,24 @@ async function extractAudio(file: File, start: number, end: number, { codec, sam
   }
 }
 
-async function send(
-  audio: Blob,
-  piece: { start: number; length: number; seconds: number; fingerprint: string },
-  signal: AbortSignal,
-): Promise<Segment[]> {
-  const form = new FormData();
-  form.append('audio', audio, audio.type === 'audio/ogg' ? 'piece.ogg' : 'piece.aac');
-  return (await call(form, piece, signal)).segments ?? [];
-}
-
-async function call(form: FormData, fields: Record<string, string | number>, signal: AbortSignal) {
-  for (const [k, v] of Object.entries(fields)) form.append(k, String(v));
-  const headers: Record<string, string> = { apikey: ANON_KEY };
+async function call<T = { ok: boolean }>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', apikey: ANON_KEY };
   const token = await getAccessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  // One more try for a dropped connection or a busy AI; limits and other answers are final.
+  // One more try for a dropped connection or a busy server; limits and other answers are final.
   for (let attempt = 0; ; attempt++) {
     let res: Response;
     try {
-      res = await fetch(`${SUPABASE_URL}/functions/v1/transcribe`, { method: 'POST', headers, body: form, signal });
+      res = await fetch(`${SUPABASE_URL}/functions/v1/listen`, { method: 'POST', headers, body: JSON.stringify(body), signal });
     } catch (err) {
-      if (signal.aborted) throw err;
+      if (signal?.aborted) throw err;
       if (attempt < 1) continue;
       throw new Error('We couldn’t reach our server. Check your internet connection and try again.');
     }
-    const data = (await res.json().catch(() => ({}))) as { segments?: Segment[]; ok?: boolean; error?: string; reason?: string };
-    if (res.ok && (data.segments || data.ok)) return data;
-    if (attempt < 1 && (res.status >= 500 || res.status === 429)) {
-      await new Promise((r) => setTimeout(r, 5000));
+    const data = (await res.json().catch(() => ({}))) as T & { error?: string; reason?: string };
+    if (res.ok) return data;
+    if (attempt < 1 && res.status >= 500) {
+      await new Promise((r) => setTimeout(r, 3000));
       continue;
     }
     throw new ApiError(data.error ?? 'Cloud listening stopped. Please try again.', res.status, data.reason);

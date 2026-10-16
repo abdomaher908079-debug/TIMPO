@@ -11,26 +11,38 @@ export interface SavedEpisode {
   segments: Segment[];
   clips: Clip[];
   savedAt: number;
+  // Being listened to in the cloud: reopening continues that instead.
+  cloud?: boolean;
 }
 
 const DB = 'hookcut';
 const STORE = 'episodes';
+// Exported clips (library.ts).
+export const LIBRARY = 'library';
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    const req = indexedDB.open(DB, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains(LIBRARY)) db.createObjectStore(LIBRARY, { keyPath: 'id' }).createIndex('user', 'user');
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function run<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
+export async function run<T>(
+  mode: IDBTransactionMode,
+  work: (store: IDBObjectStore) => IDBRequest<T> | void,
+  storeName = STORE,
+): Promise<T | undefined> {
   const db = await open();
   try {
     return await new Promise<T | undefined>((resolve, reject) => {
-      const tx = db.transaction(STORE, mode);
-      const req = work(tx.objectStore(STORE));
+      const tx = db.transaction(storeName, mode);
+      const req = work(tx.objectStore(storeName));
       tx.oncomplete = () => resolve(req ? req.result : undefined);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);

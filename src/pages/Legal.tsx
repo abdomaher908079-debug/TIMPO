@@ -49,8 +49,16 @@ export function Privacy() {
         <b>the episode's audio only</b> (never the video), a few minutes at a time, through our server to{' '}
         <b>Google's Gemini AI</b>, which writes down what's said. On a computer you can choose this or listening on your
         device. Today we use Google's free Gemini service, so as above Google may use the audio it receives to improve its
-        products, which can include people reviewing it. We don't store your audio: it passes through our server and is
-        gone once Google returns the transcript. The word timing for your clips' captions still happens on your device.
+        products, which can include people reviewing it. So that you can leave the page while this happens, each piece of
+        audio waits in our private storage only until it's transcribed, then it's deleted (at the latest within 7 days if
+        something goes wrong). We keep the transcript and the moments found for 7 days, so you can come back to them. The
+        word timing for your clips' captions still happens on your device.
+      </p>
+
+      <h2>Your clips</h2>
+      <p>
+        Your clips and edits are saved in your browser on your own device, never on our servers. Exported clips stay in My
+        clips for 7 days (30 on paid plans), then they're deleted automatically. You can delete them sooner at any time.
       </p>
 
       <h2>Your account</h2>

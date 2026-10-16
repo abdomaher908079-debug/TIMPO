@@ -9,6 +9,7 @@ import Account from './pages/Account';
 import Footer from './components/Footer';
 import { Privacy, Refunds, Terms } from './pages/Legal';
 import Diagnose from './pages/Diagnose';
+import Library from './pages/Library';
 
 export default function App() {
   const { demo } = useAuth();
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
         <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
         <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
+        <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />

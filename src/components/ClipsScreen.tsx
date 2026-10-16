@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ClipEditor from './ClipEditor';
 import { useAccount } from '../lib/account';
+import { useAuth } from '../lib/auth';
+import { useWakeLock } from '../lib/wakeLock';
 import { ensureFont, listKits, type BrandKit } from '../lib/brandKits';
 import { alignWords, captionLook, cropAt, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
@@ -15,6 +17,8 @@ interface Props {
   exportable: number;
   planName: string;
   watermark: boolean;
+  // The plan includes 4K, and this device can make it (not phones).
+  pro4k: boolean;
   allow4k: boolean;
   quality: 'quick' | 'best';
 }
@@ -32,7 +36,14 @@ export const exportKey = (c: Clip, size: string, kits: BrandKit[]) => {
   const { look, kit } = captionLook(c, kits);
   return `${rangeKey(c)}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
 };
-export const SIZE_LABELS = { '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
+export const SIZE_LABELS = { '720p': '720×1280', '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
+type Size = keyof typeof SIZE_LABELS;
+// Export quality choices. 4K is for paid plans, and only on computers: it can freeze a phone.
+const SIZE_OPTIONS: { id: Size; name: string; note: string }[] = [
+  { id: '720p', name: '720p', note: 'Smaller, faster' },
+  { id: '1080p', name: '1080p', note: 'Recommended' },
+  { id: '4k', name: '4K', note: 'Sharpest' },
+];
 
 // Frames are taken a moment in, past any cut at the very start of the clip.
 const thumbTime = (c: Clip) => c.start + Math.min(1, (c.end - c.start) / 4);
@@ -56,9 +67,24 @@ export function download(url: string, name: string) {
 }
 
 // All the clips found, best first. On plans with an export limit, the rest can be previewed but not exported.
-export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark, allow4k, quality }: Props) {
-  const [size, setSize] = useState<'1080p' | '4k'>('1080p');
-  const exportSize = allow4k ? size : '1080p';
+export default function ClipsScreen({ file, duration, segments, clips, onChange, exportable, planName, watermark, pro4k, allow4k, quality }: Props) {
+  const [size, setSize] = useState<Size>(() => {
+    try {
+      const saved = localStorage.getItem('hookcut.exportSize') as Size | null;
+      return saved && saved in SIZE_LABELS ? saved : '1080p';
+    } catch {
+      return '1080p';
+    }
+  });
+  const chooseSize = (s: Size) => {
+    setSize(s);
+    try {
+      localStorage.setItem('hookcut.exportSize', s);
+    } catch {
+      // Remembering the choice is only a convenience.
+    }
+  };
+  const exportSize: Size = size === '4k' && !allow4k ? '1080p' : size;
   const sizeRef = useRef(exportSize);
   sizeRef.current = exportSize;
   const [editing, setEditing] = useState<number | null>(null);
@@ -68,6 +94,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
   const [timed, setTimed] = useState<Record<string, CaptionGroup[]>>({});
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const { workspace } = useAccount();
+  const { user } = useAuth();
   const [kits, setKits] = useState<BrandKit[]>([]);
   const kitsRef = useRef(kits);
   kitsRef.current = kits;
@@ -190,6 +217,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
   );
 
   // Clips and edits are saved in the browser (saved.ts), but an export in progress would be lost.
+  useWakeLock(busy);
   useEffect(() => {
     if (!busy) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -261,6 +289,13 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     logo?.image.close();
     setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize, kitsRef.current) });
     download(url, name);
+    // Also kept in "My clips" on this device for a while.
+    void import('../lib/library').then(({ addClip, KEEP_DAYS }) =>
+      addClip(
+        { user: user?.id ?? 'demo', title: clip.title, episode: file.name, fileName: name, blob, quality: clipSize, seconds: clip.end - clip.start },
+        planName === 'Free' ? KEEP_DAYS.free : KEEP_DAYS.paid,
+      ),
+    );
   }
 
   async function runExports(indices: number[]) {
@@ -345,15 +380,6 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
           </h2>
           <p className="muted small">Tap a clip to preview and edit it.</p>
         </div>
-        {allow4k && (
-          <label className="size-picker">
-            Quality
-            <select value={size} onChange={(e) => setSize(e.target.value as '1080p' | '4k')} disabled={busy}>
-              <option value="1080p">1080p</option>
-              <option value="4k">4K</option>
-            </select>
-          </label>
-        )}
         {busy ? (
           <button type="button" className="btn btn-outline btn-inline" onClick={cancelExports}>
             Cancel export
@@ -374,6 +400,32 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
           export all {clips.length} clips without a watermark. <Link to="/account">Upgrade to Pro</Link>
         </p>
       )}
+      <div className="style-picker size-options" role="radiogroup" aria-label="Video quality">
+        {SIZE_OPTIONS.map((o) => {
+          const proOnly = o.id === '4k' && !pro4k;
+          const phoneOnly = o.id === '4k' && pro4k && !allow4k;
+          const on = exportSize === o.id;
+          return proOnly ? (
+            <Link key={o.id} to="/account" className="style-option size-option size-locked" aria-label={`${o.name}: Pro and Studio only`}>
+              <b>{o.name}</b>
+              <span>🔒 Pro</span>
+            </Link>
+          ) : (
+            <button
+              key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              className={`style-option size-option ${on ? 'on' : ''}`}
+              disabled={busy || phoneOnly}
+              onClick={() => chooseSize(o.id)}
+            >
+              <b>{o.name}</b>
+              <span>{phoneOnly ? 'On a computer' : o.note}</span>
+            </button>
+          );
+        })}
+      </div>
       <ol className="clip-grid clips-list">
         {clips.map((c, i) => {
           const isLocked = i >= exportable;
@@ -421,8 +473,9 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         </p>
       )}
       <p className="muted small">
-        Clips are made on your computer as {SIZE_LABELS[exportSize]} videos with captions{watermark ? ' and a small watermark' : ''}, ready for TikTok,
-        Reels and Shorts.
+        Clips are made on your device as {SIZE_LABELS[exportSize]} videos with captions{watermark ? ' and a small watermark' : ''}, ready for TikTok,
+        Reels and Shorts. Exported clips are also kept in <Link to="/library">My clips</Link> for{' '}
+        {planName === 'Free' ? '7' : '30'} days.
       </p>
     </>
   );
