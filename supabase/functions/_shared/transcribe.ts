@@ -30,10 +30,12 @@ const RESPONSE_SCHEMA = {
   required: ['lines'],
 };
 
-/** Which Gemini key and model listen for a plan: Flash-Lite (largest free quota) or Flash for Best AI. */
+/**
+ * Which Gemini key and models listen for a plan: Flash-Lite, or Flash for Best AI. The paid key for
+ * everyone once it's set (see geminiFor), otherwise the free-tier key.
+ */
 export function listenerFor(quality: 'quick' | 'best', env: (name: string) => string | undefined): { apiKey: string; models: string[] } | null {
-  const paidKey = env('GEMINI_PAID_API_KEY');
-  const apiKey = (quality === 'best' && paidKey) || env('GEMINI_API_KEY') || paidKey;
+  const apiKey = env('GEMINI_PAID_API_KEY') || env('GEMINI_API_KEY');
   if (!apiKey) return null;
   // When a model is busy or out of quota, the other one takes over.
   const models = quality === 'best' ? [DEFAULT_GEMINI_MODEL, 'gemini-flash-lite-latest'] : ['gemini-flash-lite-latest', DEFAULT_GEMINI_MODEL];

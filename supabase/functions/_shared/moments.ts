@@ -40,19 +40,20 @@ export interface GeminiChoice {
 }
 
 /**
- * Which Gemini key and model a plan's AI quality uses (see Quality in plans.ts):
- * - quick (Free): Flash-Lite on the free-tier key. Fast, and its free quota is the largest.
- * - best (Pro, Studio): the top model on a paid key (GEMINI_PAID_API_KEY, a key from a project with
- *   billing turned on). Until that key is set, the strongest free model.
+ * Which Gemini key and model a plan's AI quality uses (see Quality in plans.ts). Once
+ * GEMINI_PAID_API_KEY (a key from a project with billing turned on) is set, every plan uses it:
+ * no free-tier limits ("busy") and Google doesn't use the data to improve its products.
+ * Until then, the free-tier key GEMINI_API_KEY.
+ * - quick (Free): Flash-Lite. Fast and the cheapest.
+ * - best (Pro, Studio): the top model on the paid key; on the free key, the strongest free model.
  * Model names can be overridden with GEMINI_MODEL_QUICK and GEMINI_MODEL_BEST.
  */
 export function geminiFor(quality: 'quick' | 'best', env: (name: string) => string | undefined): GeminiChoice | null {
-  const freeKey = env('GEMINI_API_KEY');
   const paidKey = env('GEMINI_PAID_API_KEY');
-  if (quality === 'best' && paidKey) return { apiKey: paidKey, model: env('GEMINI_MODEL_BEST') || 'gemini-pro-latest' };
-  const apiKey = freeKey || paidKey;
+  const apiKey = paidKey || env('GEMINI_API_KEY');
   if (!apiKey) return null;
-  return { apiKey, model: quality === 'best' ? DEFAULT_GEMINI_MODEL : env('GEMINI_MODEL_QUICK') || 'gemini-flash-lite-latest' };
+  if (quality === 'quick') return { apiKey, model: env('GEMINI_MODEL_QUICK') || 'gemini-flash-lite-latest' };
+  return { apiKey, model: env('GEMINI_MODEL_BEST') || (paidKey ? 'gemini-pro-latest' : DEFAULT_GEMINI_MODEL) };
 }
 
 export class MomentsError extends Error {
