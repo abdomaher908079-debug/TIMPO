@@ -19,7 +19,7 @@ import { captionLook } from '../lib/clips';
 const STYLE_NAMES = { bold: 'Bold', highlight: 'Highlight', boxed: 'Boxed' } as const;
 const CORNERS = { 'top-left': 'Top left', 'top-right': 'Top right', 'bottom-left': 'Bottom left', 'bottom-right': 'Bottom right' } as const;
 
-// Brand kits on the Account page: your show's caption look and logo, used on every clip.
+// Brand kits, on their own page: your show's caption look and logo, used on every clip.
 export default function BrandKits() {
   const { plan, workspace } = useAccount();
   const [kits, setKits] = useState<BrandKit[] | null>(null);

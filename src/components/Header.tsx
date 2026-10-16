@@ -59,8 +59,11 @@ export default function Header() {
                 <Link role="menuitem" to="/library">
                   Library
                 </Link>
+                <Link role="menuitem" to="/brand-kits">
+                  Brand kits
+                </Link>
                 <Link role="menuitem" to="/account">
-                  Account & plan
+                  Plan & settings
                 </Link>
                 <button role="menuitem" onClick={() => void signOut()}>
                   Log out

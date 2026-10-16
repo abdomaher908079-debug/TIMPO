@@ -15,7 +15,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'What if I run out before the month ends?',
-    a: `Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price}, one time, from your Account page. They're used only after your monthly hours or episodes run out, and last ${PACK.days} days.`,
+    a: `Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price}, one time, from Plan & settings. They're used only after your monthly hours or episodes run out, and last ${PACK.days} days.`,
   },
   {
     q: 'When do my hours reset?',

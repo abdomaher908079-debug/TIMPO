@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import BrandKits from '../components/BrandKits';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
@@ -67,7 +66,7 @@ export default function Account() {
 
   return (
     <main className="account-page">
-      <h1 className="page-title">Your account</h1>
+      <h1 className="page-title">Plan & settings</h1>
       <p className="muted">{user?.email}</p>
 
       {activating && (
@@ -157,12 +156,8 @@ export default function Account() {
               : `${formatDuration(cloudUsage.seconds)} of ${plan.cloudSeconds / 3600} hours used`}
           </p>
         )}
-        <Link to="/new" className="btn btn-primary">
-          New episode
-        </Link>
       </section>
 
-      <BrandKits />
       <Team />
 
       {!member && (

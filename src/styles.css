@@ -501,3 +501,10 @@ h1, h2, h3 { text-wrap: balance; }
 }
 @keyframes plan-shine { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
 @media (prefers-reduced-motion: reduce) { .plan-badge::after { animation: none; } }
+/* Signed-in home: a warm welcome */
+.welcome { min-height: 62vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; }
+.welcome-logo { filter: drop-shadow(0 0 28px rgba(157, 255, 60, 0.18)); animation: welcome-in 0.8s ease-out both; }
+.welcome-greeting { color: var(--text); font-size: 1.25rem; margin: 0; animation: welcome-in 0.8s 0.15s ease-out both; }
+.welcome-btn { display: inline-block; width: auto; padding-inline: 40px; animation: welcome-in 0.8s 0.3s ease-out both; }
+@keyframes welcome-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .welcome-logo, .welcome-greeting, .welcome-btn { animation: none; } }

@@ -80,7 +80,7 @@ export const GRACE_SECONDS = 30;
 // Hour packs: one-time, for Pro and Studio, used once the month's own hours or episodes run out. They add
 // episodes too (2 per hour, like Pro), since each AI pick costs about the same whatever the episode's length.
 export const PACK = { hours: 10, episodes: 20, days: 90, price: 8 };
-const PACK_HINT = `Need more? Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price} on your Account page.`;
+const PACK_HINT = `Need more? Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price} in Plan & settings.`;
 
 // Times the AI may pick the moments of one episode in a period: the first time plus 3 free re-picks.
 export const PICKS_PER_EPISODE = 4;

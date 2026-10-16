@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
+import LogoMark from '../components/LogoMark';
 import { useAuth } from '../lib/auth';
 
 // What Hookcut does, in the words a podcaster would use. Every item here is in the product.
@@ -51,7 +52,9 @@ const SAMPLE_CLIPS = [
 
 export default function Home() {
   const { user } = useAuth();
-  const startLink = user ? '/new' : '/signup';
+  // Signed in: just a warm welcome and the one thing to do next.
+  if (user) return <Welcome name={user.name} />;
+  const startLink = '/signup';
   return (
     <main className="home">
       <section className="hero">
@@ -132,6 +135,26 @@ export default function Home() {
           Free every week, no card needed. <Link to="/pricing">See plans</Link>
         </p>
       </section>
+    </main>
+  );
+}
+
+function Welcome({ name }: { name?: string | null }) {
+  const first = name?.trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 5 ? 'Welcome back' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  return (
+    <main className="welcome">
+      <div className="welcome-logo">
+        <LogoMark size={112} />
+      </div>
+      <p className="welcome-greeting">
+        {greeting}
+        {first ? `, ${first}` : ''}.
+      </p>
+      <Link to="/new" className="btn btn-primary welcome-btn">
+        New episode
+      </Link>
     </main>
   );
 }

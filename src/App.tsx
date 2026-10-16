@@ -11,6 +11,7 @@ import { Privacy, Refunds, Terms } from './pages/Legal';
 import Diagnose from './pages/Diagnose';
 import Library from './pages/Library';
 import PricingPage from './pages/PricingPage';
+import BrandKitsPage from './pages/BrandKitsPage';
 
 export default function App() {
   const { demo } = useAuth();
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
         <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+        <Route path="/brand-kits" element={<RequireAuth><BrandKitsPage /></RequireAuth>} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />

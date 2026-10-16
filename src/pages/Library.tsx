@@ -30,7 +30,7 @@ export default function Library() {
         {plan.id === 'free' && (
           <>
             {' '}
-            <Link to="/account">Pro keeps it {days(KEEP_DAYS.paid)}.</Link>
+            <Link to="/pricing">Pro keeps it {days(KEEP_DAYS.paid)}.</Link>
           </>
         )}
       </p>

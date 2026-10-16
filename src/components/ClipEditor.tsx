@@ -381,11 +381,11 @@ export default function ClipEditor(props: Props) {
             <p className="muted small">
               {plan.id === 'free' ? (
                 <>
-                  Want captions in your show's font and colors, with your logo? <Link to="/account">Brand kits come with Pro</Link>.
+                  Want captions in your show's font and colors, with your logo? <Link to="/pricing">Brand kits come with Pro</Link>.
                 </>
               ) : (
                 <>
-                  <Link to="/account#brand-kits">Create your brand kit</Link>: your font, colors and logo on every clip.
+                  <Link to="/brand-kits">Create your brand kit</Link>: your font, colors and logo on every clip.
                 </>
               )}
             </p>
@@ -504,13 +504,13 @@ function ProEditControl({ clip, paid, locked, onChange }: { clip: Clip; paid: bo
       <p className="pro-edit pro-edit-preview">
         <b>✨ You're seeing the Pro edit</b>
         <span className="muted small">
-          {what}. <Link to="/account">Upgrade to Pro</Link> to export clips like this.
+          {what}. <Link to="/pricing">Upgrade to Pro</Link> to export clips like this.
         </span>
       </p>
     );
   }
   return (
-    <Link to="/account" className="pro-edit pro-edit-locked">
+    <Link to="/pricing" className="pro-edit pro-edit-locked">
       <b>🔒 Pro edit</b>
       <span className="muted small">{what}. Open a 🔒 Pro clip to see it, or upgrade to get it on every clip.</span>
     </Link>

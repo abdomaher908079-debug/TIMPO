@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth';
 import { setExtraSeats } from '../lib/billing';
 import { invite, joinTeam, listTeam, removeMember, MAX_EXTRA_SEATS, SEAT_PRICE, TEAM_SIZE, type TeamMember } from '../lib/team';
 
-// Studio teams on the Account page: the owner invites up to 2 people, who share the plan's hours,
+// Studio teams on the Plan & settings page: the owner invites up to 2 people, who share the plan's hours,
 // brand kits and Best AI. Invited people join from here too.
 export default function Team() {
   const { user, demo } = useAuth();
@@ -187,7 +187,7 @@ export default function Team() {
               </button>
             </form>
           )}
-          <p className="muted small">They sign up with that email, then click Join team on their Account page.</p>
+          <p className="muted small">They sign up with that email, then click Join team in Plan & settings.</p>
         </>
       ) : (
         !invitesToMe.length && (

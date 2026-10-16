@@ -401,7 +401,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         <p className="quality-note">
           <b>Found by our Quick AI.</b> The 🔒 clips show the <b>Pro edit</b>: an AI headline, zoom-ins on the best lines,
           highlighted key words and framing that follows the speaker. Pro also gets our Best AI and exports all {clips.length}{' '}
-          clips without a watermark. <Link to="/account">Upgrade to Pro</Link>
+          clips without a watermark. <Link to="/pricing">Upgrade to Pro</Link>
         </p>
       )}
       <div className="style-picker size-options" role="radiogroup" aria-label="Video quality">
@@ -410,7 +410,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
           const phoneOnly = o.id === '4k' && pro4k && !allow4k;
           const on = exportSize === o.id;
           return proOnly ? (
-            <Link key={o.id} to="/account" className="style-option size-option size-locked" aria-label={`${o.name}: Pro and Studio only`}>
+            <Link key={o.id} to="/pricing" className="style-option size-option size-locked" aria-label={`${o.name}: Pro and Studio only`}>
               <b>{o.name}</b>
               <span>🔒 Pro</span>
             </Link>

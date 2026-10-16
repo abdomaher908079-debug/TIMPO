@@ -497,7 +497,7 @@ export default function NewEpisode() {
                 {plan.id === 'free' && (
                   <>
                     {' '}
-                    <Link to="/account">Pro keeps it {KEEP_DAYS.paid} days.</Link>
+                    <Link to="/pricing">Pro keeps it {KEEP_DAYS.paid} days.</Link>
                   </>
                 )}
               </>
@@ -668,7 +668,7 @@ function UpgradeNotice({ message, planName }: { message: string; planName: strin
         'Your hours reset at the start of your next billing month.'
       ) : (
         <>
-          <Link to="/account">Upgrade</Link> for more hours and episodes of any length.
+          <Link to="/pricing">Upgrade</Link> for more hours and episodes of any length.
         </>
       )}
     </p>
@@ -681,7 +681,7 @@ export function QuickAiNote() {
     <p className="quality-note">
       <b>Free uses our Quick AI.</b> It finds good clips fast. Pro and Studio use our Best AI: a larger speech model that hears
       every word more accurately (sharper captions) and our strongest AI for picking the moments that will perform.{' '}
-      <Link to="/account">See Pro</Link>
+      <Link to="/pricing">See Pro</Link>
     </p>
   );
 }
