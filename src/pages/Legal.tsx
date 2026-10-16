@@ -55,10 +55,13 @@ export function Privacy() {
         word timing for your clips' captions still happens on your device.
       </p>
 
-      <h2>Your clips</h2>
+      <h2>Your saved work</h2>
       <p>
-        Your clips and edits are saved in your browser on your own device, never on our servers. Exported clips stay in My
-        clips for 7 days (30 on paid plans), then they're deleted automatically. You can delete them sooner at any time.
+        So you can come back to an episode, on any device, we save its transcript, the clips found and your edits with your
+        account. We keep them for 1 day after your last change on Free and 30 days on paid plans, then delete them
+        automatically; you can delete them sooner in your Library. Your video is never uploaded: your browser keeps its own
+        copy on your device for the same time, when there's room. Exported clips are kept only in your browser, on your
+        device, for the same time.
       </p>
 
       <h2>Your account</h2>

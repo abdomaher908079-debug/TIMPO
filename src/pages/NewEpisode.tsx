@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { isPhone } from '../lib/device';
 import Meter from '../components/Meter';
 import ClipsScreen from '../components/ClipsScreen';
@@ -13,7 +13,7 @@ import type { Segment } from '../lib/speech';
 import { ApiError } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { useWakeLock } from '../lib/wakeLock';
-import { forgetEpisode, loadEpisode, saveEpisode, saveVideo, type SavedEpisode } from '../lib/saved';
+import { deleteProject, getProject, getVideo, isSameVideo, keepVideo, KEEP_DAYS, listProjects, saveProject, type Project, type ProjectSummary } from '../lib/projects';
 
 const MIN_SECONDS = 60;
 
@@ -26,15 +26,17 @@ type State =
   // `limit` means the plan's limits stopped it, so trying again won't help.
   | { kind: 'moments-failed'; file: File; info: EpisodeInfo; segments: Segment[]; message: string; limit: boolean }
   | { kind: 'reading'; file: File }
-  // Saved clips whose video this browser couldn't keep: choosing the same video again reopens them.
-  | { kind: 'reopen'; episode: SavedEpisode }
+  // Opening a saved episode (from the Library, or after a refresh).
+  | { kind: 'opening' }
+  // A saved episode whose video isn't on this device: choosing the same video again reopens it.
+  | { kind: 'reopen'; project: Project }
   // `notice`: why cloud listening wasn't possible (e.g. the plan's limit).
   | { kind: 'ready'; file: File; info: EpisodeInfo; notice?: string }
   // `detail`: the technical reason, shown small so people can send it to us.
   | { kind: 'error'; message: string; detail?: string };
 
-function restored(episode: SavedEpisode, file: File): State {
-  const { info, segments, clips } = episode;
+function restored(project: Project, file: File): State {
+  const { info, segments, clips } = project;
   return clips.length ? { kind: 'done', file, info, segments, clips } : { kind: 'moments-failed', file, info, segments, message: 'Finding the best moments stopped.', limit: false };
 }
 
@@ -67,46 +69,90 @@ export default function NewEpisode() {
   const [state, setState] = useState<State>({ kind: 'empty' });
   const { user } = useAuth();
   const userId = user?.id ?? 'demo';
+  // Identifies each opened file, so retrying an episode doesn't use the plan twice.
+  const fingerprints = useRef(new WeakMap<File, string>());
 
-  // Reopen the last episode's clips after a refresh or a closed tab.
+  const keepDays = plan.id === 'free' ? KEEP_DAYS.free : KEEP_DAYS.paid;
+  // The open episode is in the address (?episode=…), so a refresh or a link from the Library opens it.
+  const [params, setParams] = useSearchParams();
+  const episodeParam = params.get('episode');
+  const openFingerprint = 'file' in state ? fingerprints.current.get(state.file) : undefined;
+  const openRef = useRef(openFingerprint);
+  openRef.current = openFingerprint;
   useEffect(() => {
+    if (!episodeParam || openRef.current === episodeParam) return;
     let live = true;
-    void loadEpisode(userId).then((saved) => {
-      if (!live || !saved) return;
-      const { episode, file } = saved;
-      if (stateRef.current.kind !== 'empty') return;
-      if (!file) return setState({ kind: 'reopen', episode });
-      fingerprints.current.set(file, episode.fingerprint);
-      reopen(episode, file);
-    });
+    setState({ kind: 'opening' });
+    void (async () => {
+      const project = await getProject(userId, episodeParam).catch((err) => (console.warn(err), null));
+      if (!live) return;
+      if (!project) {
+        setParams({}, { replace: true });
+        setState({
+          kind: 'error',
+          message: `This episode is no longer saved. Episodes are kept for ${KEEP_DAYS.free} day on Free and ${KEEP_DAYS.paid} days on Pro and Studio after you last work on them.`,
+        });
+        return;
+      }
+      const file = await getVideo(userId, project.fingerprint);
+      if (!live) return;
+      if (!file) return setState({ kind: 'reopen', project });
+      fingerprints.current.set(file, project.fingerprint);
+      reopen(project, file);
+    })();
     return () => {
       live = false;
     };
-  }, [userId]);
+  }, [episodeParam, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Save the work as it changes: the transcript once, the clips after every edit.
-  const savedVideo = useRef<File | null>(null);
+  // An episode with saved work goes in the address once it's open.
+  const savable = state.kind === 'done' || state.kind === 'moments-failed' || (state.kind === 'processing' && !!state.cloud);
+  useEffect(() => {
+    if (savable && openFingerprint && episodeParam !== openFingerprint) setParams({ episode: openFingerprint }, { replace: true });
+  }, [savable, openFingerprint, episodeParam, setParams]);
+
+  // Save the work as it changes: the transcript once, the clips after every edit. The video stays
+  // on this device only.
+  const savedSegments = useRef<Segment[] | null>(null);
+  const keptVideo = useRef<File | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed' | null>(null);
   useEffect(() => {
     if (state.kind !== 'done' && state.kind !== 'moments-failed') return;
-    const fingerprint = fingerprints.current.get(state.file);
-    if (!fingerprint) return;
+    const fp = fingerprints.current.get(state.file);
+    if (!fp) return;
+    setSaveStatus('saving');
     const id = setTimeout(() => {
-      void saveEpisode(userId, {
-        fingerprint,
-        fileName: state.file.name,
-        info: state.info,
-        segments: state.segments,
-        clips: state.kind === 'done' ? state.clips : [],
-        savedAt: Date.now(),
-        cloud: false,
-      });
-      if (savedVideo.current !== state.file) {
-        savedVideo.current = state.file;
-        void saveVideo(userId, fingerprint, state.file);
+      const full = savedSegments.current !== state.segments;
+      saveProject(
+        userId,
+        {
+          fingerprint: fp,
+          fileName: state.file.name,
+          fileSize: state.file.size,
+          info: state.info,
+          segments: state.segments,
+          clips: state.kind === 'done' ? state.clips : [],
+          listening: false,
+        },
+        full,
+        keepDays,
+      ).then(
+        () => {
+          savedSegments.current = state.segments;
+          setSaveStatus('saved');
+        },
+        (err) => {
+          console.warn('Episode not saved', err);
+          setSaveStatus('failed');
+        },
+      );
+      if (keptVideo.current !== state.file) {
+        keptVideo.current = state.file;
+        void keepVideo(userId, fp, state.file);
       }
-    }, 400);
+    }, 800);
     return () => clearTimeout(id);
-  }, [state, userId]);
+  }, [state, userId, keepDays]);
 
   // Leaving while an episode is being listened to on this device would lose that work (in the
   // cloud it carries on, once the audio is sent).
@@ -124,8 +170,6 @@ export default function NewEpisode() {
   useEffect(() => {
     if (cloudAvailable) void deviceLooksSlow().then(setSlowDevice);
   }, []);
-  // Identifies each opened file, so retrying an episode doesn't use the plan twice.
-  const fingerprints = useRef(new WeakMap<File, string>());
   const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,13 +179,14 @@ export default function NewEpisode() {
   const stateRef = useRef(state);
   stateRef.current = state;
   // Saved work: clips open as they were; an episode still with the cloud continues there.
-  function reopen(episode: SavedEpisode, file: File) {
-    if (episode.cloud && !episode.segments.length) void findClipsInCloud(file, episode.info);
-    else setState(restored(episode, file));
+  function reopen(project: Project, file: File) {
+    savedSegments.current = project.segments.length ? project.segments : null;
+    if (project.listening && !project.segments.length) void findClipsInCloud(file, project.info);
+    else setState(restored(project, file));
   }
 
-  const reopening = useRef<SavedEpisode | null>(null);
-  reopening.current = state.kind === 'reopen' ? state.episode : null;
+  const reopening = useRef<Project | null>(null);
+  reopening.current = state.kind === 'reopen' ? state.project : null;
 
   async function open(file: File | undefined) {
     if (!file) return;
@@ -151,6 +196,8 @@ export default function NewEpisode() {
       return;
     }
     const id = ++latest.current;
+    // The saved episode waiting for its video, before "reading" replaces it.
+    const saved = reopening.current;
     setState({ kind: 'reading', file });
     try {
       // The video library is large, so it loads only when a file is chosen.
@@ -159,9 +206,12 @@ export default function NewEpisode() {
       const fp = await fingerprint(file, info.durationSeconds);
       fingerprints.current.set(file, fp);
       if (id !== latest.current) return;
-      // The video of saved clips, chosen again: reopen them.
-      if (reopening.current?.fingerprint === fp) {
-        reopen(reopening.current, file);
+      // The video of a saved episode, chosen again (maybe renamed, or on another device): reopen it.
+      if (saved && isSameVideo(saved, file, fp, info.durationSeconds)) {
+        fingerprints.current.set(file, saved.fingerprint);
+        void keepVideo(userId, saved.fingerprint, file);
+        keptVideo.current = file;
+        reopen(saved, file);
         return;
       }
       const problem = problemWith(info);
@@ -248,10 +298,12 @@ export default function NewEpisode() {
     abortRef.current = abort;
     const fp = fingerprints.current.get(file)!;
     setState({ kind: 'processing', file, info, steps: cloudSteps(0, 'Only the audio, never the video'), percent: 0, cloud: true });
-    // Saved right away, so a closed tab or a refresh comes back to this episode and continues.
-    void saveEpisode(userId, { fingerprint: fp, fileName: file.name, info, segments: [], clips: [], savedAt: Date.now(), cloud: true });
-    savedVideo.current = file;
-    void saveVideo(userId, fp, file);
+    // Saved right away, so a closed tab, a refresh or another device comes back to this episode.
+    void saveProject(userId, { fingerprint: fp, fileName: file.name, fileSize: file.size, info, segments: [], clips: [], listening: true }, true, keepDays).catch(
+      (err) => console.warn('Episode not saved', err),
+    );
+    keptVideo.current = file;
+    void keepVideo(userId, fp, file);
     let jobId: string;
     try {
       const { sendToCloud } = await import('../lib/cloud');
@@ -295,10 +347,18 @@ export default function NewEpisode() {
     }
   }
 
+  // A saved episode that never got its transcript isn't worth keeping.
+  function forgetUnheard() {
+    const st = stateRef.current;
+    const fp = 'file' in st ? fingerprints.current.get(st.file) : undefined;
+    if (fp) void deleteProject(userId, fp).catch(() => {});
+    setParams({}, { replace: true });
+  }
+
   function cloudFailed(abort: AbortController, err: unknown) {
     if (abort.signal.aborted) return;
     console.error(err);
-    void forgetEpisode(userId);
+    forgetUnheard();
     if (err instanceof ApiError && err.status === 403) {
       setState((st) => (st.kind === 'processing' ? { kind: 'ready', file: st.file, info: st.info, notice: err.message } : st));
       return;
@@ -348,7 +408,7 @@ export default function NewEpisode() {
     abortRef.current?.abort();
     if (state.kind === 'processing' && state.cloud) {
       if (state.jobId) void import('../lib/cloud').then(({ cancelJob }) => cancelJob(state.jobId!));
-      void forgetEpisode(userId);
+      forgetUnheard();
     }
     setState((st) => (st.kind === 'processing' ? { kind: 'ready', file: st.file, info: st.info } : st));
   }
@@ -420,15 +480,28 @@ export default function NewEpisode() {
             type="button"
             className="btn btn-outline"
             onClick={() => {
-              if (state.kind !== 'done' || window.confirm('Start over? Your clips and edits for this episode will be lost.')) {
-                savedVideo.current = null;
-                void forgetEpisode(userId);
-                setState({ kind: 'empty' });
-              }
+              // This one stays saved in the Library.
+              setParams({}, { replace: true });
+              setState({ kind: 'empty' });
             }}
           >
             Start a new episode
           </button>
+          <p className="muted small save-status" role="status">
+            {saveStatus === 'saving' && 'Saving…'}
+            {saveStatus === 'saved' && (
+              <>
+                Saved in your <Link to="/library">Library</Link> for {keepDays === 1 ? '1 day' : `${keepDays} days`} after your last change.
+                {plan.id === 'free' && (
+                  <>
+                    {' '}
+                    <Link to="/account">Pro keeps it {KEEP_DAYS.paid} days.</Link>
+                  </>
+                )}
+              </>
+            )}
+            {saveStatus === 'failed' && "Couldn't save to your Library right now. Your work is still here; we'll try again with your next change."}
+          </p>
         </section>
       )}
 
@@ -464,13 +537,14 @@ export default function NewEpisode() {
 
       {state.kind === 'reopen' && (
         <div className="notice" role="status">
-          Your {state.episode.clips.length} clips from <b>{state.episode.fileName}</b> are saved. Choose that video again to
-          continue where you left off.{' '}
+          {state.project.clips.length ? `Your ${state.project.clips.length} clips from ` : 'Your work on '}
+          <b>{state.project.fileName}</b> {state.project.clips.length ? 'are' : 'is'} saved, but the video isn't on this device.
+          Choose that video again to continue where you left off.{' '}
           <button
             type="button"
             className="link-button"
             onClick={() => {
-              void forgetEpisode(userId);
+              setParams({}, { replace: true });
               setState({ kind: 'empty' });
             }}
           >
@@ -478,6 +552,10 @@ export default function NewEpisode() {
           </button>
         </div>
       )}
+
+      {state.kind === 'opening' && <p className="muted" role="status">Opening your episode…</p>}
+
+      {(state.kind === 'empty' || state.kind === 'error') && <RecentEpisodes userId={userId} />}
 
       {state.kind === 'reading' && <p className="muted" role="status">Opening {state.file.name}…</p>}
 
@@ -603,5 +681,53 @@ export function QuickAiNote() {
       every word more accurately (sharper captions) and our strongest AI for picking the moments that will perform.{' '}
       <Link to="/account">See Pro</Link>
     </p>
+  );
+}
+
+const WHEN = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+export function keptFor(expiresAt: number): string {
+  const hours = (expiresAt - Date.now()) / 3_600_000;
+  if (hours < 1) return 'Deleted within the hour';
+  if (hours < 48) return `Deleted in ${Math.round(hours)} hours`;
+  return `Deleted in ${Math.round(hours / 24)} days`;
+}
+
+// The latest saved episodes, to pick up where you left off.
+function RecentEpisodes({ userId }: { userId: string }) {
+  const [list, setList] = useState<ProjectSummary[]>([]);
+  useEffect(() => {
+    let live = true;
+    listProjects(userId).then(
+      (l) => live && setList(l.slice(0, 3)),
+      (err) => console.warn('Saved episodes unavailable', err),
+    );
+    return () => {
+      live = false;
+    };
+  }, [userId]);
+  if (!list.length) return null;
+  return (
+    <section className="recent" aria-label="Your saved episodes">
+      <div className="recent-head">
+        <h2 className="recent-title">Continue where you left off</h2>
+        <Link to="/library" className="small">
+          All episodes
+        </Link>
+      </div>
+      <ul className="recent-list">
+        {list.map((p) => (
+          <li key={p.fingerprint}>
+            <Link to={`/new?episode=${encodeURIComponent(p.fingerprint)}`} className="recent-item">
+              <b>{p.fileName}</b>
+              <span className="muted small">
+                {p.listening ? 'Listening in the cloud' : `${p.clipCount} clips`} · {formatDuration(p.info.durationSeconds)} · {WHEN.format(p.touchedAt)}
+              </span>
+              <span className="muted small">{keptFor(p.expiresAt)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

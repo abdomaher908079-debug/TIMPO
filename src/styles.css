@@ -435,3 +435,18 @@ h1, h2, h3 { text-wrap: balance; }
 .library-meta { display: grid; gap: 4px; min-width: 0; }
 .library-meta b { overflow-wrap: anywhere; }
 .library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+
+.save-status { margin-top: 8px; min-height: 1.2em; }
+.recent { margin-top: 22px; }
+.recent-head { display: flex; justify-content: space-between; align-items: baseline; }
+.recent-title { font-size: 1rem; margin: 0 0 8px; }
+.recent-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.recent-item { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; }
+.recent-item b { overflow-wrap: anywhere; }
+.recent-item:hover { border-color: var(--orange); }
+.library-tabs { display: flex; gap: 8px; margin: 14px 0; }
+.library-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.library-tab.on { border-color: var(--orange); color: var(--white); }
+.episode-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.episode-row { display: grid; gap: 4px; padding: 14px; }
+.episode-row b { overflow-wrap: anywhere; }

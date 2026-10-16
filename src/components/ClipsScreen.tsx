@@ -171,20 +171,19 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     );
   }
   const unframed = clips.flatMap((c, i) => (c.framed ? [] : [i])).join(',');
+  // After a failure, auto framing waits for the next visit (clips keep the whole picture meanwhile).
+  const [framingFailed, setFramingFailed] = useState(false);
   useEffect(() => {
     // Decoding frames competes with exporting, so wait for that.
-    if (!unframed || busy) return;
+    if (!unframed || busy || framingFailed) return;
     const abort = new AbortController();
     frameClips(unframed.split(',').map(Number), abort.signal).catch((err) => {
       if (abort.signal.aborted) return;
       console.warn('Auto framing failed; clips keep the whole picture.', err);
-      // Don't keep trying: centered framing still works, and people can frame clips by hand.
-      const next = clipsRef.current.map((c) => (c.framed ? c : { ...c, framed: true }));
-      clipsRef.current = next;
-      onChange(next);
+      setFramingFailed(true);
     });
     return () => abort.abort();
-  }, [unframed, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [unframed, busy, framingFailed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get caption timing ready while people look at their clips, so the first export starts right away
   // (on phones this is a ~40 MB download the first time; the browser keeps it afterwards).
@@ -474,8 +473,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       )}
       <p className="muted small">
         Clips are made on your device as {SIZE_LABELS[exportSize]} videos with captions{watermark ? ' and a small watermark' : ''}, ready for TikTok,
-        Reels and Shorts. Exported clips are also kept in <Link to="/library">My clips</Link> for{' '}
-        {planName === 'Free' ? '7' : '30'} days.
+        Reels and Shorts. Exported clips are also kept in your <Link to="/library?tab=clips">Library</Link> on this device for{' '}
+        {planName === 'Free' ? '1 day' : '30 days'}.
       </p>
     </>
   );

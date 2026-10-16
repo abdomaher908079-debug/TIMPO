@@ -53,7 +53,7 @@ export default function Header() {
                   New episode
                 </Link>
                 <Link role="menuitem" to="/library">
-                  My clips
+                  Library
                 </Link>
                 <Link role="menuitem" to="/account">
                   Account & plan

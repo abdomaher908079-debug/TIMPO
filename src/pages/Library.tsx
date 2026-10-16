@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { download } from '../components/ClipsScreen';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { formatSize } from '../lib/format';
+import { formatDuration, formatSize } from '../lib/format';
+import { deleteProject, listProjects, type ProjectSummary } from '../lib/projects';
+import { keptFor } from './NewEpisode';
 import { deleteAll, deleteClip, KEEP_DAYS, listClips, type LibraryClip } from '../lib/library';
 
 const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -13,10 +15,106 @@ function daysLeft(c: LibraryClip) {
   return d <= 1 ? 'Deleted tomorrow' : `Deleted in ${d} days`;
 }
 
-/** "My clips": exported clips kept on this device for a while (never on our servers). */
+/** The Library: saved episodes (work to come back to) and exported clips. */
 export default function Library() {
-  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'clips' ? 'clips' : 'episodes';
   const { plan } = useAccount();
+  const keep = plan.id === 'free' ? KEEP_DAYS.free : KEEP_DAYS.paid;
+  const days = (n: number) => (n === 1 ? '1 day' : `${n} days`);
+  return (
+    <main className="library">
+      <h1 className="page-title">Library</h1>
+      <p className="muted">
+        Everything is kept for {days(keep)} after you last work on it, then deleted automatically.
+        {plan.id === 'free' && (
+          <>
+            {' '}
+            <Link to="/account">Pro keeps it {days(KEEP_DAYS.paid)}.</Link>
+          </>
+        )}
+      </p>
+      <div className="library-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'episodes'} className={`library-tab ${tab === 'episodes' ? 'on' : ''}`} onClick={() => setParams({}, { replace: true })}>
+          Episodes
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'clips'} className={`library-tab ${tab === 'clips' ? 'on' : ''}`} onClick={() => setParams({ tab: 'clips' }, { replace: true })}>
+          Exported clips
+        </button>
+      </div>
+      {tab === 'episodes' ? <Episodes /> : <Clips />}
+    </main>
+  );
+}
+
+const WHEN = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function Episodes() {
+  const { user } = useAuth();
+  const userId = user?.id ?? 'demo';
+  const [list, setList] = useState<ProjectSummary[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    listProjects(userId).then(
+      (l) => live && setList(l),
+      (err) => {
+        console.warn(err);
+        if (live) setFailed(true);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [userId]);
+
+  async function remove(p: ProjectSummary) {
+    if (!window.confirm(`Delete "${p.fileName}" and its clips and edits? Your video file isn't touched.`)) return;
+    await deleteProject(userId, p.fingerprint);
+    setList((l) => l?.filter((x) => x.fingerprint !== p.fingerprint) ?? null);
+  }
+
+  if (failed) return <p className="error">We couldn't load your episodes. Check your internet connection and try again.</p>;
+  if (!list) return <p className="muted">Loading…</p>;
+  if (!list.length) {
+    return (
+      <div className="card">
+        <p>No saved episodes. Your work on each episode is saved here automatically.</p>
+        <Link to="/new" className="btn btn-primary btn-inline">
+          New episode
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <ol className="episode-list">
+      {list.map((p) => (
+        <li key={p.fingerprint} className="card episode-row">
+          <b>{p.fileName}</b>
+          <span className="muted small">
+            {p.listening ? 'Listening in the cloud' : `${p.clipCount} clips`} · {formatDuration(p.info.durationSeconds)} · last change{' '}
+            {WHEN.format(p.touchedAt)}
+          </span>
+          <span className="muted small">
+            {keptFor(p.expiresAt)} · {p.videoHere ? 'Video on this device' : "You'll choose the video again on this device"}
+          </span>
+          <div className="library-actions">
+            <Link to={`/new?episode=${encodeURIComponent(p.fingerprint)}`} className="btn btn-primary btn-inline">
+              Open
+            </Link>
+            <button type="button" className="link-button" onClick={() => void remove(p)}>
+              Delete
+            </button>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Exported clips, kept on this device (never on our servers). */
+function Clips() {
+  const { user } = useAuth();
   const userId = user?.id ?? 'demo';
   const [clips, setClips] = useState<LibraryClip[] | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -65,19 +163,9 @@ export default function Library() {
   };
 
   const total = clips?.reduce((n, c) => n + c.blob.size, 0) ?? 0;
-  const keep = plan.id === 'free' ? KEEP_DAYS.free : KEEP_DAYS.paid;
   return (
-    <main className="library">
-      <h1 className="page-title">My clips</h1>
-      <p className="muted">
-        Clips you export are kept on this device for {keep} days, then deleted automatically. Download the ones you want to keep.
-        {plan.id === 'free' && (
-          <>
-            {' '}
-            <Link to="/account">Pro keeps them {KEEP_DAYS.paid} days.</Link>
-          </>
-        )}
-      </p>
+    <>
+      <p className="muted small">Exported clips stay on this device only. Download the ones you want to keep.</p>
       {clips === null ? (
         <p className="muted">Loading…</p>
       ) : !clips.length ? (
@@ -126,6 +214,6 @@ export default function Library() {
           </ol>
         </>
       )}
-    </main>
+    </>
   );
 }
