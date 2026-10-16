@@ -1,6 +1,6 @@
 // Checkout page: opens Paddle's checkout for the plan in the URL, as the signed-in user.
 // Paddle charges the card and handles tax; its webhook then updates the plan (paddle-webhook).
-import type { Billing } from '../supabase/functions/_shared/plans';
+import { effectivePlan, type Billing, type ProfileRow } from '../supabase/functions/_shared/plans';
 import { PRICE_IDS } from './lib/billing';
 import { supabase } from './lib/supabase';
 
@@ -37,6 +37,13 @@ async function main() {
   const user = data.session?.user;
   if (!user) {
     location.replace('/signup');
+    return;
+  }
+  // Already subscribed: changing plan happens in Paddle's billing page, never with a second subscription.
+  const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>();
+  if (error) return fail('We couldn’t check your account. Please try again.');
+  if (effectivePlan(profile) !== 'free') {
+    status.innerHTML = 'You already have a plan. To change it, open <a href="/account">your account</a> and choose Manage billing.';
     return;
   }
 

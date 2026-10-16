@@ -58,7 +58,11 @@ Deno.serve(async (req) => {
   // The checkout passes our user id; later events are matched by subscription id.
   const userId = sub.custom_data?.user_id;
   const match = userId ? { column: 'id', value: userId } : { column: 'paddle_subscription_id', value: sub.id };
-  const { data: profile } = await admin.from('profiles').select('updated_at').eq(match.column, match.value).maybeSingle();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('updated_at, paddle_subscription_id, subscription_status')
+    .eq(match.column, match.value)
+    .maybeSingle<{ updated_at: string; paddle_subscription_id: string | null; subscription_status: string | null }>();
   if (!profile) {
     console.error('No profile for subscription', sub.id, userId);
     // 200 so Paddle doesn't retry an event that will never match.
@@ -66,6 +70,14 @@ Deno.serve(async (req) => {
   }
   // Events can arrive out of order; never let an older one overwrite a newer state.
   if (new Date(profile.updated_at) > new Date(sub.updated_at)) return new Response('Stale event');
+  // The account already runs on another subscription that's still going (e.g. bought twice): only a new
+  // purchase takes over; later events about the other one (renewing, ending) mustn't overwrite the account.
+  const live = (status: string | null) => status === 'active' || status === 'trialing' || status === 'past_due';
+  if (profile.paddle_subscription_id && profile.paddle_subscription_id !== sub.id && live(profile.subscription_status)) {
+    const purchase = event.event_type === 'subscription.created' || event.event_type === 'subscription.activated';
+    if (!purchase || !live(sub.status)) return new Response('Not the account’s current subscription');
+    console.error('Second subscription for one account', match.value, 'was', profile.paddle_subscription_id, 'now', sub.id);
+  }
 
   const price = planForPrice(sub.items?.[0]?.price?.id);
   if (!price) console.error('Unknown Paddle price', sub.items?.[0]?.price?.id);
