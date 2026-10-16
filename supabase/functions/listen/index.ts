@@ -160,8 +160,15 @@ async function work(jobId: string) {
         try {
           const { data: blob, error: dlError } = await admin.storage.from(BUCKET).download(audioPath(job, piece.idx));
           if (dlError || !blob) throw dlError ?? new Error('missing audio');
-          const segments = await listen(new Uint8Array(await blob.arrayBuffer()), blob.type || 'audio/ogg', Number(piece.start), Number(piece.length), listener);
-          await admin.from('listen_pieces').update({ status: 'done', segments }).eq('job_id', job.id).eq('idx', piece.idx);
+          const { segments, usage } = await listen(
+            new Uint8Array(await blob.arrayBuffer()),
+            blob.type || 'audio/ogg',
+            Number(piece.start),
+            Number(piece.length),
+            listener,
+            Deno.env.get('GEMINI_PAID_API_KEY'),
+          );
+          await admin.from('listen_pieces').update({ status: 'done', segments, usage }).eq('job_id', job.id).eq('idx', piece.idx);
           await admin.storage.from(BUCKET).remove([audioPath(job, piece.idx)]);
         } catch (err) {
           console.error(`job ${job.id} piece ${piece.idx}:`, err);

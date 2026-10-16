@@ -43,9 +43,11 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   tells Free users plainly that Pro's AI is better. Gemini steps down Pro → Flash → Flash-Lite when a model is
   overloaded or out of quota, so users get clips instead of an error.
 - **What to pay for first, once subscriptions come in:**
-  1. Gemini paid key (`GEMINI_PAID_API_KEY`) → used for every plan once set: no free-tier "busy" limits, Best AI
-     for Pro/Studio, and data not used by Google. Roughly $0.12 per hour of episode listened to in the cloud and
-     $0.02 per hour for picking moments (Flash-Lite), more for Best AI's top model.
+  1. Gemini paid key (`GEMINI_PAID_API_KEY`): Pro/Studio use it (Best AI, data not used by Google, no limits);
+     Free stays on the free-tier key and only falls back to the paid key when the free tier is busy. Measured
+     (Oct 2026, Flash-Lite, compact transcript, minimal thinking): about 92k tokens in and 18k out per hour of
+     cloud listening, roughly $0.07 per hour; picking moments about $0.02 per hour with Flash-Lite. Tokens per
+     piece are recorded in `listen_pieces.usage`.
   2. The paid Gemini key also keeps paid users' cloud-listening audio out of Google's product improvement.
   3. Later: a paid transcription API for paid users if in-browser Whisper isn't good enough.
 - **Brand kits:** a show's caption font (8 free Google Fonts), style, colors, position and logo, used in the preview
