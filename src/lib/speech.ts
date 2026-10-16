@@ -12,7 +12,8 @@ export interface Word {
 
 export type WorkerRequest =
   // `safe`: processor only, one thread. Used after the recognizer crashed on this device (e.g. a phone).
-  | { type: 'load'; quality: 'quick' | 'best'; safe?: boolean }
+  // `timingOnly`: only word times are needed (captions), so phones can use a smaller model.
+  | { type: 'load'; quality: 'quick' | 'best'; safe?: boolean; timingOnly?: boolean }
   | { type: 'transcribe'; id: number; start: number; samples: Float32Array; final: boolean }
   | { type: 'words'; id: number; samples: Float32Array };
 
@@ -139,6 +140,8 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
 export interface WordTimer {
   /** Exact word times for `start`..`end` of the episode, in episode seconds. */
   words(file: File, start: number, end: number): Promise<Word[]>;
+  /** Starts downloading and loading the model now, so the first export doesn't wait for it. */
+  warm(): void;
   dispose(): void;
 }
 
@@ -182,7 +185,7 @@ export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
       };
     });
     loaded.catch(() => {});
-    w.postMessage({ type: 'load', quality, safe: safeMode } satisfies WorkerRequest);
+    w.postMessage({ type: 'load', quality, safe: safeMode, timingOnly: true } satisfies WorkerRequest);
     worker = w;
   };
 
@@ -196,6 +199,9 @@ export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
       worker!.postMessage({ type: 'words', id, samples: copy } satisfies WorkerRequest, [copy.buffer]);
       const words = await result;
       return words.map((w) => ({ ...w, start: w.start + from, end: w.end + from }));
+    },
+    warm() {
+      if (!worker) start();
     },
     dispose() {
       failAll(new DOMException('Canceled', 'AbortError'));

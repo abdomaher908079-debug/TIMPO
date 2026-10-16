@@ -1,5 +1,7 @@
 // Supabase Edge Function: cloud listening for phones and slow computers.
 // POST multipart form { audio, start, length, seconds, fingerprint } → { segments } in episode time.
+// Without audio ({ seconds, fingerprint } only) it just checks and records the plan's limits, so the
+// browser can then send all the pieces at once.
 // The browser sends the episode's audio only (never the video), a few minutes at a time. Each piece
 // goes to Gemini to be written down and is not stored. Checks the plan's cloud limits and records
 // the episode once (in cloud_jobs). Secrets: GEMINI_API_KEY (and GEMINI_PAID_API_KEY for Best AI).
@@ -38,14 +40,18 @@ Deno.serve(async (req) => {
     const length = Number(form?.get('length'));
     const seconds = Number(form?.get('seconds'));
     const fingerprint = String(form?.get('fingerprint') ?? '').slice(0, 128);
-    if (!(audio instanceof File) || !fingerprint) throw new MomentsError('Missing audio.', 400);
+    const checkOnly = audio === null || audio === undefined;
+    if (!(checkOnly || audio instanceof File) || !fingerprint) throw new MomentsError('Missing audio.', 400);
     if (!(seconds > 0 && seconds <= 12 * 3600)) throw new MomentsError('Invalid episode length.', 400);
-    if (!(start >= 0 && start < seconds + GRACE_SECONDS) || !(length > 0 && length <= PIECE_SECONDS * 2)) {
-      throw new MomentsError('Invalid part of the episode.', 400);
+    let type: string | null = null;
+    if (audio instanceof File) {
+      if (!(start >= 0 && start < seconds + GRACE_SECONDS) || !(length > 0 && length <= PIECE_SECONDS * 2)) {
+        throw new MomentsError('Invalid part of the episode.', 400);
+      }
+      if (audio.size > MAX_PIECE_BYTES) throw new MomentsError('This part of the audio is too large.', 413);
+      type = audioType(audio.type);
+      if (!type) throw new MomentsError('Unsupported audio format.', 415);
     }
-    if (audio.size > MAX_PIECE_BYTES) throw new MomentsError('This part of the audio is too large.', 413);
-    const type = audioType(audio.type);
-    if (!type) throw new MomentsError('Unsupported audio format.', 415);
 
     // Studio team members use the team's plan and share its hours.
     const { data: workspace, error: wsError } = await admin.rpc('workspace_of', { uid: user.id }).maybeSingle<WorkspaceRow>();
@@ -79,6 +85,7 @@ Deno.serve(async (req) => {
 
     const listener = listenerFor(LIMITS[plan].quality, (name) => Deno.env.get(name));
     if (!listener) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
+    if (!(audio instanceof File) || !type) return json({ ok: true });
     const segments = await listen(new Uint8Array(await audio.arrayBuffer()), type, start, length, listener);
     return json({ segments });
   } catch (err) {

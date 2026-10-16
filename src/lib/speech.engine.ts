@@ -14,6 +14,9 @@ const QUICK_MODEL = 'onnx-community/whisper-base.en_timestamped';
 // Best AI (Pro, Studio): small, ~400 MB, noticeably more accurate but about 3× slower, so only
 // with a graphics card. Without one, paid plans use the quick model (cloud listening covers them).
 const BEST_MODEL = 'onnx-community/whisper-small.en_timestamped';
+// Caption timing on phones: tiny, ~40 MB, 2–3× faster than base. Only its word times are used; the
+// words themselves come from the episode's transcript (see alignWords in clips.ts).
+const TIMING_MODEL = 'onnx-community/whisper-tiny.en_timestamped';
 const SAMPLE_RATE = 16_000;
 // Lines that end this close to the end of a piece may be cut off; they're redone with the next piece.
 const EDGE_SECONDS = 2;
@@ -70,7 +73,7 @@ async function gpuAdapter(): Promise<GpuAdapter | null> {
   }
 }
 
-async function load(quality: 'quick' | 'best', safe = false) {
+async function load(quality: 'quick' | 'best', safe = false, timingOnly = false) {
   let downloaded = false;
   const progress_callback = (p: { status: string; loaded?: number; total?: number }) => {
     if (p.status !== 'progress_total' || !p.total) return;
@@ -107,7 +110,7 @@ async function load(quality: 'quick' | 'best', safe = false) {
   }
   downloaded = false;
   post({ type: 'stage', stage: 'downloading the speech model (processor)' });
-  asr = (await pipeline('automatic-speech-recognition', QUICK_MODEL, {
+  asr = (await pipeline('automatic-speech-recognition', timingOnly && isPhone ? TIMING_MODEL : QUICK_MODEL, {
     device: 'wasm',
     dtype: 'q8',
     progress_callback,
@@ -180,7 +183,7 @@ const round = (t: number) => Math.round(t * 100) / 100;
 export async function handle(e: MessageEvent<WorkerRequest>) {
   const msg = e.data;
   try {
-    if (msg.type === 'load') await load(msg.quality, msg.safe);
+    if (msg.type === 'load') await load(msg.quality, msg.safe, msg.timingOnly);
     else if (msg.type === 'words') await words(msg);
     else await transcribe(msg);
   } catch (err) {

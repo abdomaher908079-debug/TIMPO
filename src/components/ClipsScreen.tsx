@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import ClipEditor from './ClipEditor';
 import { useAccount } from '../lib/account';
 import { ensureFont, listKits, type BrandKit } from '../lib/brandKits';
-import { captionLook, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { alignWords, captionLook, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -123,6 +123,20 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     return () => abort.abort();
   }, [file, missingKey, editing, busy]);
 
+  // Get caption timing ready while people look at their clips, so the first export starts right away
+  // (on phones this is a ~40 MB download the first time; the browser keeps it afterwards).
+  useEffect(() => {
+    if (!exportable) return;
+    const id = setTimeout(() => {
+      if (timerRef.current) return;
+      void import('../lib/speech').then(({ createWordTimer }) => {
+        timerRef.current ??= createWordTimer(quality);
+        timerRef.current.warm();
+      });
+    }, 3000);
+    return () => clearTimeout(id);
+  }, [exportable, quality]);
+
   // Free everything this screen holds when it closes.
   const exportsRef = useRef(exports);
   exportsRef.current = exports;
@@ -161,7 +175,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       setStatus(i, { state: 'timing' });
       try {
         if (!timerRef.current) timerRef.current = (await import('../lib/speech')).createWordTimer(quality);
-        const exact = groupWords(await timerRef.current.words(file, clip.start, clip.end));
+        const timedWords = await timerRef.current.words(file, clip.start, clip.end);
+        const exact = groupWords(alignWords(estimateWords(segments, clip.start, clip.end), timedWords));
         groups = exact;
         setTimed((t) => ({ ...t, [key]: exact }));
       } catch (err) {

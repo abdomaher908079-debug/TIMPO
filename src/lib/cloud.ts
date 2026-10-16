@@ -9,8 +9,8 @@ const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.
 const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
 // Must match PIECE_SECONDS in supabase/functions/_shared/transcribe.ts.
 const PIECE_SECONDS = 5 * 60;
-// Pieces sent at the same time: quicker, but gentle on the AI's per-minute limits.
-const PARALLEL = 3;
+// Pieces in flight at once: while some are with the AI, the phone prepares the next ones.
+const PARALLEL = 4;
 
 /**
  * Whether this device is likely too slow to transcribe in the browser: no graphics card for
@@ -54,14 +54,14 @@ export async function transcribeInCloud(
     onProgress(++done / count);
   };
   onProgress(0);
-  // The first piece goes alone: the server checks the plan's limits on it before the rest are sent.
-  await run(0);
-  let next = 1;
+  // The plan's limits are checked once, up front, so no audio is prepared for nothing.
+  await call(new FormData(), { seconds, fingerprint }, signal);
+  let next = 0;
   const worker = async () => {
     while (next < count) await run(next++);
   };
   try {
-    await Promise.all(Array.from({ length: Math.min(PARALLEL, count - 1) }, worker));
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, count) }, worker));
   } finally {
     stop.abort();
   }
@@ -118,7 +118,11 @@ async function send(
 ): Promise<Segment[]> {
   const form = new FormData();
   form.append('audio', audio, audio.type === 'audio/ogg' ? 'piece.ogg' : 'piece.aac');
-  for (const [k, v] of Object.entries(piece)) form.append(k, String(v));
+  return (await call(form, piece, signal)).segments ?? [];
+}
+
+async function call(form: FormData, fields: Record<string, string | number>, signal: AbortSignal) {
+  for (const [k, v] of Object.entries(fields)) form.append(k, String(v));
   const headers: Record<string, string> = { apikey: ANON_KEY };
   const token = await getAccessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -132,8 +136,8 @@ async function send(
       if (attempt < 1) continue;
       throw new Error('We couldn’t reach our server. Check your internet connection and try again.');
     }
-    const data = (await res.json().catch(() => ({}))) as { segments?: Segment[]; error?: string; reason?: string };
-    if (res.ok && data.segments) return data.segments;
+    const data = (await res.json().catch(() => ({}))) as { segments?: Segment[]; ok?: boolean; error?: string; reason?: string };
+    if (res.ok && (data.segments || data.ok)) return data;
     if (attempt < 1 && (res.status >= 500 || res.status === 429)) {
       await new Promise((r) => setTimeout(r, 5000));
       continue;

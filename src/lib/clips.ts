@@ -174,3 +174,65 @@ export function estimateWords(segments: Segment[], from: number, to: number): Wo
   }
   return words;
 }
+
+const norm = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
+
+/**
+ * Caption words with the transcript's text and the word timer's times. The timer (a small speech
+ * model on phones) hears some words wrong; the transcript has them right but only rough times.
+ * Words both agree on take the timer's times; the rest are spread between them. Falls back to the
+ * timer's own words when the two hardly agree.
+ */
+export function alignWords(transcript: Word[], timed: Word[]): Word[] {
+  const a = transcript.map((w) => norm(w.text));
+  const b = timed.map((w) => norm(w.text));
+  // Longest common subsequence of the two word lists.
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) dp[i]![j] = a[i] && a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+  }
+  const match = new Array<number>(n).fill(-1);
+  for (let i = 0, j = 0; i < n && j < m; ) {
+    if (a[i] && a[i] === b[j]) match[i++] = j++;
+    else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) i++;
+    else j++;
+  }
+  const anchors = match.filter((j) => j >= 0).length;
+  if (!timed.length || anchors < Math.max(2, 0.4 * Math.min(n, m))) return timed;
+
+  // Words outside the clip before the first or after the last shared word are dropped.
+  const first = match.findIndex((j) => j >= 0);
+  const last = n - 1 - [...match].reverse().findIndex((j) => j >= 0);
+  const out: Word[] = [];
+  for (let i = 0; i < n; i++) {
+    const j = match[i]!;
+    if (j >= 0) {
+      out.push({ text: transcript[i]!.text, start: timed[j]!.start, end: timed[j]!.end });
+      continue;
+    }
+    // A run of unmatched words: spread it over the gap between its neighbours.
+    let k = i;
+    while (k + 1 < n && match[k + 1]! < 0) k++;
+    // Before the first or after the last shared word, the transcript runs past the clip: keep only as
+    // many words as the timer heard there.
+    let run = transcript.slice(i, k + 1);
+    if (i < first) run = run.slice(Math.max(0, run.length - match[first]!));
+    else if (i > last) run = run.slice(0, m - 1 - match[last]!);
+    const prev = out[out.length - 1];
+    const gapStart = prev ? prev.end : timed[0]!.start;
+    const nextMatch = k + 1 < n ? timed[match[k + 1]!] : undefined;
+    const gapEnd = Math.max(gapStart, nextMatch ? nextMatch.start : timed[m - 1]!.end);
+    const weights = run.map((w) => w.text.length + 2);
+    const total = weights.reduce((s, x) => s + x, 0) || 1;
+    let t = gapStart;
+    run.forEach((w, r) => {
+      const d = ((gapEnd - gapStart) * weights[r]!) / total;
+      out.push({ text: w.text, start: t, end: t + d });
+      t += d;
+    });
+    i = k;
+  }
+  return out;
+}
