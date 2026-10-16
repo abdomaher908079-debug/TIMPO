@@ -38,7 +38,7 @@ export default function Header() {
         </span>
       </Link>
       <nav className="nav">
-        <Link to="/#pricing" className="nav-link">
+        <Link to="/pricing" className="nav-link">
           Pricing
         </Link>
         {user ? (

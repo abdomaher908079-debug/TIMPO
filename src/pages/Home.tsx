@@ -1,7 +1,46 @@
 import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
-import Pricing from '../components/Pricing';
 import { useAuth } from '../lib/auth';
+
+// What Hookcut does, in the words a podcaster would use. Every item here is in the product.
+const FEATURES: { title: string; text: string }[] = [
+  {
+    title: 'Finds the moments people share',
+    text: 'Stories, hot takes, tips and laughs, each with a score and the reason it was picked. Not random 60-second cuts.',
+  },
+  {
+    title: 'Hooks from the first second',
+    text: 'Every clip starts on a line that stops the scroll and ends on its payoff, with an AI headline on top.',
+  },
+  {
+    title: 'Captions that pop',
+    text: 'Word-by-word captions in three styles, with the key words highlighted and quick zoom-ins on the punchlines.',
+  },
+  {
+    title: 'Follows the speaker',
+    text: 'Auto framing keeps whoever is talking in the vertical frame, so wide podcast shots work on TikTok and Reels.',
+  },
+  {
+    title: 'Your video stays yours',
+    text: 'Hookcut works right in your browser. Your video never leaves your computer, so there is no upload wait, even for 4 GB files.',
+  },
+  {
+    title: 'Works on your phone',
+    text: 'On phones, cloud listening takes over, and it keeps going if you leave the page.',
+  },
+  {
+    title: 'Your show’s look',
+    text: 'Brand kits with your font, colors and logo, applied to every clip. Studio has one per show.',
+  },
+  {
+    title: 'Pick up where you left off',
+    text: 'Your episodes, clips and edits are saved to your library and open on any device.',
+  },
+  {
+    title: 'Made for teams',
+    text: 'Studio teams share one plan: invite your editor or co-host and work on the same shows.',
+  },
+];
 
 const SAMPLE_CLIPS = [
   { score: 94, length: '0:42', caption: 'THIS CHANGED', title: 'How he lost everything in 2019', why: 'Strong story · emotional' },
@@ -72,13 +111,26 @@ export default function Home() {
         </ol>
       </section>
 
-      <Pricing />
+      <section className="features" aria-labelledby="features-title">
+        <h2 id="features-title" className="section-heading">Everything between your episode and the post</h2>
+        <div className="feature-grid">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="feature">
+              <b>{f.title}</b>
+              <p>{f.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="final-cta">
         <h2 className="section-heading">Your next episode deserves to be seen.</h2>
         <Link to={startLink} className="btn btn-primary">
           {user ? 'New episode' : 'Start free'}
         </Link>
+        <p className="muted small final-cta-note">
+          Free every week, no card needed. <Link to="/pricing">See plans</Link>
+        </p>
       </section>
     </main>
   );

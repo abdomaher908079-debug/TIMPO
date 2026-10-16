@@ -11,8 +11,7 @@ export default function Pricing() {
   // Yearly first: paid upfront, and people stay longer.
   const [yearly, setYearly] = useState(true);
   return (
-    <section className="pricing" id="pricing" aria-labelledby="pricing-title">
-      <h2 id="pricing-title" className="section-heading">Simple pricing</h2>
+    <section className="pricing" id="pricing" aria-label="Plans">
       <div className="billing-toggle" role="group" aria-label="Billing period">
         <button type="button" className={!yearly ? 'on' : ''} aria-pressed={!yearly} onClick={() => setYearly(false)}>
           Monthly
@@ -48,9 +47,7 @@ export default function Pricing() {
           <b>
             Extra hours: +{PACK.hours} hours and +{PACK.episodes} episodes for ${PACK.price}
           </b>
-          , one time, for Pro and Studio. Usable for {PACK.days} days, after your monthly hours or episodes run out. Why episodes
-          too? Each time our AI picks an episode's best moments costs about the same whatever its length, so plans count
-          both hours and episodes, and packs add both.
+          , one time, for Pro and Studio. Usable for {PACK.days} days, after your monthly hours or episodes run out.
         </p>
         <p>
           <b>

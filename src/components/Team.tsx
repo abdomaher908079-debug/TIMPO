@@ -193,7 +193,7 @@ export default function Team() {
         !invitesToMe.length && (
           <p className="muted">
             Work with others? Studio includes a team of {TEAM_SIZE} people sharing the plan's hours and brand kits.{' '}
-            <Link to="#pricing">See Studio</Link>
+            <Link to="/pricing">See Studio</Link>
           </p>
         )
       )}

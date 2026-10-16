@@ -125,7 +125,7 @@ export function Terms() {
       <p>
         The {free.name} plan is free. Paid plans are subscriptions billed monthly or yearly through Paddle, our reseller and
         merchant of record, and renew automatically until you cancel. Each plan's limits are shown on our{' '}
-        <Link to="/#pricing">pricing</Link>: hours and episodes per month (counted from the day your subscription
+        <Link to="/pricing">pricing</Link>: hours and episodes per month (counted from the day your subscription
         started, also on yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
         over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run

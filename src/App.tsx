@@ -10,6 +10,7 @@ import Footer from './components/Footer';
 import { Privacy, Refunds, Terms } from './pages/Legal';
 import Diagnose from './pages/Diagnose';
 import Library from './pages/Library';
+import PricingPage from './pages/PricingPage';
 
 export default function App() {
   const { demo } = useAuth();
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
         <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/refunds" element={<Refunds />} />
@@ -36,7 +38,7 @@ export default function App() {
   );
 }
 
-// New pages start at the top; links like /#pricing scroll to that section.
+// New pages start at the top; links like /#section scroll to that section.
 function ScrollOnNavigate() {
   const { pathname, hash } = useLocation();
   useEffect(() => {

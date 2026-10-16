@@ -5,7 +5,7 @@ export default function Footer() {
   return (
     <footer className="footer">
       <nav aria-label="Site">
-        <Link to="/#pricing">Pricing</Link>
+        <Link to="/pricing">Pricing</Link>
         <Link to="/privacy">Privacy</Link>
         <Link to="/terms">Terms</Link>
         <Link to="/refunds">Refunds</Link>

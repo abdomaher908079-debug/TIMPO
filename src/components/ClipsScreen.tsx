@@ -474,7 +474,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       {locked > 0 && (
         <p className="notice">
           {locked === 1 ? '1 clip is' : `${locked} clips are`} Pro only: you can watch and edit {locked === 1 ? 'it' : 'them'}, but not
-          export. The {planName} plan exports {exportable} clips per episode. <Link to="/#pricing">Upgrade to Pro</Link> to export every
+          export. The {planName} plan exports {exportable} clips per episode. <Link to="/pricing">Upgrade to Pro</Link> to export every
           clip without a watermark.
         </p>
       )}

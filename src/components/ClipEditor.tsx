@@ -428,7 +428,7 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
     return (
       <div className="export-panel export-locked">
         <p>
-          <b>🔒 Pro clip.</b> Watch and edit it all you like. <Link to="/#pricing">Upgrade to Pro</Link> to export it.
+          <b>🔒 Pro clip.</b> Watch and edit it all you like. <Link to="/pricing">Upgrade to Pro</Link> to export it.
         </p>
       </div>
     );

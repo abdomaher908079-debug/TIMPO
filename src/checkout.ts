@@ -44,7 +44,7 @@ async function main() {
   const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>();
   if (error) return fail('We couldn’t check your account. Please try again.');
   if (pack && effectivePlan(profile) === 'free') {
-    status.innerHTML = 'Extra hours are for Pro and Studio. <a href="/#pricing">See plans</a>';
+    status.innerHTML = 'Extra hours are for Pro and Studio. <a href="/pricing">See plans</a>';
     return;
   }
   // Already subscribed: changing plan happens in Paddle's billing page, never with a second subscription.

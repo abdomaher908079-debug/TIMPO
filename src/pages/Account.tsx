@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import BrandKits from '../components/BrandKits';
-import Pricing from '../components/Pricing';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
@@ -166,7 +165,13 @@ export default function Account() {
       <BrandKits />
       <Team />
 
-      {!member && <Pricing />}
+      {!member && (
+        <p className="account-plans-link">
+          <Link to="/pricing" className="btn btn-outline btn-inline">
+            {plan.id === 'free' ? 'See plans' : 'Compare plans'}
+          </Link>
+        </p>
+      )}
     </main>
   );
 }

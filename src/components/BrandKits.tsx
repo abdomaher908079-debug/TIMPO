@@ -44,7 +44,7 @@ export default function BrandKits() {
         <h2 id="kits-title" className="account-section-title">Brand kits</h2>
         <p className="muted">
           Captions in your show's font and colors, and your logo instead of our watermark, on every clip. Pro includes 1 brand kit;
-          Studio has 5, one per show. <Link to="#pricing">See plans</Link>
+          Studio has 5, one per show. <Link to="/pricing">See plans</Link>
         </p>
       </section>
     );
@@ -111,7 +111,7 @@ export default function BrandKits() {
           )}
           {kits && kits.length >= limit && plan.id === 'pro' && (
             <p className="muted small">
-              Have more than one show? Studio has 5 brand kits. <Link to="#pricing">See Studio</Link>
+              Have more than one show? Studio has 5 brand kits. <Link to="/pricing">See Studio</Link>
             </p>
           )}
         </>
