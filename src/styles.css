@@ -518,3 +518,6 @@ h1, h2, h3 { text-wrap: balance; }
 .welcome-invite-actions { display: flex; align-items: center; gap: 16px; }
 .welcome-team { margin: -6px 0 0; }
 .menu-current { display: block; padding: 8px; border-radius: 8px; background: var(--surface-2); color: var(--phosphor); font-weight: 600; cursor: default; }
+.pro-parts { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; cursor: default; }
+.pro-part { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.pro-part input { width: 18px; height: 18px; accent-color: var(--orange); }

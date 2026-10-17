@@ -12,7 +12,7 @@ import {
   WebMOutputFormat,
 } from 'mediabunny';
 import type { BrandKit } from './brandKits';
-import { captionFromGroups, cropAt, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { captionFromGroups, cropAt, proParts, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
 import { breathe } from './device';
 import { drawCaption, drawHeadline, drawLogo, drawWatermark } from './draw';
 
@@ -87,8 +87,10 @@ export async function renderClip(
     const cropH = wide ? srcH : Math.min(srcH, (srcW * 16) / 9);
     const fit = clip.layout === 'fit' && wide;
     const fitH = Math.round((OUT_W * srcH) / srcW);
-    const zooms = pro ? zoomsFor(captions.flatMap((g) => g.words), clip.punchIns) : [];
-    const headline = pro ? clip.headline : undefined;
+    // `pro`: the Pro edit is available; each part can still be off for this clip.
+    const parts = proParts(clip, pro);
+    const zooms = parts.zoom ? zoomsFor(captions.flatMap((g) => g.words), clip.punchIns) : [];
+    const headline = parts.headline ? clip.headline : undefined;
     // The headline sits in the blurred band above the picture (whole picture), or near the top for
     // the first seconds (fill), where the platforms put none of their own buttons.
     const headlineMiddle = fit ? Math.max(0.12, ((OUT_H - fitH) / 2 / OUT_H) * 0.55) : 0.15;
@@ -115,7 +117,7 @@ export async function renderClip(
           await breathe();
           // Sample times start at 0 at the clip's start.
           const t = clip.start + sample.timestamp;
-          const left = ((srcW - cropW) * cropAt(clip, t, pro)) / 100;
+          const left = ((srcW - cropW) * cropAt(clip, t, parts.follow)) / 100;
           const top = (srcH - cropH) / 2;
           const zoom = zoomAt(zooms, t);
           if (fit) {
@@ -140,7 +142,7 @@ export async function renderClip(
             const alpha = fit ? 1 : since < 3.6 ? 1 : 1 - (since - 3.6) / 0.4;
             drawHeadline(ctx, headline, look, OUT_W, OUT_H, headlineMiddle, alpha);
           }
-          const caption = captionFromGroups(captions, t, pro ? clip.emphasis : undefined);
+          const caption = captionFromGroups(captions, t, parts.highlight ? clip.emphasis : undefined);
           if (logo) drawLogo(ctx, logo.image, logo.corner, OUT_W, OUT_H);
           if (caption) drawCaption(ctx, caption, look, OUT_W, OUT_H);
           if (watermark) drawWatermark(ctx, OUT_W, OUT_H);

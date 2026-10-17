@@ -5,7 +5,7 @@ import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { useWakeLock } from '../lib/wakeLock';
 import { ensureFont, KIT_LIMITS, listKits, type BrandKit } from '../lib/brandKits';
-import { alignWords, captionLook, cropAt, hasProEdit, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { alignWords, captionLook, cropAt, proParts, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -34,7 +34,7 @@ export type ExportStatus =
 // brand kit was edited since) is out of date.
 export const exportKey = (c: Clip, size: string, kits: BrandKit[]) => {
   const { look, kit } = captionLook(c, kits);
-  return `${rangeKey(c)}|${c.proEdit !== false}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
+  return `${rangeKey(c)}|${c.proEdit !== false}|${(c.proOff ?? []).join(',')}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
 };
 export const SIZE_LABELS = { '720p': '720×1280', '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
 type Size = keyof typeof SIZE_LABELS;
@@ -279,7 +279,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       look,
       logo,
       watermark,
-      pro: hasProEdit(clip, paid),
+      pro: paid,
       size: clipSize,
       signal,
       onProgress: (p) => {
@@ -363,6 +363,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         onExport={() => void runExports([editing])}
         onCancelExport={cancelExports}
         onChange={(c) => onChange(clips.map((old, i) => (i === editing ? c : old)))}
+        onApplyProToAll={(off) => onChange(clips.map((c) => ({ ...c, proEdit: undefined, proOff: off })))}
         onClose={() => setEditing(null)}
         onPrev={editing > 0 ? () => setEditing(editing - 1) : undefined}
         onNext={editing < clips.length - 1 ? () => setEditing(editing + 1) : undefined}
@@ -453,12 +454,12 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
                       className={c.layout === 'fit' ? 'thumb-fit' : undefined}
                       src={thumb}
                       alt=""
-                      style={c.layout === 'fit' ? undefined : { objectPosition: `${cropAt(c, thumbTime(c), hasProEdit(c, paid || isLocked))}% 50%` }}
+                      style={c.layout === 'fit' ? undefined : { objectPosition: `${cropAt(c, thumbTime(c), proParts(c, paid || isLocked).follow)}% 50%` }}
                     />
                   )}
                   <span className="clip-score">{c.score}</span>
                   <span className="clip-len">{Math.round(c.end - c.start)}s</span>
-                  {hasProEdit(c, paid || isLocked) && c.headline && <span className="clip-headline">{c.headline}</span>}
+                  {proParts(c, paid || isLocked).headline && c.headline && <span className="clip-headline">{c.headline}</span>}
                   {isLocked ? <span className="clip-lock">🔒 Pro</span> : <span className="clip-caption">{c.hook}</span>}
                   {isLocked && c.headline && <span className="clip-pro-badge">✨ Pro edit</span>}
                   {status && <ExportBadge status={status} current={status.state !== 'done' || isCurrent(i)} />}

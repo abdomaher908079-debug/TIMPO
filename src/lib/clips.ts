@@ -61,11 +61,13 @@ export interface Clip {
   // Auto framing has looked at this clip (or the user framed it).
   framed?: boolean;
   // The Pro edit, written by the AI with the moment (see Moment): a headline on screen, words
-  // highlighted in the captions, phrases to zoom in on. `proEdit: false` turns it off for this clip.
+  // highlighted in the captions, phrases to zoom in on, plus framing that follows the speaker. Each part
+  // can be turned off for this clip (proOff); `proEdit: false` (older saves) means all of them.
   headline?: string;
   emphasis?: string[];
   punchIns?: string[];
   proEdit?: boolean;
+  proOff?: ProPart[];
   captionStyle: CaptionStyleId;
   // A brand kit's look instead of captionStyle. undefined = not chosen yet (the first kit is used).
   brandKitId?: string | null;
@@ -128,6 +130,7 @@ export function clipsFromMoments(moments: Moment[]): Clip[] {
     // would cut off the text.
     layout: 'fit',
     captionStyle: 'bold',
+    proOff: rememberedProOff(),
   }));
 }
 
@@ -246,9 +249,46 @@ export function zoomAt(zooms: Zoom[], t: number): number {
   return 1;
 }
 
-/** Whether a clip gets the Pro edit: paid plans (unless turned off for it), and previews of Pro-only clips. */
-export function hasProEdit(clip: Pick<Clip, 'proEdit'>, pro: boolean): boolean {
-  return pro && clip.proEdit !== false;
+/** The parts of the Pro edit, each one a choice. */
+export type ProPart = 'headline' | 'highlight' | 'zoom' | 'follow';
+export const PRO_PARTS: { id: ProPart; label: string }[] = [
+  { id: 'headline', label: 'AI headline at the top' },
+  { id: 'highlight', label: 'Highlighted key words in the captions' },
+  { id: 'zoom', label: 'Quick zoom-ins on the best lines' },
+  { id: 'follow', label: 'Framing that follows the speaker' },
+];
+
+/**
+ * Which parts of the Pro edit a clip gets: paid plans (and previews of Pro-only clips), minus the parts
+ * turned off for this clip.
+ */
+export function proParts(clip: Pick<Clip, 'proEdit' | 'proOff'>, pro: boolean): Record<ProPart, boolean> {
+  const on = pro && clip.proEdit !== false;
+  const off = clip.proOff ?? [];
+  return {
+    headline: on && !off.includes('headline'),
+    highlight: on && !off.includes('highlight'),
+    zoom: on && !off.includes('zoom'),
+    follow: on && !off.includes('follow'),
+  };
+}
+
+// The parts someone turned off last time, used for their next clips (this browser only).
+const PRO_OFF_KEY = 'hookcut_pro_off';
+export function rememberedProOff(): ProPart[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(PRO_OFF_KEY) ?? '[]') as unknown;
+    return Array.isArray(list) ? list.filter((p): p is ProPart => PRO_PARTS.some((x) => x.id === p)) : [];
+  } catch {
+    return [];
+  }
+}
+export function rememberProOff(off: ProPart[]) {
+  try {
+    localStorage.setItem(PRO_OFF_KEY, JSON.stringify(off));
+  } catch {
+    // Just not remembered.
+  }
 }
 
 /** Identifies a clip's time range, to know when cached word times or an export are out of date. */

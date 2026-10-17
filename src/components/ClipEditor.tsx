@@ -11,7 +11,10 @@ import {
   captionLook,
   clock,
   cropAt,
-  hasProEdit,
+  PRO_PARTS,
+  proParts,
+  rememberProOff,
+  type ProPart,
   estimateWords,
   groupWords,
   MAX_CLIP_SECONDS,
@@ -48,6 +51,8 @@ interface Props {
   // Another export is running.
   busy: boolean;
   onExport: () => void;
+  // Turns the same Pro edit parts off (and the rest on) for every clip of the episode.
+  onApplyProToAll?: (off: ProPart[]) => void;
   onCancelExport: () => void;
   onChange: (clip: Clip) => void;
   onClose: () => void;
@@ -130,12 +135,12 @@ export default function ClipEditor(props: Props) {
   const inClip = t >= clip.start && t < clip.end;
   const estimated = useMemo(() => groupWords(estimateWords(segments, win.from, win.to)), [segments, win]);
   // The Pro edit: on paid plans, and shown on Pro-only clips so Free users can see it.
-  const pro = hasProEdit(clip, props.paid || props.locked);
+  const parts = proParts(clip, props.paid || props.locked);
   const groups = exactCaptions ?? estimated;
-  const caption = inClip ? captionFromGroups(groups, t, pro ? clip.emphasis : undefined) : null;
-  const zooms = useMemo(() => (pro ? zoomsFor(groups.flatMap((g) => g.words), clip.punchIns) : []), [pro, groups, clip.punchIns]);
+  const caption = inClip ? captionFromGroups(groups, t, parts.highlight ? clip.emphasis : undefined) : null;
+  const zooms = useMemo(() => (parts.zoom ? zoomsFor(groups.flatMap((g) => g.words), clip.punchIns) : []), [parts.zoom, groups, clip.punchIns]);
   const zoom = inClip ? zoomAt(zooms, t) : 1;
-  const headlineAlpha = !pro || !clip.headline || !inClip ? 0 : clip.layout === 'fit' ? 1 : Math.max(0, Math.min(1, (4 - (t - clip.start)) / 0.4));
+  const headlineAlpha = !parts.headline || !clip.headline || !inClip ? 0 : clip.layout === 'fit' ? 1 : Math.max(0, Math.min(1, (4 - (t - clip.start)) / 0.4));
   const { look, kit } = captionLook(clip, kits);
   const { plan } = useAccount();
   const sample = { words: ['Best', 'moment'], active: 1 };
@@ -177,7 +182,7 @@ export default function ClipEditor(props: Props) {
                 playsInline
                 preload="auto"
                 style={{
-                  ...(fit ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${cropAt(clip, t, pro)}% 50%` }),
+                  ...(fit ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${cropAt(clip, t, parts.follow)}% 50%` }),
                   transform: zoom !== 1 ? `scale(${zoom})` : undefined,
                 }}
                 onLoadedMetadata={(e) => {
@@ -275,7 +280,7 @@ export default function ClipEditor(props: Props) {
               </button>
             </span>
           </div>
-          <ProEditControl clip={clip} paid={props.paid} locked={props.locked} onChange={onChange} />
+          <ProEditControl clip={clip} paid={props.paid} locked={props.locked} onChange={onChange} onApplyAll={props.onApplyProToAll} />
 
           {changed && (
             <button
@@ -484,19 +489,57 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
 
 // What the Pro edit adds, shown in the editor: a switch on paid plans, a preview on Pro-only clips,
 // and a locked row with what's missing on the clips Free can export.
-function ProEditControl({ clip, paid, locked, onChange }: { clip: Clip; paid: boolean; locked: boolean; onChange: (c: Clip) => void }) {
-  const has = !!(clip.headline || clip.emphasis?.length || clip.punchIns?.length || clip.track);
+function ProEditControl({
+  clip,
+  paid,
+  locked,
+  onChange,
+  onApplyAll,
+}: {
+  clip: Clip;
+  paid: boolean;
+  locked: boolean;
+  onChange: (c: Clip) => void;
+  onApplyAll?: (off: ProPart[]) => void;
+}) {
+  // Only the parts the AI made for this clip (and framing once auto framing found someone to follow).
+  const available: Record<ProPart, boolean> = {
+    headline: !!clip.headline,
+    highlight: !!clip.emphasis?.length,
+    zoom: !!clip.punchIns?.length,
+    follow: !!clip.track?.length,
+  };
+  const has = Object.values(available).some(Boolean);
   if (!has) return null;
   const what = 'AI headline, zoom-ins on the best lines, highlighted key words, and framing that follows the speaker';
   if (paid) {
+    const on = proParts(clip, true);
+    const offList = (next: Record<ProPart, boolean>) => PRO_PARTS.map((p) => p.id).filter((id) => !next[id]);
     return (
-      <label className="pro-edit pro-edit-on">
-        <input type="checkbox" checked={clip.proEdit !== false} onChange={(e) => onChange({ ...clip, proEdit: e.target.checked })} />
-        <span>
-          <b>Pro edit</b>
-          <span className="muted small">{what}</span>
-        </span>
-      </label>
+      <div className="pro-edit pro-edit-on pro-parts">
+        <b>Pro edit</b>
+        <span className="muted small">Choose what this clip gets.</span>
+        {PRO_PARTS.filter((p) => available[p.id]).map((p) => (
+          <label key={p.id} className="pro-part">
+            <input
+              type="checkbox"
+              checked={on[p.id]}
+              onChange={(e) => {
+                const off = offList({ ...on, [p.id]: e.target.checked });
+                // Remembered for the next episodes' clips.
+                rememberProOff(off);
+                onChange({ ...clip, proEdit: undefined, proOff: off });
+              }}
+            />
+            <span>{p.label}</span>
+          </label>
+        ))}
+        {onApplyAll && (
+          <button type="button" className="link-button" onClick={() => onApplyAll(offList(on))}>
+            Use these choices on every clip
+          </button>
+        )}
+      </div>
     );
   }
   if (locked) {
