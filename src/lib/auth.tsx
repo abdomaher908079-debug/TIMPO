@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!supabase) return demoLogin('demo.user@gmail.com', 'Demo User');
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: `${window.location.origin}/new` },
+          options: { redirectTo: `${window.location.origin}/` },
         });
         if (error) throw error;
       },
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/new` },
+          options: { emailRedirectTo: `${window.location.origin}/` },
         });
         if (error) throw error;
         // With email confirmation on (Supabase's default), there's no session until they click the link.

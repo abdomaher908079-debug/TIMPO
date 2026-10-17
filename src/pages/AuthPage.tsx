@@ -51,7 +51,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       } else {
         await signInWithEmail(email.trim(), password);
       }
-      navigate('/new');
+      navigate('/');
     });
   }
 
