@@ -80,9 +80,6 @@ function Episodes() {
     return (
       <div className="card">
         <p>No saved episodes. Your work on each episode is saved here automatically.</p>
-        <Link to="/new" className="btn btn-primary btn-inline">
-          New episode
-        </Link>
       </div>
     );
   }
@@ -171,9 +168,6 @@ function Clips() {
       ) : !clips.length ? (
         <div className="card">
           <p>No clips yet. Clips appear here when you export them.</p>
-          <Link to="/new" className="btn btn-primary btn-inline">
-            New episode
-          </Link>
         </div>
       ) : (
         <>

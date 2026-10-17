@@ -508,3 +508,5 @@ h1, h2, h3 { text-wrap: balance; }
 .welcome-btn { display: inline-block; width: auto; padding-inline: 40px; animation: welcome-in 0.8s 0.3s ease-out both; }
 @keyframes welcome-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .welcome-logo, .welcome-greeting, .welcome-btn { animation: none; } }
+.back-button { background: none; border: none; color: var(--muted); font: inherit; font-size: 0.95rem; padding: 4px 0; margin: -8px 0 12px; cursor: pointer; }
+.back-button:hover { color: var(--text); }

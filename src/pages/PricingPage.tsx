@@ -64,12 +64,14 @@ export default function PricingPage() {
         ))}
       </section>
 
-      <section className="final-cta">
-        <h2 className="section-heading">Try it on your next episode.</h2>
-        <Link to={user ? '/new' : '/signup'} className="btn btn-primary">
-          {user ? 'New episode' : 'Start free'}
-        </Link>
-      </section>
+      {!user && (
+        <section className="final-cta">
+          <h2 className="section-heading">Try it on your next episode.</h2>
+          <Link to="/signup" className="btn btn-primary">
+            Start free
+          </Link>
+        </section>
+      )}
     </main>
   );
 }

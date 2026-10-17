@@ -42,9 +42,11 @@ export default function Header() {
         {user && !loading && plan.id !== 'free' && <span className="plan-badge">{plan.name}</span>}
       </Link>
       <nav className="nav">
-        <Link to="/pricing" className="nav-link">
-          Pricing
-        </Link>
+        {!user && (
+          <Link to="/pricing" className="nav-link">
+            Pricing
+          </Link>
+        )}
         {user ? (
           <div className="account" ref={menuRef}>
             <button className="avatar" aria-label="Account menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
@@ -53,9 +55,6 @@ export default function Header() {
             {menuOpen && (
               <div className="menu" role="menu">
                 <p className="menu-email">{user.email}</p>
-                <Link role="menuitem" to="/new">
-                  New episode
-                </Link>
                 <Link role="menuitem" to="/library">
                   Library
                 </Link>

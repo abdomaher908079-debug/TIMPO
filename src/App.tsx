@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Header from './components/Header';
+import BackButton from './components/BackButton';
 import { useAuth } from './lib/auth';
 import Home from './pages/Home';
 import AuthPage from './pages/AuthPage';
@@ -20,6 +21,7 @@ export default function App() {
       {demo && <div className="demo-banner">Demo mode: logins are fake and only saved in this browser.</div>}
       <ScrollOnNavigate />
       <Header />
+      <BackButton />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />

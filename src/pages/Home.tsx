@@ -51,7 +51,9 @@ const SAMPLE_CLIPS = [
 ];
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  // Wait for the login check, so signed-in people never see the visitor page first.
+  if (loading) return <main className="welcome" />;
   // Signed in: just a warm welcome and the one thing to do next.
   if (user) return <Welcome name={user.name} />;
   const startLink = '/signup';
@@ -67,7 +69,7 @@ export default function Home() {
           captions for TikTok, Reels and Shorts.
         </p>
         <Link to={startLink} className="btn btn-primary">
-          {user ? 'New episode' : 'Try it free, 1 episode every week'}
+          Try it free, 1 episode every week
         </Link>
         <p className="privacy-note">
           Your video never leaves your computer. No upload wait. <Link to="/privacy">Privacy</Link>
@@ -129,7 +131,7 @@ export default function Home() {
       <section className="final-cta">
         <h2 className="section-heading">Your next episode deserves to be seen.</h2>
         <Link to={startLink} className="btn btn-primary">
-          {user ? 'New episode' : 'Start free'}
+          Start free
         </Link>
         <p className="muted small final-cta-note">
           Free every week, no card needed. <Link to="/pricing">See plans</Link>
