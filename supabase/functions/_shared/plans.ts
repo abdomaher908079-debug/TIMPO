@@ -103,13 +103,19 @@ export interface Period {
 }
 
 /**
- * The usage period containing `now`. Paid plans: a month counted from the subscription's billing
- * start, so yearly plans also get their hours every month, and a late renewal doesn't start a fresh
- * month early. Without billing dates (set by hand): the calendar month. Free: the week from Monday 00:00 UTC.
+ * The usage period containing `now`. Paid plans: Paddle's billing period when it's a month; yearly
+ * plans get a month at a time counted from the start of the year (so their hours come every month);
+ * after a late renewal, the month continues from the last start rather than restarting. Without billing dates (set by hand): the calendar month. Free: the week from Monday 00:00 UTC.
  */
 export function currentPeriod(plan: PlanId, now: Date, billingPeriod?: { start: string | null; end: string | null }): Period {
   if (LIMITS[plan].period === 'month') {
     const anchor = plan !== 'free' && billingPeriod?.start ? new Date(billingPeriod.start) : null;
+    const billingEnd = billingPeriod?.end ? new Date(billingPeriod.end) : null;
+    // A monthly subscription inside its paid period: exactly Paddle's period, so usage resets when Paddle
+    // renews (Paddle keeps the 31st after a short month; counting months ourselves would drift).
+    if (anchor && billingEnd && anchor <= now && now < billingEnd && billingEnd.getTime() - anchor.getTime() <= 32 * 86_400_000) {
+      return { start: anchor, end: billingEnd };
+    }
     if (anchor && !Number.isNaN(anchor.getTime())) {
       // Months are always counted from the anchor itself, so short months don't shift later ones.
       let k = (now.getUTCFullYear() - anchor.getUTCFullYear()) * 12 + (now.getUTCMonth() - anchor.getUTCMonth());

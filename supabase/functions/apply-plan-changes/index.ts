@@ -3,7 +3,7 @@
 // - Same billing (Studio → Pro monthly): the items change now without billing, so the renewal charges
 //   the new plan. If the renewal already happened, the change is prorated instead.
 // - Yearly → monthly: billed in full now (a new monthly period starts). Changing billing without
-//   billing would start a free period, so never that.
+//   billing would start a free period, so never that. If the year renewed first, it waits for the next end.
 // Secrets: PLAN_CHANGES_SECRET (also in Vault as plan_changes_secret), PADDLE_*.
 // Deploy: supabase functions deploy apply-plan-changes --no-verify-jwt
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -44,6 +44,9 @@ Deno.serve(async (req) => {
       const to = { plan: p.pending_plan as 'pro' | 'studio', billing: p.pending_billing as Billing };
       const sameBilling = now.billing === to.billing;
       const renewed = !sub.next_billed_at || new Date(sub.next_billed_at).getTime() - Date.now() > WINDOW_MS;
+      // Yearly → monthly after the year already renewed: the new year is paid for, so the switch waits for
+      // its end (the webhook moves current_period_end, and this runs again then).
+      if (!sameBilling && renewed) continue;
       const mode = sameBilling ? (renewed ? 'prorated_immediately' : 'do_not_bill') : 'full_immediately';
       const res = await paddle(`/subscriptions/${p.paddle_subscription_id}`, {
         method: 'PATCH',

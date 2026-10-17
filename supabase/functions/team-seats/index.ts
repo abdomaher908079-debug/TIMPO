@@ -6,7 +6,7 @@
 // Secrets: PADDLE_API_KEY, PADDLE_ENV, PADDLE_PRICE_SEAT_{MONTHLY,YEARLY}
 // Deploy: supabase functions deploy team-seats
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { PADDLE_API, seatPrice } from '../_shared/paddle.ts';
+import { isSeatPrice, paddle, seatPrice } from '../_shared/paddle.ts';
 import { effectivePlan, type ProfileRow } from '../_shared/plans.ts';
 
 // Studio: 3 people included, up to 10 in all.
@@ -23,12 +23,6 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
   auth: { persistSession: false },
 });
 
-async function paddle(path: string, init: RequestInit = {}) {
-  return fetch(`${PADDLE_API}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${Deno.env.get('PADDLE_API_KEY')}`, 'Content-Type': 'application/json' },
-  });
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -72,7 +66,7 @@ Deno.serve(async (req) => {
     const sub = ((await current.json()) as { data: { items: { price: { id: string }; quantity: number }[] } }).data;
     // Keep the plan's item; replace any seat item (monthly or yearly) with the new count.
     const items = sub.items
-      .filter((i) => i.price.id !== seatPrice('monthly') && i.price.id !== seatPrice('yearly'))
+      .filter((i) => !isSeatPrice(i.price.id))
       .map((i) => ({ price_id: i.price.id, quantity: i.quantity }));
     if (extraSeats > 0) items.push({ price_id: seat, quantity: extraSeats });
 

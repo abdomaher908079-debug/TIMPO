@@ -40,10 +40,14 @@ export default function Account() {
   const [activating, setActivating] = useState(params.get('upgraded') === '1');
   // Back from buying an hour pack: it shows up the same way.
   const [packPending, setPackPending] = useState(params.get('pack') === '1');
-  const [packStart] = useState(packs.seconds);
+  // What the packs held when the page first loaded: the new pack shows up as more than that.
+  const [packStart, setPackStart] = useState<number | null>(null);
+  useEffect(() => {
+    if (!loading && packStart === null) setPackStart(packs.seconds);
+  }, [loading, packStart, packs.seconds]);
 
   useEffect(() => {
-    if (!packPending) return;
+    if (!packPending || packStart === null) return;
     if (packs.seconds > packStart) {
       setPackPending(false);
       setParams({}, { replace: true });

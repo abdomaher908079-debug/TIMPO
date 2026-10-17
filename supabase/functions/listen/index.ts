@@ -11,7 +11,7 @@
 // Secrets: GEMINI_API_KEY (and GEMINI_PAID_API_KEY). Deploy: supabase functions deploy listen --no-verify-jwt
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { geminiFor, MomentsError, pickMoments, type Segment } from '../_shared/moments.ts';
-import { checkCloud, checkEpisode, cloudProblem, currentPeriod, LIMITS, type PlanId, type WorkspaceRow } from '../_shared/plans.ts';
+import { checkCloud, checkEpisode, currentPeriod, LIMITS, type PlanId, type WorkspaceRow } from '../_shared/plans.ts';
 import { AudioTooLong, listen, listenerFor, PIECE_SECONDS } from '../_shared/transcribe.ts';
 import { countedSeconds, logAiCall, releaseCloud, releasePick, reserveCloud, reservePick } from '../_shared/usage.ts';
 
@@ -86,17 +86,28 @@ async function create(userId: string, body: { seconds?: unknown; fingerprint?: u
   }
 
   const { plan, workspaceId, periodStart } = await workspaceOf(userId);
-  const [cloud, episodes] = await Promise.all([
+  const [cloud, episodes, packRows] = await Promise.all([
     admin.from('cloud_jobs').select('fingerprint, seconds').eq('workspace_id', workspaceId).eq('period_start', periodStart),
     admin.from('episodes').select('fingerprint, seconds').eq('workspace_id', workspaceId).eq('period_start', periodStart),
+    admin
+      .from('hour_packs')
+      .select('seconds_left, episodes_left')
+      .eq('workspace_id', workspaceId)
+      .is('refunded_at', null)
+      .gt('expires_at', new Date().toISOString()),
   ]);
+  // Hour packs count for the episode (as in reserve_pick), not for cloud listening.
+  const packs = {
+    seconds: (packRows.data ?? []).reduce((n, r) => n + Number(r.seconds_left), 0),
+    episodes: (packRows.data ?? []).reduce((n, r) => n + Number(r.episodes_left), 0),
+  };
   if (cloud.error) throw cloud.error;
   if (episodes.error) throw episodes.error;
   const used = (rows: { seconds: number }[]) => ({ episodes: rows.length, seconds: rows.reduce((n, r) => n + Number(r.seconds), 0) });
   // A quick check so people hear about a limit before uploading. What counts is reserve_cloud, piece by
   // piece as the audio is heard, and reserve_pick when the moments are picked.
   const problem =
-    (episodes.data.some((r) => r.fingerprint === fingerprint) ? null : checkEpisode(plan, used(episodes.data), seconds)) ??
+    (episodes.data.some((r) => r.fingerprint === fingerprint) ? null : checkEpisode(plan, used(episodes.data), seconds, packs)) ??
     checkCloud(plan, used(cloud.data), seconds, cloud.data.some((r) => r.fingerprint === fingerprint));
   if (problem) return { error: problem.message, reason: problem.reason, status: 403 };
 
@@ -154,13 +165,22 @@ async function work(jobId: string) {
     if (error) throw error;
     if (!claimed?.length) break;
     await Promise.all(
-      (claimed as { idx: number; start: number; length: number; attempts: number }[]).map(async (piece) => {
+      (claimed as { idx: number; start: number; length: number; attempts: number; claimed_at: string }[]).map(async (piece) => {
         const seconds = Number(piece.length);
         // Counted before the AI hears it, given back if it can't.
-        if (!(await reserveCloud(admin, { plan, userId: job.user_id, seconds, ...charge }))) {
+        let allowed: boolean;
+        try {
+          allowed = await reserveCloud(admin, { plan, userId: job.user_id, seconds, ...charge });
+        } catch (err) {
+          // A database hiccup: hand the piece back for the next step instead of stalling the job.
+          console.error(`job ${job.id} piece ${piece.idx} reserve:`, err);
+          await admin.from('listen_pieces').update({ status: 'pending' }).eq('job_id', job.id).eq('idx', piece.idx);
+          return;
+        }
+        if (!allowed) {
           stopped = true;
           await admin.from('listen_pieces').update({ status: 'pending' }).eq('job_id', job.id).eq('idx', piece.idx);
-          return fail(job, cloudProblem(plan, 'no-hours-left', Number(job.seconds), 0).message);
+          return fail(job, cloudLimitMessage(plan));
         }
         try {
           const { data: blob, error: dlError } = await admin.storage.from(BUCKET).download(audioPath(job, piece.idx));
@@ -174,7 +194,20 @@ async function work(jobId: string) {
             Deno.env.get('GEMINI_PAID_API_KEY'),
           );
           await logAiCall(admin, { workspaceId, userId: job.user_id, kind: 'listen', usage, seconds });
-          await admin.from('listen_pieces').update({ status: 'done', segments, usage }).eq('job_id', job.id).eq('idx', piece.idx);
+          // Only if this worker still holds the piece: one that took over 3 minutes may have been handed to
+          // another worker, which charged it again, so give this charge back.
+          const { data: mine } = await admin
+            .from('listen_pieces')
+            .update({ status: 'done', segments, usage })
+            .eq('job_id', job.id)
+            .eq('idx', piece.idx)
+            .eq('status', 'running')
+            .eq('claimed_at', piece.claimed_at)
+            .select('idx');
+          if (!mine?.length) {
+            await releaseCloud(admin, { ...charge, seconds });
+            return;
+          }
           await admin.storage.from(BUCKET).remove([audioPath(job, piece.idx)]);
         } catch (err) {
           console.error(`job ${job.id} piece ${piece.idx}:`, err);
@@ -185,7 +218,8 @@ async function work(jobId: string) {
           } else if (piece.attempts >= MAX_ATTEMPTS) {
             await fail(job, err instanceof MomentsError ? err.message : 'We couldn’t listen to part of this episode. Please try again.');
           } else {
-            await admin.from('listen_pieces').update({ status: 'pending' }).eq('job_id', job.id).eq('idx', piece.idx);
+            // Unless another worker took it over meanwhile.
+            await admin.from('listen_pieces').update({ status: 'pending' }).eq('job_id', job.id).eq('idx', piece.idx).eq('claimed_at', piece.claimed_at);
           }
         }
       }),
@@ -199,6 +233,12 @@ async function work(jobId: string) {
   // Work left (or still uploading): the next step picks it up.
   const { count: left } = await admin.from('listen_pieces').select('idx', { count: 'exact', head: true }).eq('job_id', job.id).in('status', ['pending', 'running']);
   if (left) kickSelf(job.id);
+}
+
+/** Why a piece couldn't be counted: no cloud listening left this period (time or episodes). */
+function cloudLimitMessage(plan: PlanId): string {
+  const l = LIMITS[plan];
+  return `You've reached your cloud listening for this ${l.period}. You can still listen on this device${plan === 'studio' ? '' : ', or upgrade for more'}.`;
 }
 
 function kickSelf(jobId: string) {

@@ -123,9 +123,18 @@ export async function listen(
   const data = toBase64(audio);
   // The page says how long each piece is and that's what is counted, so check the audio really is
   // no longer before paying to listen to it (counting tokens is free).
-  const first = attempts[0];
-  if (!first) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
-  const tokens = await countTokens(first.model, first.apiKey, type, data);
+  if (!attempts.length) throw new MomentsError('The AI isn’t set up on the server yet.', 503);
+  let tokens: number | null = null;
+  // The same keys and models as listening, so a busy free key falls back to the next one.
+  for (const { apiKey, model } of attempts) {
+    try {
+      tokens = await countTokens(model, apiKey, type, data);
+      break;
+    } catch (err) {
+      console.error(`Gemini countTokens ${model}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  if (tokens === null) throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
   if (tokens > (length + AUDIO_SLACK_SECONDS) * AUDIO_TOKENS_PER_SECOND) {
     console.error(`Audio piece of ${length} s holds about ${Math.round(tokens / AUDIO_TOKENS_PER_SECOND)} s`);
     throw new AudioTooLong();
