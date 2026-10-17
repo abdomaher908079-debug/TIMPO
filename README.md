@@ -56,6 +56,24 @@ pricing buttons switch plans for free so you can try what each plan unlocks.
    supabase functions deploy pick-moments
    supabase functions deploy billing-portal
    supabase functions deploy team-seats
+   supabase functions deploy change-plan
+   supabase functions deploy apply-plan-changes --no-verify-jwt
+   ```
+
+   Scheduled downgrades are applied by a job every 15 minutes (`apply-plan-changes`). Give it a random secret, as a
+   function secret and in Vault, plus the project address (SQL editor):
+
+   ```sql
+   select vault.create_secret('https://<project>.supabase.co', 'project_url');
+   select vault.create_secret('<random secret>', 'plan_changes_secret');
+   ```
+   and `supabase secrets set PLAN_CHANGES_SECRET=<the same secret>`.
+
+   Refunds: approve them in Paddle (Transactions → the payment → Refund). A refunded plan payment ends the plan; a
+   refunded hour pack is emptied. After a price rise, put the old price IDs in `PADDLE_LEGACY_PRICES`
+   (`pri_…:pro:monthly,…`) so existing subscribers keep their price.
+
+   ```bash
    supabase functions deploy paddle-webhook --no-verify-jwt
    ```
 

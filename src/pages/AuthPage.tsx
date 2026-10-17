@@ -8,7 +8,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const { googleEnabled, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  // Invite links bring the invited email (?email=…).
+  const [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get('email') ?? '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

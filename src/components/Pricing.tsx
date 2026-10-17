@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { openBillingPortal, paymentsReady, startCheckout } from '../lib/billing';
+import { openBillingPortal, paymentsReady, startCheckout, switchPlan } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
 import { SEAT_PRICE } from '../lib/team';
 import { PACK } from '../../supabase/functions/_shared/plans';
@@ -68,6 +68,7 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   const { user, demo } = useAuth();
   const account = useAccount();
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const style = `btn ${plan.id === 'pro' ? 'btn-primary' : 'btn-outline'}`;
 
   if (!user) {
@@ -77,7 +78,11 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
       </Link>
     );
   }
-  if (account.plan.id === plan.id) {
+  const current = account.plan.id;
+  const currentBilling = account.profile?.billing ?? 'monthly';
+  const billing = yearly ? 'yearly' : 'monthly';
+  const member = !!account.workspace?.is_team_member;
+  if (current === plan.id && (plan.id === 'free' || currentBilling === billing || member)) {
     return (
       <button type="button" className="btn btn-outline" disabled>
         Your plan
@@ -92,16 +97,35 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
       </button>
     );
   }
-  // Subscribers change or cancel their plan in Paddle's billing portal.
-  if (account.plan.id !== 'free') {
+  // Subscribers switch here (shown the exact amount first); cancelling and invoices are in Paddle's billing page.
+  if (current !== 'free' && !member) {
+    const pending = account.profile?.pending_plan === plan.id && account.profile?.pending_billing === billing;
     return (
       <>
         <button
           type="button"
           className="btn btn-outline"
-          onClick={() => openBillingPortal().catch((e: Error) => setError(e.message))}
+          disabled={busy || pending}
+          onClick={() => {
+            setError(null);
+            if (plan.id === 'free') {
+              openBillingPortal().catch((e: Error) => setError(e.message));
+              return;
+            }
+            setBusy(true);
+            switchPlan(plan.id as 'pro' | 'studio', billing, { hasTeam: (account.profile?.extra_seats ?? 0) > 0 || current === 'studio' })
+              .then((changed) => (changed ? account.refresh() : undefined))
+              .catch((e: Error) => setError(e.message))
+              .finally(() => setBusy(false));
+          }}
         >
-          {plan.id === 'free' ? 'Cancel in billing' : `Switch in billing`}
+          {plan.id === 'free'
+            ? 'Cancel in billing'
+            : pending
+              ? 'Scheduled'
+              : current === plan.id
+                ? `Switch to ${billing}`
+                : `Switch to ${plan.name}`}
         </button>
         {error && <p className="error small">{error}</p>}
       </>

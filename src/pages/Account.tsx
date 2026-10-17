@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { openBillingPortal, PACK_PRICE_ID, startPackCheckout } from '../lib/billing';
+import { keepPlan, openBillingPortal, PACK_PRICE_ID, startPackCheckout } from '../lib/billing';
 import { PACK } from '../../supabase/functions/_shared/plans';
 import { cloudAvailable } from '../lib/cloud';
 import { formatDuration } from '../lib/format';
@@ -16,6 +16,26 @@ export default function Account() {
   const [params, setParams] = useSearchParams();
   const [billingError, setBillingError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const [keeping, setKeeping] = useState(false);
+  const [keepError, setKeepError] = useState<string | null>(null);
+
+  function billing(target?: 'payment') {
+    setOpening(true);
+    setBillingError(null);
+    openBillingPortal(target).catch((e: Error) => {
+      setBillingError(e.message);
+      setOpening(false);
+    });
+  }
+
+  function keep() {
+    setKeeping(true);
+    setKeepError(null);
+    keepPlan()
+      .then(() => refresh())
+      .catch((e: Error) => setKeepError(e.message))
+      .finally(() => setKeeping(false));
+  }
   // Back from checkout: the plan changes once Paddle tells our server, usually within seconds.
   const [activating, setActivating] = useState(params.get('upgraded') === '1');
   // Back from buying an hour pack: it shows up the same way.
@@ -86,31 +106,46 @@ export default function Account() {
               type="button"
               className="btn btn-outline btn-inline"
               disabled={opening}
-              onClick={() => {
-                setOpening(true);
-                setBillingError(null);
-                openBillingPortal().catch((e: Error) => {
-                  setBillingError(e.message);
-                  setOpening(false);
-                });
-              }}
+              onClick={() => billing()}
             >
-              Manage billing
+              Invoices & billing
             </button>
           )}
         </div>
         {billingError && <p className="error">{billingError}</p>}
-        {profile?.subscription_status === 'past_due' && (
-          <p className="notice">Your last payment didn't go through. Update your card in billing to keep {plan.name}.</p>
+        {paid && profile?.subscription_status === 'past_due' && (
+          <div className="notice notice-error">
+            <p>Your last payment didn't go through. We'll try again, and you keep {plan.name} meanwhile. Update your card so you don't lose it.</p>
+            <button type="button" className="btn btn-primary btn-inline" disabled={opening} onClick={() => billing('payment')}>
+              Update card
+            </button>
+          </div>
         )}
         {paid && profile?.cancel_at && (
-          <p className="notice">
-            Your plan is canceled and ends on {DATE.format(new Date(profile.cancel_at))}. You'll move to Free after that.
-          </p>
+          <div className="notice">
+            <p>Your plan is canceled and ends on {DATE.format(new Date(profile.cancel_at))}. You'll move to Free after that.</p>
+            <button type="button" className="btn btn-outline btn-inline" disabled={keeping} onClick={keep}>
+              Keep my plan
+            </button>
+          </div>
         )}
+        {paid && !profile?.cancel_at && profile?.pending_plan && profile.pending_billing && (
+          <div className="notice">
+            <p>
+              Switching to {profile.pending_plan === 'pro' ? 'Pro' : 'Studio'} {profile.pending_billing}
+              {profile.current_period_end ? ` on ${DATE.format(new Date(profile.current_period_end))}` : ' at the end of this period'}.
+              You keep {plan.name} until then.
+            </p>
+            <button type="button" className="btn btn-outline btn-inline" disabled={keeping} onClick={keep}>
+              Keep {plan.name} {profile.billing}
+            </button>
+          </div>
+        )}
+        {keepError && <p className="error">{keepError}</p>}
         {paid && !profile?.cancel_at && profile?.current_period_end && (
           <p className="muted small">
-            Renews {profile.billing === 'yearly' ? 'yearly' : 'monthly'} on {DATE.format(new Date(profile.current_period_end))}.
+            {plan.name} {profile.billing} · renews on {DATE.format(new Date(profile.current_period_end))}.{' '}
+            <Link to="/pricing">Change plan</Link>
           </p>
         )}
 

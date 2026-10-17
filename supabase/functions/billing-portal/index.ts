@@ -1,5 +1,6 @@
-// Supabase Edge Function: POST → { url } of Paddle's customer portal, where subscribers update their
-// card, switch between monthly and yearly, download invoices or cancel.
+// Supabase Edge Function: POST { target? } → { url } of Paddle's customer portal, where subscribers update
+// their card, download invoices or cancel (plan changes are in change-plan). target 'payment' opens the
+// card update straight away.
 // Secrets: PADDLE_API_KEY, PADDLE_ENV
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { PADDLE_API } from '../_shared/paddle.ts';
@@ -41,6 +42,10 @@ Deno.serve(async (req) => {
     console.error('Paddle portal error', res.status, await res.text());
     return json({ error: 'Billing is unavailable right now. Please try again.' }, 502);
   }
-  const data = (await res.json()) as { data: { urls: { general: { overview: string } } } };
-  return json({ url: data.data.urls.general.overview });
+  const data = (await res.json()) as {
+    data: { urls: { general: { overview: string }; subscriptions?: { id: string; update_subscription_payment_method?: string }[] } };
+  };
+  const body = (await req.json().catch(() => ({}))) as { target?: unknown };
+  const payment = data.data.urls.subscriptions?.find((s) => s.id === profile.paddle_subscription_id)?.update_subscription_payment_method;
+  return json({ url: body.target === 'payment' && payment ? payment : data.data.urls.general.overview });
 });

@@ -29,7 +29,7 @@ export default function BrandKits() {
   const limit = KIT_LIMITS[plan.id];
 
   useEffect(() => {
-    if (!workspaceId || plan.id === 'free') return;
+    if (!workspaceId) return;
     listKits(workspaceId)
       .then((list) => {
         setKits(list);
@@ -46,6 +46,11 @@ export default function BrandKits() {
           Captions in your show's font and colors, and your logo instead of our watermark, on every clip. Pro includes 1 brand kit;
           Studio has 5, one per show. <Link to="/pricing">See plans</Link>
         </p>
+        {!!kits?.length && (
+          <p className="muted small">
+            Your {kits.length === 1 ? 'brand kit is' : `${kits.length} brand kits are`} saved and come back when you upgrade.
+          </p>
+        )}
       </section>
     );
   }
@@ -74,14 +79,15 @@ export default function BrandKits() {
       ) : (
         <>
           <ul className="kit-list">
-            {kits?.map((k) => (
-              <li key={k.id} className="kit-row">
+            {kits?.map((k, i) => (
+              <li key={k.id} className={`kit-row ${i >= limit ? 'kit-locked' : ''}`}>
                 <KitPreview kit={k} small />
                 <div className="kit-info">
                   <b>{k.name}</b>
                   <span className="muted small">
                     {k.font} · {STYLE_NAMES[k.style]}
                     {k.logo ? ' · logo' : ''}
+                    {i >= limit ? ' · locked on your plan' : ''}
                   </span>
                   <span className="kit-actions">
                     <button type="button" className="link-button" onClick={() => setEditing(k)}>

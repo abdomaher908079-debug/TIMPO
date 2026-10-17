@@ -49,7 +49,7 @@ async function main() {
   }
   // Already subscribed: changing plan happens in Paddle's billing page, never with a second subscription.
   if (!pack && effectivePlan(profile) !== 'free') {
-    status.innerHTML = 'You already have a plan. To change it, open <a href="/account">your account</a> and choose Manage billing.';
+    status.innerHTML = 'You already have a plan. To change it, choose the plan on the <a href="/pricing">Pricing</a> page.';
     return;
   }
 

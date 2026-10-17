@@ -4,7 +4,7 @@
 // Events: subscription.*, transaction.completed (hour packs), adjustment.* (refunds of hour packs).
 // Secrets: PADDLE_WEBHOOK_SECRET, PADDLE_ENV, PADDLE_PRICE_{PRO,STUDIO,SEAT}_{MONTHLY,YEARLY}, PADDLE_PRICE_HOURS_PACK
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { isSeatPrice, planForPrice } from '../_shared/paddle.ts';
+import { isSeatPrice, paddle, planForPrice } from '../_shared/paddle.ts';
 import { PACK } from '../_shared/plans.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
@@ -91,7 +91,9 @@ Deno.serve(async (req) => {
   const { error } = await admin
     .from('profiles')
     .update({
-      ...(price ? { plan: price.plan, billing: price.billing, extra_seats: price.plan === 'studio' ? Math.min(7, seats) : 0 } : {}),
+      ...(price ? { plan: price.plan, billing: price.billing, extra_seats: price.plan === 'studio' && live(sub.status) ? Math.min(7, seats) : 0 } : {}),
+      // A plan that ended has nothing left to change.
+      ...(live(sub.status) ? {} : { pending_plan: null, pending_billing: null }),
       paddle_customer_id: sub.customer_id,
       paddle_subscription_id: sub.id,
       subscription_status: sub.status,
@@ -121,6 +123,8 @@ interface Adjustment {
   id: string;
   action: string;
   status: string;
+  type?: string;
+  subscription_id?: string | null;
   transaction_id: string;
 }
 
@@ -159,6 +163,7 @@ async function packBought(txn: Transaction): Promise<Response> {
 /** A refund or chargeback went through: an hour pack bought in that transaction can't be used any more. */
 async function refunded(adj: Adjustment): Promise<Response> {
   if ((adj.action !== 'refund' && adj.action !== 'chargeback') || adj.status !== 'approved') return new Response('Ignored');
+  // An hour pack bought in that transaction can't be used any more.
   const { error } = await admin
     .from('hour_packs')
     .update({ refunded_at: new Date().toISOString(), seconds_left: 0, episodes_left: 0 })
@@ -166,6 +171,26 @@ async function refunded(adj: Adjustment): Promise<Response> {
   if (error) {
     console.error(error);
     return new Response('Database error', { status: 500 });
+  }
+  // A plan payment refunded in full ends the plan right away (seat proration refunds don't).
+  if (adj.subscription_id && adj.type !== 'partial') {
+    const txn = await paddle(`/transactions/${adj.transaction_id}`);
+    if (!txn.ok) {
+      console.error('Refunded transaction', txn.status, await txn.text());
+      return new Response('Paddle error', { status: 500 });
+    }
+    const items = ((await txn.json()) as { data: { items?: { price?: { id?: string } }[] } }).data.items ?? [];
+    if (items.some((i) => planForPrice(i.price?.id))) {
+      const res = await paddle(`/subscriptions/${adj.subscription_id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ effective_from: 'immediately' }),
+      });
+      // Already canceled is fine; anything else is worth Paddle trying again.
+      if (!res.ok && res.status !== 400) {
+        console.error('Cancel after refund', res.status, await res.text());
+        return new Response('Paddle error', { status: 500 });
+      }
+    }
   }
   return new Response('OK');
 }

@@ -130,15 +130,27 @@ export function Terms() {
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
         over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run
         out, and only while you're on a paid plan. Extra Studio seats are added to your subscription and billed with it; adding
-        or removing one is charged or credited for the rest of the billing period. You can cancel any time in Account → Manage
-        billing; your plan stays active until the end of the period you paid for. Refunds follow our{' '}
-        <Link to="/refunds">refund policy</Link>.
+        or removing one is charged or credited for the rest of the billing period.
+      </p>
+      <h2>Changing or cancelling your plan</h2>
+      <p>
+        Upgrades (Pro to Studio) and switching from monthly to yearly happen right away: you pay the difference for the rest of
+        the period, with credit for what's left of your current plan. Downgrades (Studio to Pro) and switching from yearly to
+        monthly happen at the end of the period you paid for, and you keep your current plan until then. You can cancel any time
+        in Plan &amp; settings → Invoices &amp; billing; your plan stays active until the end of the period you paid for. A
+        scheduled change or cancellation can be undone until it happens.
+      </p>
+      <p>
+        If a payment fails, Paddle tries again and you keep your plan meanwhile; if it can't be collected, the subscription
+        ends. When a plan ends, extra seats are removed and team members return to their own plan. Hour packs stay until they
+        expire and work again if you subscribe again. Brand kits are kept (locked beyond your plan's number). Your saved work is
+        kept for at least 30 days after a paid plan ends. Refunds follow our <Link to="/refunds">refund policy</Link>.
       </p>
 
       <h2>Changes and availability</h2>
       <p>
-        We may change features, limits or prices. We'll give at least 30 days' notice by email before a price change affects
-        your subscription. We work to keep {BRAND_NAME} running but can't promise it will always be available or error-free.
+        We may change features, limits or prices. If prices go up, your subscription keeps the price you signed up at for as
+        long as you stay subscribed. We work to keep {BRAND_NAME} running but can't promise it will always be available or error-free.
       </p>
 
       <h2>Liability</h2>
@@ -162,7 +174,9 @@ export function Refunds() {
       <p>
         If you're not happy with a paid plan, ask for a full refund within <b>14 days of your first payment</b> and you'll get
         your money back, no questions asked. Renewals can be refunded within 14 days if you haven't processed any episodes since
-        the renewal. Extra hour packs can be refunded within 14 days if none of their hours or episodes have been used.
+        the renewal. Extra hour packs can be refunded within 14 days if none of their hours or episodes have been used. A
+        refunded plan payment ends the plan straight away. Extra seats aren't refunded in cash: removing one gives credit
+        for the rest of the period, used on your next bills.
       </p>
       <h2>How to ask</h2>
       <p>
@@ -171,8 +185,8 @@ export function Refunds() {
       </p>
       <h2>Cancelling</h2>
       <p>
-        You can cancel any time in Account → Manage billing. You keep your plan until the end of the period you paid for and
-        won't be charged again.
+        You can cancel any time in Plan &amp; settings → Invoices &amp; billing. You keep your plan until the end of the period
+        you paid for and won't be charged again. Changed your mind? Choose Keep my plan before it ends.
       </p>
     </Page>
   );

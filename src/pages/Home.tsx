@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
 import LogoMark from '../components/LogoMark';
+import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
+import { joinTeam, listTeam, type TeamMember } from '../lib/team';
 
 // What Hookcut does, in the words a podcaster would use. Every item here is in the product.
 const FEATURES: { title: string; text: string }[] = [
@@ -142,9 +145,59 @@ export default function Home() {
 }
 
 function Welcome({ name }: { name?: string | null }) {
+  const { user } = useAuth();
+  const { plan, workspace, refresh } = useAccount();
   const first = name?.trim().split(/\s+/)[0];
   const hour = new Date().getHours();
   const greeting = hour < 5 ? 'Welcome back' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  // A Studio team invite to this email: shown first, one tap to join.
+  const [invites, setInvites] = useState<TeamMember[]>([]);
+  const [team, setTeam] = useState<TeamMember | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<number[]>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('hookcut_invites_later') ?? '[]') as number[];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    if (!user) return;
+    const me = user.email.toLowerCase();
+    listTeam()
+      .then((rows) => {
+        setInvites(rows.filter((r) => r.status === 'invited' && r.email === me && r.owner_id !== user.id));
+        setTeam(rows.find((r) => r.user_id === user.id && r.status === 'active') ?? null);
+      })
+      .catch(() => undefined);
+  }, [user, workspace?.owner_id]);
+  const invite = invites.find((i) => !dismissed.includes(i.id));
+
+  async function join(id: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      await joinTeam(id);
+      setInvites((list) => list.filter((i) => i.id !== id));
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'We couldn’t join this team. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function later(id: number) {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try {
+      sessionStorage.setItem('hookcut_invites_later', JSON.stringify(next));
+    } catch {
+      // Shown again next time.
+    }
+  }
+
   return (
     <main className="welcome">
       <div className="welcome-logo">
@@ -154,9 +207,34 @@ function Welcome({ name }: { name?: string | null }) {
         {greeting}
         {first ? `, ${first}` : ''}.
       </p>
-      <Link to="/new" className="btn btn-primary welcome-btn">
-        New episode
-      </Link>
+      {invite ? (
+        <div className="card welcome-invite">
+          <p>
+            <b>{invite.owner_email ?? 'A Studio owner'}</b> invited you to their Studio team. You'll share their plan: hours, brand
+            kits and Best AI.
+          </p>
+          {error && <p className="error">{error}</p>}
+          <div className="welcome-invite-actions">
+            <button type="button" className="btn btn-primary btn-inline" disabled={busy} onClick={() => void join(invite.id)}>
+              Join team
+            </button>
+            <button type="button" className="link-button" onClick={() => later(invite.id)}>
+              Not now
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {workspace?.is_team_member && team && (
+            <p className="muted small welcome-team">
+              You're on {team.owner_email ?? 'your'}'s {plan.name} team.
+            </p>
+          )}
+          <Link to="/new" className="btn btn-primary welcome-btn">
+            New episode
+          </Link>
+        </>
+      )}
     </main>
   );
 }

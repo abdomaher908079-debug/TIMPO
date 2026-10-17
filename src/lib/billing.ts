@@ -38,8 +38,61 @@ export async function setExtraSeats(extraSeats: number): Promise<void> {
   await callFunction<{ extraSeats: number }>('team-seats', { extraSeats });
 }
 
-/** Opens Paddle's customer portal: card, invoices, monthly ↔ yearly, cancel. */
-export async function openBillingPortal() {
-  const { url } = await callFunction<{ url: string }>('billing-portal', {});
+/** Opens Paddle's customer portal: card, invoices, cancel. `payment` goes straight to updating the card. */
+export async function openBillingPortal(target?: 'payment') {
+  const { url } = await callFunction<{ url: string }>('billing-portal', target ? { target } : {});
   window.location.assign(url);
+}
+
+type PaidPlan = Exclude<PlanId, 'free'>;
+type PlanQuote =
+  | { timing: 'same' }
+  | { timing: 'now'; action: 'charge' | 'credit' | 'none'; amount: number; currency: string }
+  | { timing: 'later'; date: string | null };
+
+const NAMES: Record<PaidPlan, string> = { pro: 'Pro', studio: 'Studio' };
+const PRICES: Record<PaidPlan, Record<Billing, string>> = {
+  pro: { monthly: '$15 a month', yearly: '$144 a year' },
+  studio: { monthly: '$29 a month', yearly: '$288 a year' },
+};
+const DAY = new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+
+/**
+ * Switches a subscriber's plan after showing exactly what happens: upgrades and monthly → yearly now with
+ * the prorated amount from Paddle, downgrades and yearly → monthly at the end of the paid period.
+ * Resolves true when something changed.
+ */
+export async function switchPlan(plan: PaidPlan, billing: Billing, opts: { hasTeam: boolean }): Promise<boolean> {
+  const quote = await callFunction<PlanQuote>('change-plan', { action: 'change', plan, billing, preview: true });
+  if (quote.timing === 'same') {
+    await callFunction('change-plan', { action: 'change', plan, billing });
+    return true;
+  }
+  const target = `${NAMES[plan]} ${billing}`;
+  let text: string;
+  if (quote.timing === 'now') {
+    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: quote.currency || 'USD' }).format(quote.amount);
+    text =
+      `Switch to ${target} now?\n\n` +
+      (quote.action === 'charge'
+        ? `${money} now, with credit for what's left of your current plan`
+        : quote.action === 'credit'
+          ? `${money} credit for what's left of your current plan`
+          : 'Nothing to pay now') +
+      `. Then ${PRICES[plan][billing]}${plan === 'studio' ? ', plus any extra seats' : ''}. Charged to the card on your subscription.`;
+  } else {
+    const when = quote.date ? DAY.format(new Date(quote.date)) : 'the end of your billing period';
+    text =
+      `Switch to ${target} on ${when}?\n\nYou keep your current plan until then, and pay ${PRICES[plan][billing]} from that day.` +
+      (plan === 'pro' && opts.hasTeam ? ' Any team members lose access and extra seats are removed on that day.' : '') +
+      ' You can change your mind any time before.';
+  }
+  if (!window.confirm(text)) return false;
+  await callFunction('change-plan', { action: 'change', plan, billing });
+  return true;
+}
+
+/** Undoes a scheduled downgrade or cancellation. */
+export async function keepPlan(): Promise<void> {
+  await callFunction('change-plan', { action: 'keep' });
 }

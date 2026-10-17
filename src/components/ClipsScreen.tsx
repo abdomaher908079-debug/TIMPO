@@ -4,7 +4,7 @@ import ClipEditor from './ClipEditor';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { useWakeLock } from '../lib/wakeLock';
-import { ensureFont, listKits, type BrandKit } from '../lib/brandKits';
+import { ensureFont, KIT_LIMITS, listKits, type BrandKit } from '../lib/brandKits';
 import { alignWords, captionLook, cropAt, hasProEdit, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
@@ -93,7 +93,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
   // Exact word times per clip range, so re-exports and the preview reuse them.
   const [timed, setTimed] = useState<Record<string, CaptionGroup[]>>({});
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const { workspace } = useAccount();
+  const { workspace, plan } = useAccount();
+  const kitLimit = KIT_LIMITS[plan.id];
   const { user } = useAuth();
   // Paid plans get the Pro edit; Free sees it on the Pro-only clips.
   const paid = planName !== 'Free';
@@ -113,6 +114,8 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     if (!workspaceId) return;
     let live = true;
     listKits(workspaceId)
+      // Kits beyond the plan's number (kept from a bigger plan) are locked: only the oldest ones are used.
+      .then((all) => all.slice(0, kitLimit))
       .then((list) => {
         if (!live) return;
         setKits(list);
@@ -126,7 +129,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     return () => {
       live = false;
     };
-  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, kitLimit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const url = URL.createObjectURL(file);

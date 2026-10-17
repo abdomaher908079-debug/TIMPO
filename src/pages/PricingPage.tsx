@@ -23,7 +23,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Can I change or cancel my plan?',
-    a: 'Yes, any time in Account → Manage billing. When you cancel, you keep your plan until the end of the period you paid for.',
+    a: 'Yes, any time. Upgrades and switching to yearly happen right away (you pay only the difference); downgrades and switching to monthly happen when your paid period ends. To cancel, open Plan & settings → Invoices & billing; you keep your plan until the end of the period you paid for, and you can undo it until then.',
   },
   {
     q: 'Is there a refund?',

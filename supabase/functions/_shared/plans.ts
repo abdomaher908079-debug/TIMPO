@@ -189,6 +189,9 @@ export interface ProfileRow {
   plan: PlanId;
   // Studio seats beyond the 3 included (missing in demo mode).
   extra_seats?: number;
+  // A downgrade waiting for the end of the paid period (change-plan).
+  pending_plan?: 'pro' | 'studio' | null;
+  pending_billing?: Billing | null;
   billing: Billing | null;
   subscription_status: string | null;
   current_period_start: string | null;
