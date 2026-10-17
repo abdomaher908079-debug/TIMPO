@@ -28,6 +28,11 @@ export function startPackCheckout() {
   window.location.assign('/checkout.html?pack=hours');
 }
 
+/** What changing to `extraSeats` would charge or credit right now (prorated, tax included). */
+export async function previewExtraSeats(extraSeats: number): Promise<{ action: 'charge' | 'credit' | 'none'; amount: number; currency: string }> {
+  return callFunction('team-seats', { extraSeats, preview: true });
+}
+
 /** Sets how many people a Studio owner can add beyond the 3 included; Paddle bills the difference now. */
 export async function setExtraSeats(extraSeats: number): Promise<void> {
   await callFunction<{ extraSeats: number }>('team-seats', { extraSeats });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { setExtraSeats } from '../lib/billing';
+import { previewExtraSeats, setExtraSeats } from '../lib/billing';
 import { invite, joinTeam, listTeam, removeMember, MAX_EXTRA_SEATS, SEAT_PRICE, TEAM_SIZE, type TeamMember } from '../lib/team';
 
 // Studio teams on the Plan & settings page: the owner invites up to 2 people, who share the plan's hours,
@@ -56,12 +56,23 @@ export default function Team() {
   const yearly = profile?.billing === 'yearly';
   const seatPrice = yearly ? `$${SEAT_PRICE.yearly} a year` : `$${SEAT_PRICE.monthly} a month`;
 
-  function changeSeats(n: number) {
-    const adding = n > extraSeats;
+  async function changeSeats(n: number) {
+    setBusy(true);
+    setError(null);
+    let quote;
+    try {
+      quote = await previewExtraSeats(n);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That didn’t work. Please try again.');
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: quote.currency || 'USD' }).format(quote.amount);
     const ok = window.confirm(
-      adding
-        ? `Add a seat for ${seatPrice}? You'll be charged now for the rest of this billing period, then with your plan.`
-        : `Remove a seat? You'll get credit for the rest of this billing period.`,
+      n > extraSeats
+        ? `Add a seat?\n\n${quote.action === 'charge' ? `${money} now, for the rest of this billing period` : 'Nothing to pay now'}, then ${seatPrice} with your plan. Charged to the card on your subscription.`
+        : `Remove a seat?\n\n${quote.action === 'credit' ? `${money} credit for the rest of this billing period, used on your next bills` : 'No credit for this period'}. Your plan then renews without it.`,
     );
     if (ok) void act(() => setExtraSeats(n));
   }

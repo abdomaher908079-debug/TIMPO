@@ -1,4 +1,5 @@
-// Supabase Edge Function: POST { extraSeats } → { extraSeats }. Sets how many people a Studio owner
+// Supabase Edge Function: POST { extraSeats, preview? } → { extraSeats } (or, with preview, what changing
+// now would charge or credit: { action: 'charge' | 'credit' | 'none', amount, currency }, nothing changed). Sets how many people a Studio owner
 // can add beyond the 3 included, as an extra item on their Paddle subscription ($8 a month each, or
 // $80 a year on yearly plans). Paddle charges or credits the difference for the rest of the period
 // right away; paddle-webhook then confirms the new count.
@@ -37,7 +38,8 @@ Deno.serve(async (req) => {
     const { data: auth } = await admin.auth.getUser(token);
     if (!auth.user) return json({ error: 'Please sign in again.' }, 401);
 
-    const body = (await req.json().catch(() => ({}))) as { extraSeats?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { extraSeats?: unknown; preview?: unknown };
+    const preview = body.preview === true;
     const extraSeats = Number(body.extraSeats);
     if (!Number.isInteger(extraSeats) || extraSeats < 0 || extraSeats > MAX_EXTRA_SEATS) {
       return json({ error: `A Studio team can have up to ${MAX_EXTRA_SEATS} extra seats.` }, 400);
@@ -74,10 +76,25 @@ Deno.serve(async (req) => {
       .map((i) => ({ price_id: i.price.id, quantity: i.quantity }));
     if (extraSeats > 0) items.push({ price_id: seat, quantity: extraSeats });
 
-    const res = await paddle(`/subscriptions/${profile.paddle_subscription_id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ items, proration_billing_mode: 'prorated_immediately', on_payment_failure: 'prevent_change' }),
-    });
+    const change = { items, proration_billing_mode: 'prorated_immediately', on_payment_failure: 'prevent_change' };
+    if (preview) {
+      // Paddle works out the exact prorated amount, tax included, without changing anything.
+      const res = await paddle(`/subscriptions/${profile.paddle_subscription_id}/preview`, { method: 'PATCH', body: JSON.stringify(change) });
+      if (!res.ok) {
+        console.error('Paddle seat preview', res.status, await res.text());
+        return json({ error: 'Billing is unavailable right now. Please try again.' }, 502);
+      }
+      const data = (await res.json()) as {
+        data: { currency_code: string; update_summary?: { result?: { action?: string; amount?: string } } | null };
+      };
+      const result = data.data.update_summary?.result;
+      return json({
+        action: result?.action === 'charge' || result?.action === 'credit' ? result.action : 'none',
+        amount: Number(result?.amount ?? 0) / 100,
+        currency: data.data.currency_code,
+      });
+    }
+    const res = await paddle(`/subscriptions/${profile.paddle_subscription_id}`, { method: 'PATCH', body: JSON.stringify(change) });
     if (!res.ok) {
       const detail = await res.text();
       console.error('Paddle seat change', res.status, detail);
