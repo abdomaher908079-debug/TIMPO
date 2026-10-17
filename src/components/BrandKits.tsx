@@ -20,7 +20,7 @@ const STYLE_NAMES = { bold: 'Bold', highlight: 'Highlight', boxed: 'Boxed' } as 
 const CORNERS = { 'top-left': 'Top left', 'top-right': 'Top right', 'bottom-left': 'Bottom left', 'bottom-right': 'Bottom right' } as const;
 
 // Brand kits, on their own page: your show's caption look and logo, used on every clip.
-export default function BrandKits() {
+export default function BrandKits({ onOwnPage = false }: { onOwnPage?: boolean } = {}) {
   const { plan, workspace } = useAccount();
   const [kits, setKits] = useState<BrandKit[] | null>(null);
   const [editing, setEditing] = useState<(NewBrandKit & { id?: string }) | null>(null);
@@ -40,8 +40,8 @@ export default function BrandKits() {
 
   if (plan.id === 'free') {
     return (
-      <section className="card account-card" id="brand-kits" aria-labelledby="kits-title">
-        <h2 id="kits-title" className="account-section-title">Brand kits</h2>
+      <section className="card account-card" id="brand-kits" aria-label="Brand kits">
+        {!onOwnPage && <h2 id="kits-title" className="account-section-title">Brand kits</h2>}
         <p className="muted">
           Captions in your show's font and colors, and your logo instead of our watermark, on every clip. Pro includes 1 brand kit;
           Studio has 5, one per show. <Link to="/pricing">See plans</Link>
@@ -58,7 +58,7 @@ export default function BrandKits() {
   return (
     <section className="card account-card" id="brand-kits" aria-labelledby="kits-title">
       <div className="account-row">
-        <h2 id="kits-title" className="account-section-title">Brand kits</h2>
+        <h2 id="kits-title" className="account-section-title">{onOwnPage ? 'Your kits' : 'Brand kits'}</h2>
         <span className="muted small">
           {kits?.length ?? 0} of {limit}
         </span>

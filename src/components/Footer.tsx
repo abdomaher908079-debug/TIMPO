@@ -1,16 +1,26 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { BRAND_NAME, LEGAL } from '../lib/brand';
 
+const LINKS: [string, string][] = [
+  ['/pricing', 'Pricing'],
+  ['/privacy', 'Privacy'],
+  ['/terms', 'Terms'],
+  ['/refunds', 'Refunds'],
+];
+
 export default function Footer() {
+  // Links to every page but the one you're on.
+  const here = useLocation().pathname;
   return (
     <footer className="footer">
       <nav aria-label="Site">
-        <Link to="/pricing">Pricing</Link>
-        <Link to="/privacy">Privacy</Link>
-        <Link to="/terms">Terms</Link>
-        <Link to="/refunds">Refunds</Link>
+        {LINKS.filter(([to]) => to !== here).map(([to, label]) => (
+          <Link key={to} to={to}>
+            {label}
+          </Link>
+        ))}
         <a href={`mailto:${LEGAL.email}`}>Contact</a>
-        <Link to="/diagnose">Check my browser</Link>
+        {here !== '/diagnose' && <Link to="/diagnose">Check my browser</Link>}
       </nav>
       <p>
         © {new Date().getFullYear()} {BRAND_NAME}

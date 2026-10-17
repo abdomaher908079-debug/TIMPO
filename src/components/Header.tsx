@@ -5,12 +5,22 @@ import { useAuth } from '../lib/auth';
 import { BRAND, BRAND_NAME } from '../lib/brand';
 import LogoMark from './LogoMark';
 
+// The account menu's pages.
+const MENU: [string, string][] = [
+  ['/', 'Home'],
+  ['/library', 'Library'],
+  ['/brand-kits', 'Brand kits'],
+  ['/account', 'Plan & settings'],
+  ['/pricing', 'Pricing'],
+];
+
 export default function Header() {
   const { user, signOut } = useAuth();
   const { plan, loading } = useAccount();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const here = location.pathname;
 
   // Close the account menu on navigation and on clicks outside it.
   useEffect(() => setMenuOpen(false), [location.pathname]);
@@ -42,9 +52,16 @@ export default function Header() {
         {user && !loading && plan.id !== 'free' && <span className="plan-badge">{plan.name}</span>}
       </Link>
       <nav className="nav">
-        <Link to="/pricing" className="nav-link">
-          Pricing
-        </Link>
+        {/* Never a link to the page you're on: Pricing from home, Home from everywhere else. */}
+        {here === '/' ? (
+          <Link to="/pricing" className="nav-link">
+            Pricing
+          </Link>
+        ) : (
+          <Link to="/" className="nav-link">
+            Home
+          </Link>
+        )}
         {user ? (
           <div className="account" ref={menuRef}>
             <button className="avatar" aria-label="Account menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
@@ -53,15 +70,17 @@ export default function Header() {
             {menuOpen && (
               <div className="menu" role="menu">
                 <p className="menu-email">{user.email}</p>
-                <Link role="menuitem" to="/library">
-                  Library
-                </Link>
-                <Link role="menuitem" to="/brand-kits">
-                  Brand kits
-                </Link>
-                <Link role="menuitem" to="/account">
-                  Plan & settings
-                </Link>
+                {MENU.map(([to, label]) =>
+                  here === to ? (
+                    <span key={to} role="menuitem" aria-current="page" className="menu-current">
+                      {label}
+                    </span>
+                  ) : (
+                    <Link key={to} role="menuitem" to={to}>
+                      {label}
+                    </Link>
+                  ),
+                )}
                 <button role="menuitem" onClick={() => void signOut()}>
                   Log out
                 </button>
@@ -69,9 +88,12 @@ export default function Header() {
             )}
           </div>
         ) : (
-          <Link to="/login" className="nav-link">
-            Log in
-          </Link>
+          here !== '/login' &&
+          here !== '/signup' && (
+            <Link to="/login" className="nav-link">
+              Log in
+            </Link>
+          )
         )}
       </nav>
     </header>
