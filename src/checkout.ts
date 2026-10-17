@@ -43,6 +43,12 @@ async function main() {
   }
   const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle<ProfileRow>();
   if (error) return fail('We couldn’t check your account. Please try again.');
+  // A Studio team member uses the team's plan: their own purchase would do nothing while they're in it.
+  const { data: ws } = await supabase.rpc('my_workspace').maybeSingle<{ is_team_member: boolean }>();
+  if (ws?.is_team_member) {
+    status.innerHTML = 'You\u2019re on a Studio team, so you use your team\u2019s plan. Only the team owner can change it. To buy your own plan, leave the team first in <a href="/account">Plan &amp; settings</a>.';
+    return;
+  }
   if (pack && effectivePlan(profile) === 'free') {
     status.innerHTML = 'Extra hours are for Pro and Studio. <a href="/pricing">See plans</a>';
     return;

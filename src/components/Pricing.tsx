@@ -82,6 +82,14 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   const currentBilling = account.profile?.billing ?? 'monthly';
   const billing = yearly ? 'yearly' : 'monthly';
   const member = !!account.workspace?.is_team_member;
+  // Team members use the owner's plan: only the owner can change it, and buying their own would do nothing.
+  if (member) {
+    return (
+      <button type="button" className="btn btn-outline" disabled>
+        {current === plan.id ? "Your team's plan" : 'Set by your team owner'}
+      </button>
+    );
+  }
   if (current === plan.id && (plan.id === 'free' || currentBilling === billing || member)) {
     return (
       <button type="button" className="btn btn-outline" disabled>
