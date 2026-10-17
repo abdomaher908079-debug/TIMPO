@@ -48,6 +48,12 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
     yearly plans keep a profit too. Once real `ai_calls` numbers are in, set a ceiling on the AI's output at twice
     the largest real request, so no normal request is ever cut.
 - **Hours:** Pro 20 h, Studio 40 h (10 h a week, shared by a team of 3): enough for 4–5 weekly shows.
+- **Storage (Supabase free plan: 500 MB):** videos and exported clips never leave the user's device; cloud audio
+  is deleted as soon as it's heard. Saved episodes (transcript + edits, ~100 KB per hour of episode) go 1 day
+  after their last change on Free, 30 days on paid plans (and 30 days after a paid plan ends); listening jobs
+  after 8 days; usage records after 3 months; AI cost rows after 90 days, kept as monthly totals in
+  `ai_costs_monthly`; expired hour packs after 90 days. At about 1,000 paid users the 30-day library is about
+  1 GB: move to Supabase Pro (8 GB included, $25 a month) before that.
 - **Hour packs:** +10 h and +20 episodes for $8, one time, Pro and Studio owners, usable for 90 days after the
   month's own hours or episodes run out (`hour_packs`, drawn by `reserve_pick`, given back if the AI fails, emptied
   by a refund). About $0.80 an hour, a little above the plans, so heavy users are nudged to upgrade.
