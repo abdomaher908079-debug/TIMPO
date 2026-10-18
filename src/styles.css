@@ -683,3 +683,22 @@ h1, h2, h3 { text-wrap: balance; }
 /* Pricing: room between the notice and the monthly/yearly switch. */
 .pricing-hero .notice { margin-bottom: 18px; }
 .pricing-note { text-align: center; }
+
+/* Status page */
+.status-page { max-width: 720px; margin: 0 auto; }
+.status-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.status-banner b { font-size: 1.1rem; color: var(--title); }
+.status-banner .muted { flex-basis: 100%; margin-left: 22px; }
+.status-list { list-style: none; padding: 4px 18px; }
+.status-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.status-row:last-child { border-bottom: none; }
+.status-row p { margin: 2px 0 0; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.85rem; font-weight: 600; }
+.status-dot { width: 12px; height: 12px; border-radius: 50%; background: #b9a999; flex: none; }
+.status-ok .status-dot { background: #3f8f14; box-shadow: 0 0 0 4px rgba(63, 143, 20, 0.15); }
+.status-busy .status-dot { background: #e0a21e; box-shadow: 0 0 0 4px rgba(224, 162, 30, 0.18); }
+.status-down .status-dot { background: #d63c3c; box-shadow: 0 0 0 4px rgba(214, 60, 60, 0.15); }
+.status-ok { color: #3f8f14; }
+.status-busy { color: #a8740a; }
+.status-down { color: #c0392b; }
+.status-off { color: var(--muted); }

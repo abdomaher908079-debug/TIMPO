@@ -15,6 +15,7 @@ import Library from './pages/Library';
 import PricingPage from './pages/PricingPage';
 import BrandKitsPage from './pages/BrandKitsPage';
 import ResetPassword from './pages/ResetPassword';
+import StatusPage from './pages/StatusPage';
 
 export default function App() {
   const { demo, user } = useAuth();
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/refunds" element={<Refunds />} />
           <Route path="/diagnose" element={<Diagnose />} />
+          <Route path="/status" element={<StatusPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Footer />

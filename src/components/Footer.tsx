@@ -6,6 +6,7 @@ const LINKS: [string, string][] = [
   ['/privacy', 'Privacy'],
   ['/terms', 'Terms'],
   ['/refunds', 'Refunds'],
+  ['/status', 'Status'],
 ];
 
 export default function Footer() {
