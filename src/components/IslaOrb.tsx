@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ORB } from '../lib/brand';
 
 export type IslaMood = 'idle' | 'listening' | 'found' | 'done';
@@ -13,7 +13,7 @@ const SHAPES = [
 /**
  * Isla, the agent: a living green-to-orange orb with a glass visor and two eye-lights.
  * `mood` changes her eyes, `look` (-1..1 on each axis) where she's looking, and `still` turns off
- * all movement (logos, small icons, and people who prefer less motion get that from the CSS too).
+ * all movement (logos, small icons). People who prefer less motion always get her still.
  */
 export default function IslaOrb({
   size = 120,
@@ -29,6 +29,8 @@ export default function IslaOrb({
   className?: string;
 }) {
   const id = useId().replace(/:/g, '');
+  const calm = usePrefersReducedMotion();
+  if (calm) still = true;
   const eyeColor = mood === 'found' ? ORB.orange : ORB.green;
   const dx = Math.max(-1, Math.min(1, look.x)) * 6;
   const dy = Math.max(-1, Math.min(1, look.y)) * 3;
@@ -44,7 +46,7 @@ export default function IslaOrb({
       <defs>
         <linearGradient id={`b${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor={ORB.green} />
-          <stop offset=".5" stopColor="#e0b51e" />
+          <stop offset=".5" stopColor={ORB.yellow} />
           <stop offset="1" stopColor={ORB.orange} />
         </linearGradient>
         <radialGradient id={`s${id}`} cx="35%" cy="28%" r="80%">
@@ -53,7 +55,7 @@ export default function IslaOrb({
         </radialGradient>
         <linearGradient id={`v${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#1c232b" />
-          <stop offset="1" stopColor="#0b0e12" />
+          <stop offset="1" stopColor={ORB.visor} />
         </linearGradient>
         <filter id={`g${id}`} x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="6" result="b" />
@@ -115,4 +117,18 @@ export default function IslaOrb({
       </g>
     </svg>
   );
+}
+
+/** The system "reduce motion" setting, live. */
+function usePrefersReducedMotion(): boolean {
+  const query = '(prefers-reduced-motion: reduce)';
+  const [reduced, setReduced] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(query).matches === true);
+  useEffect(() => {
+    const m = window.matchMedia?.(query);
+    if (!m) return;
+    const update = () => setReduced(m.matches);
+    m.addEventListener('change', update);
+    return () => m.removeEventListener('change', update);
+  }, []);
+  return reduced;
 }

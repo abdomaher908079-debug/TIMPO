@@ -150,20 +150,19 @@ export function drawWatermark(ctx: Ctx, W: number, H: number) {
   drawOrb(ctx, x0, y0, markH);
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#fff';
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-  ctx.shadowBlur = markH * 0.25;
   ctx.fillText(text, textX, y0 + markH / 2);
   ctx.restore();
 }
 
 /** Isla's orb (as in components/IslaOrb.tsx, without the glow), `size` across, top-left at x, y. */
 function drawOrb(ctx: Ctx, x: number, y: number, size: number) {
+  ctx.save();
   const r = size / 2;
   const cx = x + r;
   const cy = y + r;
   const body = ctx.createLinearGradient(x, y, x + size, y + size);
   body.addColorStop(0, ORB.green);
-  body.addColorStop(0.5, '#e0b51e');
+  body.addColorStop(0.5, ORB.yellow);
   body.addColorStop(1, ORB.orange);
   ctx.fillStyle = body;
   ctx.beginPath();
@@ -176,6 +175,7 @@ function drawOrb(ctx: Ctx, x: number, y: number, size: number) {
   ctx.fillStyle = ORB.green;
   roundRect(ctx, cx - 19 * k, cy - 10 * k, 12 * k, 14 * k, 6 * k);
   roundRect(ctx, cx + 7 * k, cy - 10 * k, 12 * k, 14 * k, 6 * k);
+  ctx.restore();
 }
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {

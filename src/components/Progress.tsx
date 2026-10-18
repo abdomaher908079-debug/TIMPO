@@ -62,26 +62,26 @@ function IslaWatching({ file, mood }: { file: File; mood: IslaMood }) {
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [file]);
-  // Her eyes stay on the video while she drifts around it.
+  // Her eyes stay on the video while she drifts around it. Checked a few times a second (the eyes glide
+  // between checks), so it takes nothing from the listening; not at all when she's kept still.
   useEffect(() => {
-    let frame = 0;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     const track = () => {
       const o = orb.current?.getBoundingClientRect();
       const v = video.current?.getBoundingClientRect();
-      if (o && v) {
-        const dx = v.left + v.width / 2 - (o.left + o.width / 2);
-        const dy = v.top + v.height / 2 - (o.top + o.height / 2);
-        const d = Math.hypot(dx, dy) || 1;
-        setLook((l) => {
-          const next = { x: dx / d, y: dy / d };
-          return Math.abs(next.x - l.x) + Math.abs(next.y - l.y) > 0.05 ? next : l;
-        });
-      }
-      frame = requestAnimationFrame(track);
+      if (!o || !v) return;
+      const dx = v.left + v.width / 2 - (o.left + o.width / 2);
+      const dy = v.top + v.height / 2 - (o.top + o.height / 2);
+      const d = Math.hypot(dx, dy) || 1;
+      setLook((l) => {
+        const next = { x: dx / d, y: dy / d };
+        return Math.abs(next.x - l.x) + Math.abs(next.y - l.y) > 0.1 ? next : l;
+      });
     };
-    frame = requestAnimationFrame(track);
-    return () => cancelAnimationFrame(frame);
-  }, []);
+    track();
+    const timer = setInterval(track, 300);
+    return () => clearInterval(timer);
+  }, [url]);
   return (
     <div className="isla-studio">
       <div className="isla-screen">

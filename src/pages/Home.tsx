@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
 import IslaOrb from '../components/IslaOrb';
@@ -256,12 +256,24 @@ function LivingIsla() {
     const timer = setInterval(() => setLook(glances[++i % glances.length]!), 2200);
     return () => clearInterval(timer);
   }, [following]);
+  const self = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let idle: ReturnType<typeof setTimeout>;
+    let frame = 0;
+    let last: PointerEvent | null = null;
+    // Once per frame at most, measured from where she really is.
+    const apply = () => {
+      frame = 0;
+      const r = self.current?.getBoundingClientRect();
+      if (!r || !last) return;
+      const dx = last.clientX - (r.left + r.width / 2);
+      const dy = last.clientY - (r.top + r.height / 2);
+      const d = Math.max(Math.hypot(dx, dy), 60);
+      setLook({ x: dx / d, y: dy / d });
+    };
     const move = (e: PointerEvent) => {
-      const cx = window.innerWidth / 2;
-      const cy = window.innerHeight * 0.35;
-      setLook({ x: (e.clientX - cx) / cx, y: (e.clientY - cy) / (window.innerHeight / 2) });
+      last = e;
+      if (!frame) frame = requestAnimationFrame(apply);
       setFollowing(true);
       clearTimeout(idle);
       idle = setTimeout(() => setFollowing(false), 3000);
@@ -272,7 +284,12 @@ function LivingIsla() {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerdown', move);
       clearTimeout(idle);
+      cancelAnimationFrame(frame);
     };
   }, []);
-  return <IslaOrb size={150} look={look} />;
+  return (
+    <div ref={self}>
+      <IslaOrb size={150} look={look} />
+    </div>
+  );
 }
