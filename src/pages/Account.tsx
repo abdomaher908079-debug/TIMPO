@@ -11,7 +11,7 @@ import { formatDuration } from '../lib/format';
 const DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'long', day: 'numeric' });
 
 export default function Account() {
-  const { user, demo } = useAuth();
+  const { user, demo, signOut } = useAuth();
   const { plan, profile, workspace, period, usage, cloudUsage, packs, loading, refresh } = useAccount();
   const [params, setParams] = useSearchParams();
   const [billingError, setBillingError] = useState<string | null>(null);
@@ -206,6 +206,12 @@ export default function Account() {
           </Link>
         </p>
       )}
+      {/* Phones have no sidebar, so logging out lives here too. */}
+      <p className="account-logout">
+        <button type="button" className="link-button" onClick={() => void signOut()}>
+          Log out
+        </button>
+      </p>
     </main>
   );
 }

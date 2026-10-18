@@ -8,6 +8,7 @@ import AuthPage from './pages/AuthPage';
 import NewEpisode from './pages/NewEpisode';
 import Account from './pages/Account';
 import Footer from './components/Footer';
+import { Sidebar, TabBar } from './components/AppNav';
 import { Privacy, Refunds, Terms } from './pages/Legal';
 import Diagnose from './pages/Diagnose';
 import Library from './pages/Library';
@@ -16,30 +17,35 @@ import BrandKitsPage from './pages/BrandKitsPage';
 import ResetPassword from './pages/ResetPassword';
 
 export default function App() {
-  const { demo } = useAuth();
+  const { demo, user } = useAuth();
   return (
-    <div className="page">
-      {demo && <div className="demo-banner">Demo mode: logins are fake and only saved in this browser.</div>}
-      <ScrollOnNavigate />
-      <Header />
-      <BackButton />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
-        <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
-        <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
-        <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
-        <Route path="/brand-kits" element={<RequireAuth><BrandKitsPage /></RequireAuth>} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/refunds" element={<Refunds />} />
-        <Route path="/diagnose" element={<Diagnose />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      <Footer />
+    <div className={`page ${user ? 'page-app' : ''}`}>
+      {/* Signed in: a sidebar on computers, tabs at the bottom on phones. */}
+      <Sidebar />
+      <div className="app-content">
+        {demo && <div className="demo-banner">Demo mode: logins are fake and only saved in this browser.</div>}
+        <ScrollOnNavigate />
+        <Header />
+        <BackButton />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
+          <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
+          <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
+          <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+          <Route path="/brand-kits" element={<RequireAuth><BrandKitsPage /></RequireAuth>} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/refunds" element={<Refunds />} />
+          <Route path="/diagnose" element={<Diagnose />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <Footer />
+      </div>
+      <TabBar />
     </div>
   );
 }

@@ -1,44 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { BRAND_NAME } from '../lib/brand';
 import LogoMark from './LogoMark';
 
-// The account menu's pages.
-const MENU: [string, string][] = [
-  ['/', 'Home'],
-  ['/library', 'Library'],
-  ['/brand-kits', 'Brand kits'],
-  ['/account', 'Plan & settings'],
-  ['/pricing', 'Pricing'],
-];
-
 export default function Header() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { plan, loading } = useAccount();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const location = useLocation();
-  const here = location.pathname;
-
-  // Close the account menu on navigation and on clicks outside it.
-  useEffect(() => setMenuOpen(false), [location.pathname]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menuOpen]);
-
-  const initials = (user?.name ?? user?.email ?? '?')
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]!.toUpperCase())
-    .join('');
+  const here = useLocation().pathname;
 
   return (
     <header className="header">
@@ -48,51 +17,26 @@ export default function Header() {
         {/* The plan you work under (yours, or your Studio team's). Nothing on Free. */}
         {user && !loading && plan.id !== 'free' && <span className="plan-badge">{plan.name}</span>}
       </Link>
-      <nav className="nav">
-        {/* Never a link to the page you're on: Pricing from home, Home from everywhere else. */}
-        {here === '/' ? (
-          <Link to="/pricing" className="nav-link">
-            Pricing
-          </Link>
-        ) : (
-          <Link to="/" className="nav-link">
-            Home
-          </Link>
-        )}
-        {user ? (
-          <div className="account" ref={menuRef}>
-            <button className="avatar" aria-label="Account menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
-              {initials}
-            </button>
-            {menuOpen && (
-              <div className="menu" role="menu">
-                <p className="menu-email">{user.email}</p>
-                {MENU.map(([to, label]) =>
-                  here === to ? (
-                    <span key={to} role="menuitem" aria-current="page" className="menu-current">
-                      {label}
-                    </span>
-                  ) : (
-                    <Link key={to} role="menuitem" to={to}>
-                      {label}
-                    </Link>
-                  ),
-                )}
-                <button role="menuitem" onClick={() => void signOut()}>
-                  Log out
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          here !== '/login' &&
-          here !== '/signup' && (
+      {/* Signed in, the sidebar (computers) or the tabs (phones) are the menu: just the logo here. */}
+      {!user && (
+        <nav className="nav">
+          {/* Never a link to the page you're on: Pricing from home, Home from everywhere else. */}
+          {here === '/' ? (
+            <Link to="/pricing" className="nav-link">
+              Pricing
+            </Link>
+          ) : (
+            <Link to="/" className="nav-link">
+              Home
+            </Link>
+          )}
+          {here !== '/login' && here !== '/signup' && (
             <Link to="/login" className="nav-link">
               Log in
             </Link>
-          )
-        )}
-      </nav>
+          )}
+        </nav>
+      )}
     </header>
   );
 }
