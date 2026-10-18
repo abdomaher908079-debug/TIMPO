@@ -5,7 +5,7 @@ import { BRAND_NAME } from '../lib/brand';
 export default function Watermark() {
   return (
     <span className="watermark" aria-label={`Watermark: Made with ${BRAND_NAME}`}>
-      <LogoMark size={14} white />
+      <LogoMark size={16} />
       Made with {BRAND_NAME}
     </span>
   );

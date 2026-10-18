@@ -53,12 +53,12 @@ function cloudSteps(phase: 0 | 1 | 2, detail?: string): Step[] {
 }
 
 function problemWith(info: EpisodeInfo): string | null {
-  if (!info.audioCodec) return "This video has no sound. Hookcut needs the episode's audio to find the best moments.";
+  if (!info.audioCodec) return "This video has no sound. Isla needs the episode's audio to find the best moments.";
   if (!info.videoCodec) return 'This file has no video. Choose the video version of your episode.';
   if (!info.canDecodeVideo || !info.canDecodeAudio) {
     return "Your browser can't read this video format. Try exporting the episode as MP4 (H.264), or use the latest Chrome.";
   }
-  if (info.durationSeconds < MIN_SECONDS) return 'This video is shorter than a minute. Hookcut is made for full episodes.';
+  if (info.durationSeconds < MIN_SECONDS) return 'This video is shorter than a minute. Isla is made for full episodes.';
   return null;
 }
 
@@ -564,7 +564,7 @@ export default function NewEpisode() {
       {state.kind === 'processing' && (
         <>
           <p className="episode-name processing-name">{state.file.name}</p>
-          <Progress steps={state.steps} percent={state.percent} onCancel={cancel} />
+          <Progress steps={state.steps} percent={state.percent} onCancel={cancel} file={state.file} />
         </>
       )}
 

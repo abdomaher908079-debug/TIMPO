@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Meter from '../components/Meter';
-import LogoMark from '../components/LogoMark';
+import IslaOrb from '../components/IslaOrb';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { joinTeam, listTeam, type TeamMember } from '../lib/team';
 
-// What Hookcut does, in the words a podcaster would use. Every item here is in the product.
+// What Isla does, in the words a podcaster would use. Every item here is in the product.
 const FEATURES: { title: string; text: string }[] = [
   {
     title: 'Finds the moments people share',
@@ -26,7 +26,7 @@ const FEATURES: { title: string; text: string }[] = [
   },
   {
     title: 'Your video stays yours',
-    text: 'Hookcut works right in your browser. Your video never leaves your computer, so there is no upload wait, even for 4 GB files.',
+    text: 'Isla works right in your browser. Your video never leaves your computer, so there is no upload wait, even for 4 GB files.',
   },
   {
     title: 'Works on your phone',
@@ -68,7 +68,7 @@ export default function Home() {
           Turn your 2-hour episode into <span>10 ready-to-post clips.</span>
         </h1>
         <p className="hero-sub">
-          Hookcut listens to your whole episode, finds the moments people will share, and cuts vertical clips with
+          Isla listens to your whole episode, finds the moments people will share, and cuts vertical clips with
           captions for TikTok, Reels and Shorts.
         </p>
         <Link to={startLink} className="btn btn-primary">
@@ -201,7 +201,7 @@ function Welcome({ name }: { name?: string | null }) {
   return (
     <main className="welcome">
       <div className="welcome-logo">
-        <LogoMark size={112} />
+        <LivingIsla />
       </div>
       <p className="welcome-greeting">
         {greeting}
@@ -237,4 +237,42 @@ function Welcome({ name }: { name?: string | null }) {
       )}
     </main>
   );
+}
+
+/** Isla on the welcome screen: she glances around on her own and looks toward your finger or mouse. */
+function LivingIsla() {
+  const [look, setLook] = useState({ x: 0, y: 0 });
+  const [following, setFollowing] = useState(false);
+  useEffect(() => {
+    if (following) return;
+    const glances = [
+      { x: 0, y: 0 },
+      { x: -0.8, y: -0.2 },
+      { x: 0, y: 0 },
+      { x: 0.8, y: 0.3 },
+      { x: 0.2, y: 0.8 },
+    ];
+    let i = 0;
+    const timer = setInterval(() => setLook(glances[++i % glances.length]!), 2200);
+    return () => clearInterval(timer);
+  }, [following]);
+  useEffect(() => {
+    let idle: ReturnType<typeof setTimeout>;
+    const move = (e: PointerEvent) => {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight * 0.35;
+      setLook({ x: (e.clientX - cx) / cx, y: (e.clientY - cy) / (window.innerHeight / 2) });
+      setFollowing(true);
+      clearTimeout(idle);
+      idle = setTimeout(() => setFollowing(false), 3000);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerdown', move);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerdown', move);
+      clearTimeout(idle);
+    };
+  }, []);
+  return <IslaOrb size={150} look={look} />;
 }

@@ -138,7 +138,7 @@ export default function Team() {
                         type="button"
                         className="link-button"
                         onClick={() => {
-                          const text = `I've added you to my Hookcut Studio team. Open ${location.origin}/signup?email=${encodeURIComponent(r.email)} and sign up (or log in) with ${r.email}. You'll see the invite right away: tap Join team.`;
+                          const text = `I've added you to my Isla Studio team. Open ${location.origin}/signup?email=${encodeURIComponent(r.email)} and sign up (or log in) with ${r.email}. You'll see the invite right away: tap Join team.`;
                           void navigator.clipboard?.writeText(text).then(() => setCopied(r.id));
                         }}
                       >

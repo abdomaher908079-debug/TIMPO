@@ -31,7 +31,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Is my video uploaded?',
-    a: 'No. Your video stays on your computer; Hookcut listens and makes the clips right in your browser. Only the transcript text goes to our AI. On phones, only the audio is sent, a few minutes at a time, and deleted right after.',
+    a: 'No. Your video stays on your computer; Isla listens and makes the clips right in your browser. Only the transcript text goes to our AI. On phones, only the audio is sent, a few minutes at a time, and deleted right after.',
   },
   {
     q: 'What about tax?',

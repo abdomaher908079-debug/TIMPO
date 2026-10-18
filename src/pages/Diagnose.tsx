@@ -176,7 +176,7 @@ export default function Diagnose() {
   }, [loading, !!user]);
 
   const report = [
-    `Hookcut check · ${new Date().toISOString()}`,
+    `Isla check · ${new Date().toISOString()}`,
     `Signed in: ${user ? 'yes' : 'no'}`,
     ...list.map((c, i) => {
       const r = results[i];
@@ -198,7 +198,7 @@ export default function Diagnose() {
     <main className="legal">
       <h1 className="page-title">Check my browser</h1>
       <p className="muted">
-        This checks everything Hookcut needs on this device. If something doesn’t work, copy the report and send it to us.
+        This checks everything Isla needs on this device. If something doesn’t work, copy the report and send it to us.
       </p>
       <ul className="diagnose">
         {list.map((c, i) => {

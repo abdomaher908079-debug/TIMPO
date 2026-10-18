@@ -24,7 +24,7 @@ export const PLANS: Plan[] = [
       'See all 10 best clips, export 3',
       'Full editor, 1080p export, auto framing',
       'Cloud listening for phones and slow devices: 1 a week',
-      'Small "Made with Hookcut" watermark',
+      'Small "Made with Isla" watermark',
     ],
   },
   {

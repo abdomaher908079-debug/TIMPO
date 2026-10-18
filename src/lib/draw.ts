@@ -1,4 +1,4 @@
-import { BRAND_NAME, LOGO_BARS, LOGO_ORANGE, LOGO_PEAK } from './brand';
+import { BRAND_NAME, ORB } from './brand';
 import type { BrandKit } from './brandKits';
 import type { Caption, CaptionLook } from './clips';
 
@@ -128,17 +128,15 @@ export function drawHeadline(ctx: Ctx, text: string, look: Pick<CaptionLook, 'fo
 }
 
 /**
- * The Free plan's watermark: the logo mark and "Made with Hookcut", top-left, where TikTok, Reels
+ * The Free plan's watermark: the logo mark and "Made with Isla", top-left, where TikTok, Reels
  * and Shorts put none of their buttons or text, and clear of the captions in the lower third.
  */
 export function drawWatermark(ctx: Ctx, W: number, H: number) {
   const markH = Math.round(W * 0.042);
-  const bar = markH / 8;
-  const gap = (markH * 23) / 24 / 5 - bar;
   const x0 = Math.round(W * 0.055);
   const y0 = Math.round(H * 0.075);
   const text = `Made with ${BRAND_NAME}`;
-  const textX = x0 + 5 * (bar + gap) + markH * 0.3;
+  const textX = x0 + markH * 1.3;
   ctx.save();
   ctx.font = `600 ${Math.round(markH * 0.72)}px ${CAPTION_FONT}`;
   // A faint dark pill keeps it readable on bright footage.
@@ -149,15 +147,35 @@ export function drawWatermark(ctx: Ctx, W: number, H: number) {
   ctx.globalAlpha = 0.9;
   ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
   ctx.shadowBlur = markH * 0.25;
-  LOGO_BARS.forEach((h, i) => {
-    ctx.fillStyle = i === LOGO_PEAK ? LOGO_ORANGE : '#fff';
-    const bh = h * markH;
-    roundRect(ctx, x0 + i * (bar + gap), y0 + markH - bh, bar, bh, bar / 2);
-  });
+  drawOrb(ctx, x0, y0, markH);
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#fff';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+  ctx.shadowBlur = markH * 0.25;
   ctx.fillText(text, textX, y0 + markH / 2);
   ctx.restore();
+}
+
+/** Isla's orb (as in components/IslaOrb.tsx, without the glow), `size` across, top-left at x, y. */
+function drawOrb(ctx: Ctx, x: number, y: number, size: number) {
+  const r = size / 2;
+  const cx = x + r;
+  const cy = y + r;
+  const body = ctx.createLinearGradient(x, y, x + size, y + size);
+  body.addColorStop(0, ORB.green);
+  body.addColorStop(0.5, '#e0b51e');
+  body.addColorStop(1, ORB.orange);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  const k = size / 116;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = ORB.visor;
+  roundRect(ctx, cx - 38 * k, cy - 18 * k, 76 * k, 30 * k, 15 * k);
+  ctx.fillStyle = ORB.green;
+  roundRect(ctx, cx - 19 * k, cy - 10 * k, 12 * k, 14 * k, 6 * k);
+  roundRect(ctx, cx + 7 * k, cy - 10 * k, 12 * k, 14 * k, 6 * k);
 }
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
