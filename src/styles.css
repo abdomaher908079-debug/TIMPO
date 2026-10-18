@@ -94,6 +94,7 @@ a { color: var(--orange); }
 .btn-light { background: var(--white); color: #111; font-weight: 600; }
 .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 600; }
 .link-button { background: none; border: none; color: var(--orange); font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0; }
+.forgot-link { display: block; margin: -2px 0 14px auto; }
 .divider { text-align: center; color: var(--muted); font-size: 0.8rem; margin: 16px 0 0; }
 
 /* Forms */

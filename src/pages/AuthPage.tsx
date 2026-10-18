@@ -6,7 +6,7 @@ const MIN_PASSWORD = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
-  const { googleEnabled, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { googleEnabled, signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset } = useAuth();
   const navigate = useNavigate();
   // Invite links bring the invited email (?email=…).
   const [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get('email') ?? '');
@@ -14,6 +14,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const isSignup = mode === 'signup';
 
   async function run(action: () => Promise<void>) {
@@ -32,6 +34,13 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     e.preventDefault();
     if (!EMAIL.test(email.trim())) {
       setError('Enter a valid email address.');
+      return;
+    }
+    if (forgot) {
+      void run(async () => {
+        await sendPasswordReset(email.trim());
+        setResetSent(true);
+      });
       return;
     }
     if (!password) {
@@ -63,6 +72,47 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
         <p className="muted">
           We sent a confirmation link to <strong>{email}</strong>. Click it to finish creating your account.
         </p>
+      </main>
+    );
+  }
+
+  if (resetSent) {
+    return (
+      <main className="auth">
+        <h1 className="page-title">Check your email</h1>
+        <p className="muted">
+          If <strong>{email}</strong> has an account, we've sent it a link to choose a new password. It can take a minute;
+          check your spam folder too.
+        </p>
+        <button type="button" className="link-button" onClick={() => { setResetSent(false); setForgot(false); }}>
+          Back to log in
+        </button>
+      </main>
+    );
+  }
+
+  if (forgot) {
+    return (
+      <main className="auth">
+        <h1 className="page-title">Forgot your password?</h1>
+        <p className="muted">Enter your email and we'll send you a link to choose a new one.</p>
+        <form onSubmit={submit} noValidate>
+          <label className="field-label" htmlFor="email">
+            Email
+          </label>
+          <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? 'Please wait…' : 'Send me a link'}
+          </button>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </form>
+        <button type="button" className="link-button" onClick={() => { setForgot(false); setError(null); }}>
+          Back to log in
+        </button>
       </main>
     );
   }
@@ -106,6 +156,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        {!isSignup && (
+          <button type="button" className="link-button forgot-link" onClick={() => { setForgot(true); setError(null); }}>
+            Forgot password?
+          </button>
+        )}
         <button className="btn btn-primary" type="submit" disabled={busy}>
           {busy ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}
         </button>

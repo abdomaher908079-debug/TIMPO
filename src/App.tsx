@@ -13,6 +13,7 @@ import Diagnose from './pages/Diagnose';
 import Library from './pages/Library';
 import PricingPage from './pages/PricingPage';
 import BrandKitsPage from './pages/BrandKitsPage';
+import ResetPassword from './pages/ResetPassword';
 
 export default function App() {
   const { demo } = useAuth();
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
         <Route path="/signup" element={<GuestOnly><AuthPage key="signup" mode="signup" /></GuestOnly>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/new" element={<RequireAuth><NewEpisode /></RequireAuth>} />
         <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
