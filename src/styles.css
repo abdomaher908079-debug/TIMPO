@@ -148,6 +148,7 @@ h1, h2, h3 { text-wrap: balance; }
 .clip-meta { padding: 9px 11px 11px; }
 .clip-meta b { display: block; font-size: 0.85rem; color: var(--title); line-height: 1.3; }
 .clip-meta span { font-size: 0.75rem; color: var(--muted); }
+.clip-meta .clip-reason { color: var(--text); margin: 3px 0 2px; line-height: 1.35; }
 .demo-note { margin: 12px 0 0; }
 
 .steps-list { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }

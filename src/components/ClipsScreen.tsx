@@ -466,6 +466,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
                 </span>
                 <span className="clip-meta">
                   <b>{c.title}</b>
+                  {c.reason && <span className="clip-reason">{c.reason}</span>}
                   <span>
                     {clock(c.start)}–{clock(c.end)}
                   </span>
