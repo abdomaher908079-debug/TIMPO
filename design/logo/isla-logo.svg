@@ -1,7 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="1024" height="1024"><defs>
 <linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9dff3c"/><stop offset=".5" stop-color="#e0b51e"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
 <radialGradient id="s" cx="35%" cy="28%" r="80%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></radialGradient>
+<filter id="gl" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs><rect width="160" height="160" fill="#14100c"/>
-<circle cx="80" cy="80" r="54" fill="url(#b)"/><circle cx="80" cy="80" r="54" fill="url(#s)"/>
-<ellipse cx="58" cy="46" rx="11" ry="4.5" fill="#fff" opacity=".25" transform="rotate(-25 58 46)"/>
-<g fill="#14100c"><rect x="49" y="70" width="6" height="20" rx="3"/><rect x="61" y="60" width="6" height="40" rx="3"/><rect x="73" y="66" width="6" height="28" rx="3"/><rect x="85" y="52" width="6" height="56" rx="3"/><rect x="97" y="63" width="6" height="34" rx="3"/><rect x="109" y="71" width="6" height="18" rx="3"/></g></svg>
+<g transform="translate(80 26) scale(0.52) translate(-80 -50)">
+<circle cx="80" cy="50" r="30" fill="url(#b)"/><circle cx="80" cy="50" r="30" fill="url(#s)"/>
+<ellipse cx="67" cy="32" rx="6" ry="2.6" fill="#fff" opacity=".25" transform="rotate(-25 67 32)"/>
+<rect x="70" y="32" width="20" height="36" rx="5" fill="#14100c"/>
+<path d="M76.5 44.3 Q76.5 42.8 77.8 43.6 L85.2 48.6 Q86.4 49.4 85.2 50.2 L77.8 55.2 Q76.5 56 76.5 54.5 Z" fill="#9dff3c" filter="url(#gl)"/></g>
+<rect x="64" y="50" width="32" height="100" rx="16" fill="#fbf2e9"/></svg>
