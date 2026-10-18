@@ -8,5 +8,5 @@ export const LEGAL = {
   // The person or company that runs Isla.
   owner: (import.meta.env.VITE_LEGAL_NAME as string | undefined) || BRAND_NAME,
   email: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'support@islaclips.com',
-  updated: 'October 15, 2026',
+  updated: 'October 18, 2026',
 };

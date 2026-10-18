@@ -368,6 +368,8 @@ h1, h2, h3 { text-wrap: balance; }
 .legal { max-width: 680px; margin: 0 auto; line-height: 1.6; }
 .legal h2 { color: var(--title); font-size: 1.1rem; margin: 28px 0 6px; }
 .legal p { margin: 0 0 10px; }
+.legal ul { margin: 0 0 10px; padding-left: 20px; }
+.legal li { margin: 0 0 4px; }
 .footer { margin: 56px 0 24px; padding-top: 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 0.85rem; }
 .footer nav { display: flex; gap: 16px; flex-wrap: wrap; }
 .footer a { color: var(--muted); text-decoration: none; }

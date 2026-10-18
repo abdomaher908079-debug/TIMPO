@@ -604,7 +604,7 @@ export default function NewEpisode() {
             <>
               <p className="notice">
                 This device would take a long time to listen to a full episode, so we'll listen in the cloud: only the audio
-                (never the video) is sent to Google's Gemini AI to write down what's said, and we delete it right after. Once
+                (never the video) is sent to our AI to write down what's said, and we delete it right after. Once
                 the audio is sent you can leave this page; your clips will be waiting here.
               </p>
               <button
@@ -652,8 +652,8 @@ export default function NewEpisode() {
 
       <p className="muted small">
         {cloudAvailable && slowDevice
-          ? "Your video stays on your device. The audio and transcript are sent to Google's Gemini AI to listen and find the best moments."
-          : "Your video and audio stay on your computer. Only the written transcript is sent to Google's Gemini AI to find the best moments."}{' '}
+          ? "Your video stays on your device. The audio and transcript are sent to our AI to listen and find the best moments."
+          : "Your video and audio stay on your computer. Only the written transcript is sent to our AI to find the best moments."}{' '}
         <Link to="/privacy">How we handle your data</Link>
       </p>
     </main>
