@@ -14,6 +14,7 @@ export default function ResetPassword() {
   const [tokenHash] = useState(() => new URLSearchParams(window.location.search).get('token_hash'));
   const [failed, setFailed] = useState(false);
   const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,7 +70,14 @@ export default function ResetPassword() {
       await setNewPassword(password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      const code = (err as { code?: string }).code;
+      setError(
+        code === 'same_password'
+          ? "That's your current password. If your browser filled it in, clear the box and type a new one."
+          : err instanceof Error
+            ? err.message
+            : 'Something went wrong. Please try again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -85,11 +93,14 @@ export default function ResetPassword() {
         </label>
         <input
           id="password"
-          type="password"
+          type={show ? 'text' : 'password'}
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        <label className="show-password">
+          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} /> Show password
+        </label>
         <button className="btn btn-primary" type="submit" disabled={busy}>
           {busy ? 'Please wait…' : 'Save password'}
         </button>
