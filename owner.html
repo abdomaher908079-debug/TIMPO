@@ -30,6 +30,25 @@
       .row:last-child { border-bottom: none; }
       .row b { color: var(--title); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
       .email { word-break: break-all; }
+      .tabs, .chips, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .tabs { margin: 18px 0 8px; }
+      .tabs button.on, .chips button.on { border-color: var(--orange); color: var(--title); background: #fff; }
+      .chips { margin: 10px 0; }
+      .chips button, .actions button, .small-btn { padding: 7px 12px; font-size: 0.85rem; }
+      .chips label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; margin-right: 10px; }
+      .chips input[type='radio'] { width: auto; }
+      input[type='search'] { margin-top: 8px; }
+      .account { margin-bottom: 12px; }
+      .account-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+      .account-plan { margin: 6px 0 2px; font-weight: 600; color: var(--title); }
+      .account .muted { margin: 0 0 10px; }
+      .small { font-size: 0.85rem; }
+      .badge { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: #eadccd; color: var(--title); }
+      .badge-red { background: #f6d5d2; color: #c0392b; }
+      .actions .danger { color: #c0392b; border-color: #f0c4bf; }
+      form.give { margin-top: 12px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px; }
+      form.give input[type='date'] { width: auto; margin-left: 6px; }
+      .error.ok { color: var(--green); }
     </style>
   </head>
   <body>
