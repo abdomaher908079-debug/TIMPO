@@ -40,6 +40,8 @@ function restored(project: Project, file: File): State {
   return clips.length ? { kind: 'done', file, info, segments, clips } : { kind: 'moments-failed', file, info, segments, message: 'Finding the best moments stopped.', limit: false };
 }
 
+const LANGUAGE_KEY = 'isla_episode_language';
+
 // Under the cloud listening buttons: why phones have limits and computers don't.
 const CLOUD_LIMITS_NOTE =
   'Phones listen in the cloud, using shared AI tools with daily limits, so on busy days an episode may wait in line. On a computer, Isla listens on your own device: no daily limits, and your audio stays with you.';
@@ -187,6 +189,27 @@ export default function NewEpisode() {
   useEffect(() => {
     if (cloudAvailable) void deviceLooksSlow().then(setSlowDevice);
   }, []);
+  // The language spoken: listening on this device only understands English, so other languages
+  // (Arabic, …) are listened to in the cloud. Arabic browsers start on "another language".
+  const [english, setEnglishState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LANGUAGE_KEY);
+      if (saved) return saved === 'en';
+    } catch {
+      // Blocked storage: fall back to the browser's language.
+    }
+    return !/^ar\b/i.test(navigator.language);
+  });
+  const setEnglish = (value: boolean) => {
+    setEnglishState(value);
+    try {
+      localStorage.setItem(LANGUAGE_KEY, value ? 'en' : 'other');
+    } catch {
+      // Not remembered; it still applies now.
+    }
+  };
+  // Cloud listening by default: slow devices, and every language but English.
+  const cloudFirst = cloudAvailable && (slowDevice || !english);
   const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -627,12 +650,23 @@ export default function NewEpisode() {
           </dl>
           {limitProblem && <UpgradeNotice message={limitProblem.message} planName={plan.name} />}
           {!limitProblem && ready.notice && <UpgradeNotice message={ready.notice} planName={plan.name} />}
-          {cloudAvailable && slowDevice ? (
+          <div className="lang-choice" role="group" aria-label="Language spoken in the episode">
+            <span>Language spoken</span>
+            <button type="button" className={english ? 'on' : ''} aria-pressed={english} onClick={() => setEnglish(true)}>
+              English
+            </button>
+            <button type="button" className={!english ? 'on' : ''} aria-pressed={!english} onClick={() => setEnglish(false)}>
+              Arabic or another language
+            </button>
+          </div>
+          {cloudFirst ? (
             <>
               <p className="notice">
-                This device would take a long time to listen to a full episode, so we'll listen in the cloud: only the audio
-                (never the video) is sent to our AI to write down what's said, and we delete it right after. Once
-                the audio is sent you can leave this page; your clips will be waiting here.
+                {slowDevice
+                  ? "This device would take a long time to listen to a full episode, so we'll listen in the cloud"
+                  : 'Listening on this computer only understands English, so for this language we listen in the cloud'}
+                : only the audio (never the video) is sent to our AI to write down what's said, and we delete it right after.
+                Once the audio is sent you can leave this page; your clips will be waiting here.
               </p>
               <button
                 type="button"
@@ -642,14 +676,16 @@ export default function NewEpisode() {
               >
                 Find my best clips in the cloud
               </button>
-              <button
-                type="button"
-                className="link-button cloud-alt"
-                disabled={!!limitProblem || accountLoading}
-                onClick={() => void findClips(ready.file, ready.info)}
-              >
-                Use this device instead
-              </button>
+              {english && (
+                <button
+                  type="button"
+                  className="link-button cloud-alt"
+                  disabled={!!limitProblem || accountLoading}
+                  onClick={() => void findClips(ready.file, ready.info)}
+                >
+                  Use this device instead
+                </button>
+              )}
               <p className="muted small cloud-limits">{CLOUD_LIMITS_NOTE}</p>
             </>
           ) : (
@@ -680,7 +716,7 @@ export default function NewEpisode() {
       )}
 
       <p className="muted small">
-        {cloudAvailable && slowDevice
+        {cloudFirst
           ? "Your video stays on your device. The audio and transcript are sent to our AI to listen and find the best moments."
           : "Your video and audio stay on your computer. Only the written transcript is sent to our AI to find the best moments."}{' '}
         <Link to="/privacy">How we handle your data</Link>
