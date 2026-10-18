@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { BRAND, BRAND_NAME } from '../lib/brand';
+import { BRAND_NAME } from '../lib/brand';
 import LogoMark from './LogoMark';
 
 // The account menu's pages.
@@ -43,11 +43,8 @@ export default function Header() {
   return (
     <header className="header">
       <Link to="/" className="logo" aria-label={`${BRAND_NAME} home`}>
-        <LogoMark />
-        <span>
-          {BRAND.first}
-          <b>{BRAND.second}</b>
-        </span>
+        <LogoMark size={34} />
+        <span className="logo-word">{BRAND_NAME.toLowerCase()}</span>
         {/* The plan you work under (yours, or your Studio team's). Nothing on Free. */}
         {user && !loading && plan.id !== 'free' && <span className="plan-badge">{plan.name}</span>}
       </Link>
