@@ -35,6 +35,8 @@ export interface CloudJob {
   moments: Moment[] | null;
   error: string | null;
   updated_at: string;
+  // Set while the AI's daily limit is used up: the job is in line and finishes on its own later.
+  waiting_until: string | null;
 }
 
 /**
@@ -87,7 +89,7 @@ export async function getJob(id: string): Promise<CloudJob | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('listen_jobs')
-    .select('id, status, pieces, pieces_done, segments, moments, error, updated_at')
+    .select('id, status, pieces, pieces_done, segments, moments, error, updated_at, waiting_until')
     .eq('id', id)
     .maybeSingle<CloudJob>();
   if (error) throw error;
@@ -111,11 +113,12 @@ export async function followJob(id: string, { signal, onUpdate }: { signal: Abor
     onUpdate(job);
     if (job.status === 'done' || job.status === 'error') return job;
     const quiet = Date.now() - new Date(job.updated_at).getTime();
-    if (job.status !== 'uploading' && quiet > 60_000 && Date.now() - lastKick > 60_000) {
+    if (job.status !== 'uploading' && !job.waiting_until && quiet > 60_000 && Date.now() - lastKick > 60_000) {
       lastKick = Date.now();
       void call({ action: 'kick', job: id }).catch(() => {});
     }
-    await new Promise((r) => setTimeout(r, 3000));
+    // In line for hours: no need to check every few seconds.
+    await new Promise((r) => setTimeout(r, job.waiting_until ? 60_000 : 3000));
   }
 }
 

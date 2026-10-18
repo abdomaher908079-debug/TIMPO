@@ -44,6 +44,20 @@ interface Job {
   seconds: number;
   pieces: number;
   status: string;
+  // Set while the free AI's daily limit is used up: the job waits in line and resumes on its own.
+  waiting_until: string | null;
+}
+
+// How long a job waits before trying again once the AI's daily limit is reached (the cron resumes it).
+const WAIT_MS = 60 * 60_000;
+
+/** Puts a job in line until the AI's daily limit resets; the resume cron picks it up again. */
+async function waitInLine(job: Job) {
+  const now = Date.now();
+  await admin
+    .from('listen_jobs')
+    .update({ waiting_until: new Date(now + WAIT_MS).toISOString(), updated_at: new Date(now).toISOString() })
+    .eq('id', job.id);
 }
 
 /** How an episode is cut into pieces: about 5 minutes each, a short last piece joins the one before. */
@@ -153,6 +167,8 @@ async function work(jobId: string) {
   const started = Date.now();
   const { data: job } = await admin.from('listen_jobs').select('*').eq('id', jobId).maybeSingle<Job & { updated_at: string }>();
   if (!job) return;
+  // In line for the AI's daily limit: the resume cron starts it again.
+  if (job.waiting_until && new Date(job.waiting_until).getTime() > Date.now()) return;
   // Picking the moments stopped without finishing (the step ran out of time): take it over again.
   if (job.status === 'finishing') {
     const cutoff = new Date(Date.now() - FINISH_STALE_MS).toISOString();
@@ -230,9 +246,19 @@ async function work(jobId: string) {
         } catch (err) {
           console.error(`job ${job.id} piece ${piece.idx}:`, err);
           await releaseCloud(admin, { ...charge, seconds });
-          if (err instanceof AudioTooLong || err instanceof DailyLimit) {
+          if (err instanceof AudioTooLong) {
             stopped = true;
             await fail(job, err.message);
+          } else if (err instanceof DailyLimit) {
+            // The free AI is used up for today: wait in line instead of failing (this piece wasn't charged).
+            stopped = true;
+            await admin
+              .from('listen_pieces')
+              .update({ status: 'pending', attempts: piece.attempts - 1 })
+              .eq('job_id', job.id)
+              .eq('idx', piece.idx)
+              .eq('claimed_at', piece.claimed_at);
+            await waitInLine(job);
           } else if (err instanceof RateLimited) {
             // Not this piece's fault: give the attempt back and try again after a pause.
             throttled = true;
@@ -310,6 +336,8 @@ async function finish(job: Job, plan: PlanId) {
         await logAiCall(admin, { workspaceId, userId: job.user_id, kind: 'pick', usage: result.usage, seconds });
       } catch (err) {
         await releasePick(admin, workspaceId, pick);
+        // The free AI is used up for today: stay "finishing" and wait in line; the resume cron tries again.
+        if (err instanceof DailyLimit) return waitInLine(job);
         throw err;
       }
     } catch (err) {
@@ -324,6 +352,22 @@ async function finish(job: Job, plan: PlanId) {
     .eq('id', job.id);
 }
 
+/** Starts again the jobs whose wait for the AI's daily limit is over (a few at a time). */
+async function resumeWaiting(): Promise<number> {
+  const { data: due } = await admin
+    .from('listen_jobs')
+    .select('id, status')
+    .lte('waiting_until', new Date().toISOString())
+    .in('status', ['listening', 'finishing'])
+    .order('waiting_until')
+    .limit(10);
+  for (const job of due ?? []) {
+    await admin.from('listen_jobs').update({ waiting_until: null, updated_at: new Date().toISOString() }).eq('id', job.id);
+    kickSelf(job.id, job.status === 'finishing' ? 'finish' : 'kick');
+  }
+  return due?.length ?? 0;
+}
+
 async function ownJob(userId: string | null, jobId: unknown): Promise<Job> {
   const { data: job } = await admin.from('listen_jobs').select('*').eq('id', String(jobId ?? '')).maybeSingle<Job>();
   if (!job || (userId && job.user_id !== userId)) throw new MomentsError('This job has expired. Please start again.', 404);
@@ -334,6 +378,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   try {
+    // Every 15 minutes (cron): jobs waiting for the AI's daily limit try again.
+    const cronSecret = Deno.env.get('PLAN_CHANGES_SECRET');
+    if (cronSecret && req.headers.get('x-cron-secret') === cronSecret) return json({ resumed: await resumeWaiting() });
     const token = req.headers.get('Authorization')?.replace(/^Bearer /, '') ?? '';
     // Our own next step, or a signed-in user.
     const internal = token === SERVICE_KEY;

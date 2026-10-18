@@ -40,15 +40,23 @@ function restored(project: Project, file: File): State {
   return clips.length ? { kind: 'done', file, info, segments, clips } : { kind: 'moments-failed', file, info, segments, message: 'Finding the best moments stopped.', limit: false };
 }
 
+// Under the cloud listening buttons: why phones have limits and computers don't.
+const CLOUD_LIMITS_NOTE =
+  'Phones listen in the cloud, using shared AI tools with daily limits, so on busy days an episode may wait in line. On a computer, Isla listens on your own device: no daily limits, and your audio stays with you.';
+
+// Shown while the free AI's daily limit is used up and the episode waits in line.
+const IN_LINE =
+  'Isla is very busy today, so your episode is in line. It will finish on its own, usually within a few hours. You can close this page: your clips will be waiting here.';
+
 function cloudSteps(phase: 0 | 1 | 2, detail?: string): Step[] {
   return [
     { label: 'Sending the audio', state: phase > 0 ? 'done' : 'active', detail: phase === 0 ? detail : undefined },
     {
       label: 'Listening to every word, in the cloud',
       state: phase > 1 ? 'done' : phase === 1 ? 'active' : 'waiting',
-      detail: phase === 1 ? `${detail} · you can leave this page, we'll keep going` : undefined,
+      detail: phase === 1 ? (detail === IN_LINE ? detail : `${detail} · you can leave this page, we'll keep going`) : undefined,
     },
-    { label: 'Finding the best moments', state: phase === 2 ? 'active' : 'waiting' },
+    { label: 'Finding the best moments', state: phase === 2 ? 'active' : 'waiting', detail: phase === 2 ? detail : undefined },
   ];
 }
 
@@ -325,7 +333,8 @@ export default function NewEpisode() {
       job = await followJob(jobId, {
         signal: abort.signal,
         onUpdate: (j) => {
-          if (j.status === 'finishing') return update(abort, cloudSteps(2), 95);
+          if (j.status === 'finishing') return update(abort, cloudSteps(2, j.waiting_until ? IN_LINE : undefined), 95);
+          if (j.waiting_until) return update(abort, cloudSteps(1, IN_LINE), 20 + (j.pieces ? j.pieces_done / j.pieces : 0) * 72);
           const p = j.pieces ? j.pieces_done / j.pieces : 0;
           update(abort, cloudSteps(1, `${formatDuration(p * info.durationSeconds)} of ${formatDuration(info.durationSeconds)}`), 20 + p * 72);
         },
@@ -623,6 +632,7 @@ export default function NewEpisode() {
               >
                 Use this device instead
               </button>
+              <p className="muted small cloud-limits">{CLOUD_LIMITS_NOTE}</p>
             </>
           ) : (
             <>
@@ -644,6 +654,7 @@ export default function NewEpisode() {
                   Slow computer? Listen in the cloud (sends the audio only)
                 </button>
               )}
+              {cloudAvailable && <p className="muted small cloud-limits">{CLOUD_LIMITS_NOTE}</p>}
             </>
           )}
           {plan.quality === 'quick' && <QuickAiNote />}

@@ -380,6 +380,7 @@ h1, h2, h3 { text-wrap: balance; }
 .footer a:hover { color: var(--text); }
 .footer p { margin: 0; }
 .cloud-alt { display: block; margin: 12px auto 0; }
+.cloud-limits { max-width: 440px; margin: 10px auto 0; text-align: center; font-size: 0.78rem; line-height: 1.45; }
 
 /* Brand kit logo in the preview, placed like drawLogo() in lib/draw.ts */
 .phone-logo { position: absolute; max-width: 20%; max-height: 8%; pointer-events: none; }
