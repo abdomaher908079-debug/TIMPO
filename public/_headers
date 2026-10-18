@@ -74,3 +74,19 @@
 # Face detection model for auto framing.
 /models/*
   Cache-Control: public, max-age=604800
+
+# The owners' page: nothing but our own code may run on it, it can't be shown inside another site
+# (clickjacking), it's never cached, and it tells nothing to other sites about where people came from.
+/owner
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://medqkcnpxjogeedenkee.supabase.co; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+
+/owner.html
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://medqkcnpxjogeedenkee.supabase.co; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow

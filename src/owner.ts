@@ -26,7 +26,94 @@ async function main() {
     await supabase.auth.signOut();
     return showSignIn('This page is private.');
   }
+  // Two-step verification: the page (and the server) need the code from an authenticator app too.
+  const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (level?.currentLevel !== 'aal2') {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const factor = factors?.totp.find((f) => f.status === 'verified');
+    return factor ? showCode(factor.id) : showEnroll();
+  }
+  watchIdle();
   showPage(email);
+}
+
+/** Owners sign out by themselves after this long without touching the page. */
+const IDLE_MS = 20 * 60_000;
+let idleTimer = 0;
+function watchIdle() {
+  const reset = () => {
+    clearTimeout(idleTimer);
+    idleTimer = window.setTimeout(async () => {
+      await supabase!.auth.signOut();
+      showSignIn('Signed out after 20 minutes without activity.');
+    }, IDLE_MS);
+  };
+  for (const e of ['pointerdown', 'keydown', 'scroll']) window.addEventListener(e, reset, { passive: true });
+  reset();
+}
+
+/** Asks for the 6-digit code from the authenticator app. */
+function showCode(factorId: string, message = '') {
+  app.innerHTML = `
+    <div class="card signin">
+      <h1>Two-step verification</h1>
+      <p class="muted">Open your authenticator app and enter the 6-digit code for Isla.</p>
+      <form id="code-form">
+        <label for="code">Code</label>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required />
+        <button class="primary" type="submit">Continue</button>
+      </form>
+      <p class="error" id="error">${esc(message)}</p>
+      <button class="wide" id="out" style="margin-top:12px">Sign out</button>
+    </div>`;
+  (document.getElementById('code') as HTMLInputElement).focus();
+  document.getElementById('out')!.addEventListener('click', async () => {
+    await supabase!.auth.signOut();
+    showSignIn();
+  });
+  document.getElementById('code-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = (document.getElementById('code') as HTMLInputElement).value.trim();
+    const { error } = await supabase!.auth.mfa.challengeAndVerify({ factorId, code });
+    if (error) return showCode(factorId, 'That code didn’t work. Use the newest one in the app.');
+    void main();
+  });
+}
+
+/** First visit: links an authenticator app (Google Authenticator, Microsoft Authenticator, …) to this owner. */
+async function showEnroll() {
+  // A half-finished setup from before would block a new one.
+  const { data: factors } = await supabase!.auth.mfa.listFactors();
+  for (const f of factors?.all ?? []) if (f.status !== 'verified') await supabase!.auth.mfa.unenroll({ factorId: f.id });
+  const { data, error } = await supabase!.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Isla owner' });
+  if (error || !data) {
+    app.innerHTML = `<p class="error">Couldn’t start two-step verification: ${esc(error?.message ?? '')}</p>`;
+    return;
+  }
+  app.innerHTML = `
+    <div class="card signin">
+      <h1>Protect the owner page</h1>
+      <p class="muted">The owner page needs a second step: a code from an authenticator app on your phone. Set it up once:</p>
+      <p class="muted">1. Install <b>Google Authenticator</b> (or Microsoft Authenticator).<br />2. Tap <b>+</b> and scan this code, or enter the key below.</p>
+      <img src="${esc(data.totp.qr_code)}" alt="QR code for the authenticator app" width="200" height="200" style="display:block;margin:12px auto;background:#fff;border-radius:12px" />
+      <p class="muted small" style="text-align:center">Key: <code class="email">${esc(data.totp.secret)}</code></p>
+      <form id="code-form">
+        <label for="code">3. Enter the 6-digit code it shows</label>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required />
+        <button class="primary" type="submit">Turn on</button>
+      </form>
+      <p class="error" id="error"></p>
+    </div>`;
+  document.getElementById('code-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = (document.getElementById('code') as HTMLInputElement).value.trim();
+    const { error: verifyError } = await supabase!.auth.mfa.challengeAndVerify({ factorId: data.id, code });
+    if (verifyError) {
+      document.getElementById('error')!.textContent = 'That code didn’t work. Use the newest one in the app.';
+      return;
+    }
+    void main();
+  });
 }
 
 function showSignIn(message?: string) {

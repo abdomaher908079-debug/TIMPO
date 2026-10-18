@@ -8,8 +8,10 @@ import { currentPeriod, type PlanId } from '../_shared/plans.ts';
 
 const OWNERS = ['abdomaher908079@gmail.com', 'islaclipsofficial@gmail.com'];
 const SITE = 'https://islaclips.com';
+// Only the site itself may call this from a browser.
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': SITE,
+  Vary: 'Origin',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
@@ -17,6 +19,18 @@ const CORS = {
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false },
 });
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A claim from the session token (already verified by getUser above). */
+function claim(token: string, name: string): unknown {
+  try {
+    const part = token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    return (JSON.parse(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), '='))) as Record<string, unknown>)[name];
+  } catch {
+    return undefined;
+  }
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
@@ -56,16 +70,19 @@ Deno.serve(async (req) => {
     const me = auth.user;
     const myEmail = me?.email?.toLowerCase() ?? '';
     if (!me || !OWNERS.includes(myEmail) || !me.email_confirmed_at) return json({ error: 'Not allowed.' }, 403);
+    // The session must have passed two-step verification (the code from the authenticator app).
+    if (claim(token, 'aal') !== 'aal2') return json({ error: 'Enter the code from your authenticator app first.' }, 403);
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const action = String(body.action ?? '');
-    if (action === 'search') return json({ accounts: await search(String(body.q ?? '').trim(), String(body.filter ?? 'all')) });
+    if (action === 'search') return json({ accounts: await search(String(body.q ?? '').trim().slice(0, 100), String(body.filter ?? 'all')) });
     if (action === 'log') {
       const { data } = await admin.from('owner_actions').select('*').order('at', { ascending: false }).limit(50);
       return json({ log: data ?? [] });
     }
 
     const id = String(body.id ?? '');
+    if (!UUID.test(id)) return json({ error: 'Account not found.' }, 404);
     const { data: target, error: findError } = await admin.auth.admin.getUserById(id);
     if (findError || !target.user) return json({ error: 'Account not found.' }, 404);
     const email = target.user.email ?? '';

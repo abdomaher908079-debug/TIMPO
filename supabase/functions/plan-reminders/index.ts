@@ -1,0 +1,131 @@
+// Supabase Edge Function, run every hour by the hookcut-plan-reminders cron (x-cron-secret).
+// For plans given from the owner page (no Paddle subscription): reminder emails 7, 3 and 1 day before the
+// plan ends, then "your plan has ended" and back to Free when it ends without being renewed.
+// Emails go through Brevo's API (secret BREVO_API_KEY); without it, plans still end on time.
+// Deploy: supabase functions deploy plan-reminders --no-verify-jwt
+import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+
+const SITE = 'https://islaclips.com';
+const FROM = { name: 'Isla', email: 'support@islaclips.com' };
+const DAY = 86_400_000;
+
+const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+  auth: { persistSession: false },
+});
+
+type Kind = '7d' | '3d' | '1d' | 'ended';
+
+interface Gift {
+  id: string;
+  plan: 'pro' | 'studio';
+  current_period_end: string;
+}
+
+const PLAN_NAMES = { pro: 'Pro', studio: 'Studio' };
+const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+function letter(kind: Kind, plan: Gift['plan'], end: Date): { subject: string; html: string } {
+  const name = PLAN_NAMES[plan];
+  const when = DATE.format(end);
+  const p = (text: string) => `<p style="margin:0 0 14px;font:16px/1.5 Arial,sans-serif;color:#3a2a1e">${text}</p>`;
+  const button = (text: string, href: string) =>
+    `<p style="margin:22px 0"><a href="${href}" style="background:#f2600d;color:#fff;text-decoration:none;font:bold 16px Arial,sans-serif;padding:12px 22px;border-radius:10px;display:inline-block">${text}</a></p>`;
+  const sign = p('Isla<br><a href="mailto:support@islaclips.com" style="color:#f2600d">support@islaclips.com</a>');
+  if (kind === 'ended') {
+    return {
+      subject: `Your Isla ${name} plan has ended`,
+      html:
+        p('Hi,') +
+        p(`Your Isla ${name} plan ended on ${when}, and your account is now on the Free plan.`) +
+        p('Your saved episodes and clips are kept for at least 30 days. To get every clip, no watermark and our best AI back, reply to this email and we’ll renew your plan.') +
+        button('Open Isla', `${SITE}/account`) +
+        sign,
+    };
+  }
+  const left = kind === '7d' ? 'in 7 days' : kind === '3d' ? 'in 3 days' : 'tomorrow';
+  return {
+    subject: `Your Isla ${name} plan ends ${left}`,
+    html:
+      p('Hi,') +
+      p(`A reminder that your Isla ${name} plan ends ${left}, on ${when}.`) +
+      p(`To keep it without a break, reply to this email and we’ll renew it. If you don’t, your account moves to the Free plan on ${when}; your saved work stays.`) +
+      button('See my plan', `${SITE}/account`) +
+      sign,
+  };
+}
+
+async function send(to: string, kind: Kind, plan: Gift['plan'], end: Date): Promise<boolean> {
+  const key = Deno.env.get('BREVO_API_KEY');
+  if (!key) return false;
+  const { subject, html } = letter(kind, plan, end);
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': key, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ sender: FROM, replyTo: FROM, to: [{ email: to }], subject, htmlContent: html }),
+  });
+  if (!res.ok) console.error('Brevo', res.status, await res.text().catch(() => ''));
+  return res.ok;
+}
+
+/** The reminder due now, if any: only the nearest one, so a short gift doesn't get a late "7 days" email. */
+function due(end: Date, now: number): Kind | null {
+  const left = end.getTime() - now;
+  if (left <= 0) return 'ended';
+  if (left <= DAY) return '1d';
+  if (left <= 3 * DAY) return '3d';
+  if (left <= 7 * DAY) return '7d';
+  return null;
+}
+
+Deno.serve(async (req) => {
+  const secret = Deno.env.get('PLAN_CHANGES_SECRET');
+  if (!secret || req.headers.get('x-cron-secret') !== secret) return new Response('Not allowed', { status: 401 });
+  const now = Date.now();
+  const { data: gifts, error } = await admin
+    .from('profiles')
+    .select('id, plan, current_period_end')
+    .is('paddle_subscription_id', null)
+    .neq('plan', 'free')
+    .eq('subscription_status', 'active')
+    .not('current_period_end', 'is', null)
+    .lte('current_period_end', new Date(now + 7 * DAY).toISOString());
+  if (error) {
+    console.error(error);
+    return new Response('error', { status: 500 });
+  }
+  let sent = 0;
+  let ended = 0;
+  for (const g of (gifts ?? []) as Gift[]) {
+    const end = new Date(g.current_period_end);
+    const kind = due(end, now);
+    if (!kind) continue;
+    const { data: already } = await admin
+      .from('plan_emails')
+      .select('kind')
+      .eq('user_id', g.id)
+      .eq('period_end', g.current_period_end)
+      .eq('kind', kind)
+      .maybeSingle();
+    if (!already) {
+      const { data: user } = await admin.auth.admin.getUserById(g.id);
+      const email = user.user?.email;
+      if (email && (await send(email, kind, g.plan, end))) {
+        await admin.from('plan_emails').insert({ user_id: g.id, period_end: g.current_period_end, kind });
+        sent++;
+      }
+    }
+    if (kind === 'ended') {
+      // Back to Free, unless the plan was renewed meanwhile (a new end date).
+      await admin
+        .from('profiles')
+        .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, updated_at: new Date().toISOString() })
+        .eq('id', g.id)
+        .eq('current_period_end', g.current_period_end)
+        .is('paddle_subscription_id', null);
+      ended++;
+    }
+  }
+  return new Response(JSON.stringify({ checked: gifts?.length ?? 0, sent, ended, email: !!Deno.env.get('BREVO_API_KEY') }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+});
