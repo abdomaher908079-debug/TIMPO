@@ -7,7 +7,7 @@ import Progress, { type Step } from '../components/Progress';
 import { useAccount } from '../lib/account';
 import { formatDuration, formatSize, type EpisodeInfo } from '../lib/format';
 import { clipsFromMoments, type Clip } from '../lib/clips';
-import { fingerprint } from '../lib/moments';
+import { fingerprint, InLine } from '../lib/moments';
 import { cloudAvailable, deviceLooksSlow } from '../lib/cloud';
 import type { Segment } from '../lib/speech';
 import { ApiError } from '../lib/supabase';
@@ -47,6 +47,15 @@ const CLOUD_LIMITS_NOTE =
 // Shown while the free AI's daily limit is used up and the episode waits in line.
 const IN_LINE =
   'Isla is very busy today, so your episode is in line. It will finish on its own, usually within a few hours. You can close this page: your clips will be waiting here.';
+
+// Listened to on this device; now finding the moments.
+function momentSteps(detail?: string): Step[] {
+  return [
+    { label: 'Getting speech recognition ready', state: 'done' },
+    { label: 'Listening to every word', state: 'done' },
+    { label: 'Finding the best moments', state: 'active', detail },
+  ];
+}
 
 function cloudSteps(phase: 0 | 1 | 2, detail?: string): Step[] {
   return [
@@ -326,14 +335,16 @@ export default function NewEpisode() {
     await followCloud(file, info, jobId, abort);
   }
 
-  async function followCloud(file: File, info: EpisodeInfo, jobId: string, abort: AbortController) {
+  // `local`: listened to on this device, only the moments are in line on our server.
+  async function followCloud(file: File, info: EpisodeInfo, jobId: string, abort: AbortController, local = false) {
     let job;
     try {
       const { followJob } = await import('../lib/cloud');
       job = await followJob(jobId, {
         signal: abort.signal,
         onUpdate: (j) => {
-          if (j.status === 'finishing') return update(abort, cloudSteps(2, j.waiting_until ? IN_LINE : undefined), 95);
+          const detail = j.waiting_until ? IN_LINE : undefined;
+          if (j.status === 'finishing') return update(abort, local ? momentSteps(detail) : cloudSteps(2, detail), 95);
           if (j.waiting_until) return update(abort, cloudSteps(1, IN_LINE), 20 + (j.pieces ? j.pieces_done / j.pieces : 0) * 72);
           const p = j.pieces ? j.pieces_done / j.pieces : 0;
           update(abort, cloudSteps(1, `${formatDuration(p * info.durationSeconds)} of ${formatDuration(info.durationSeconds)}`), 20 + p * 72);
@@ -396,20 +407,27 @@ export default function NewEpisode() {
       void refresh();
     } catch (err) {
       if (abort.signal.aborted) return;
+      if (err instanceof InLine) return waitInLine(file, info, err.jobId, abort);
       console.error(err);
       const message = err instanceof Error ? err.message : String(err);
       setState({ kind: 'moments-failed', file, info, segments, message, limit: err instanceof ApiError && err.status === 403 });
     }
   }
 
+  // The AI's daily limit is used up: the moments are picked later on our server, so this page can close.
+  async function waitInLine(file: File, info: EpisodeInfo, jobId: string, abort: AbortController) {
+    const fp = fingerprints.current.get(file)!;
+    // Saved as an episode still with the cloud: coming back follows the same job (its transcript is there).
+    void saveProject(userId, { fingerprint: fp, fileName: file.name, fileSize: file.size, info, segments: [], clips: [], listening: true }, true, keepDays).catch(
+      (err) => console.warn('Episode not saved', err),
+    );
+    setState({ kind: 'processing', file, info, steps: momentSteps(IN_LINE), percent: 95, cloud: true, jobId });
+    await followCloud(file, info, jobId, abort, true);
+  }
+
   function retryMoments(file: File, info: EpisodeInfo, segments: Segment[]) {
     const abort = new AbortController();
-    const steps: Step[] = [
-      { label: 'Getting speech recognition ready', state: 'done' },
-      { label: 'Listening to every word', state: 'done' },
-      { label: 'Finding the best moments', state: 'active' },
-    ];
-    setState({ kind: 'processing', file, info, steps, percent: 92 });
+    setState({ kind: 'processing', file, info, steps: momentSteps(), percent: 92 });
     void pickBest(file, info, segments, abort);
   }
 

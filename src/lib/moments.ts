@@ -3,6 +3,13 @@ import { ApiError, callFunction, supabase } from './supabase';
 
 export type { Moment };
 
+/** The AI's daily limit was reached: the episode waits in line on our server, as the cloud job `jobId`. */
+export class InLine extends Error {
+  constructor(readonly jobId: string) {
+    super('In line for the AI');
+  }
+}
+
 export interface EpisodeRef {
   // Identifies the video file, so retrying the same episode isn't counted twice.
   fingerprint: string;
@@ -28,7 +35,11 @@ export async function findMoments(
   episode: EpisodeRef,
   signal?: AbortSignal,
 ): Promise<Moment[]> {
-  if (supabase) return (await callFunction<{ moments: Moment[] }>('pick-moments', { segments, episode }, signal)).moments;
+  if (supabase) {
+    const data = await callFunction<{ moments?: Moment[]; waiting?: string }>('pick-moments', { segments, episode }, signal);
+    if (data.waiting) throw new InLine(data.waiting);
+    return data.moments ?? [];
+  }
 
   let res: Response;
   try {
