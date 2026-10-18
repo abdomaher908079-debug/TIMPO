@@ -120,7 +120,7 @@ export default defineConfig(({ mode }) => {
       __SPEECH_RUNTIME_GZ__: JSON.stringify(ownCopy ? SPEECH_RUNTIME_GZ : ''),
       __APP_VERSION__: JSON.stringify(appVersion()),
     },
-    build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html' } } },
+    build: { rollupOptions: { input: { main: 'index.html', checkout: 'checkout.html', owner: 'owner.html' } } },
     // Its WebAssembly files are located relative to the package; pre-bundling breaks that.
     optimizeDeps: { exclude: ['@huggingface/transformers'] },
   };
