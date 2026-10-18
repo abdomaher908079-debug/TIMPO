@@ -10,7 +10,7 @@
 // Work runs in steps of under 2 minutes (the free plan's limit), each starting the next.
 // Secrets: GEMINI_API_KEY (and GEMINI_PAID_API_KEY). Deploy: supabase functions deploy listen --no-verify-jwt
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { geminiFor, MomentsError, pickMoments, type Segment } from '../_shared/moments.ts';
+import { DailyLimit, geminiFor, MomentsError, pickMoments, RateLimited, type Segment } from '../_shared/moments.ts';
 import { checkCloud, checkEpisode, currentPeriod, LIMITS, type PlanId, type WorkspaceRow } from '../_shared/plans.ts';
 import { AudioTooLong, listen, listenerFor, PIECE_SECONDS } from '../_shared/transcribe.ts';
 import { countedSeconds, logAiCall, releaseCloud, releasePick, reserveCloud, reservePick } from '../_shared/usage.ts';
@@ -172,6 +172,8 @@ async function work(jobId: string) {
   if (!listener) return fail(job, 'The AI isn’t set up on the server yet.');
   const charge = { workspaceId, fingerprint: job.fingerprint, periodStart };
   let stopped = false;
+  // Too many requests this minute: pause before claiming more, so the free limit can recover.
+  let throttled = false;
 
   while (Date.now() - started < STEP_MS && !stopped) {
     // Canceled or failed meanwhile: hear nothing more.
@@ -228,9 +230,18 @@ async function work(jobId: string) {
         } catch (err) {
           console.error(`job ${job.id} piece ${piece.idx}:`, err);
           await releaseCloud(admin, { ...charge, seconds });
-          if (err instanceof AudioTooLong) {
+          if (err instanceof AudioTooLong || err instanceof DailyLimit) {
             stopped = true;
             await fail(job, err.message);
+          } else if (err instanceof RateLimited) {
+            // Not this piece's fault: give the attempt back and try again after a pause.
+            throttled = true;
+            await admin
+              .from('listen_pieces')
+              .update({ status: 'pending', attempts: piece.attempts - 1 })
+              .eq('job_id', job.id)
+              .eq('idx', piece.idx)
+              .eq('claimed_at', piece.claimed_at);
           } else if (piece.attempts >= MAX_ATTEMPTS) {
             await fail(job, err instanceof MomentsError ? err.message : 'We couldn’t listen to part of this episode. Please try again.');
           } else {
@@ -240,6 +251,10 @@ async function work(jobId: string) {
         }
       }),
     );
+    if (throttled && !stopped) {
+      throttled = false;
+      await new Promise((r) => setTimeout(r, 20_000));
+    }
     const { count } = await admin.from('listen_pieces').select('idx', { count: 'exact', head: true }).eq('job_id', job.id).eq('status', 'done');
     await admin.from('listen_jobs').update({ pieces_done: count ?? 0, updated_at: new Date().toISOString() }).eq('id', job.id).in('status', ['uploading', 'listening']);
   }

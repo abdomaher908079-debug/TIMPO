@@ -213,11 +213,31 @@ export async function pickMoments(
   }
   if (backup) return pickMoments(request, backup);
   if (!(lastError instanceof ModelProblem)) throw lastError;
-  throw allQuota ? new MomentsError(DAILY_LIMIT_MESSAGE, 503) : new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+  throw allQuota ? new DailyLimit() : new RateLimited();
 }
 
 export const DAILY_LIMIT_MESSAGE =
   'Isla is very busy today and has reached its daily AI limit. Please try again tomorrow; this episode wasn’t counted.';
+
+/** Which free-tier limit a 429 hit: the per-minute one passes in seconds, the daily one only tomorrow. */
+export async function quotaKind(res: Response): Promise<'minute' | 'day'> {
+  const text = await res.text().catch(() => '');
+  return /PerDay/i.test(text) ? 'day' : 'minute';
+}
+
+/** The free AI's daily limit is used up: retrying today won't help. */
+export class DailyLimit extends MomentsError {
+  constructor(message = DAILY_LIMIT_MESSAGE) {
+    super(message, 503);
+  }
+}
+
+/** Every model was busy (too many requests this minute, or overloaded): worth trying again shortly. */
+export class RateLimited extends MomentsError {
+  constructor() {
+    super('Our AI is busy right now. Please try again in a minute.', 503);
+  }
+}
 
 // The model can't answer right now, but another one might.
 class ModelProblem extends MomentsError {
@@ -252,7 +272,8 @@ async function askGemini(
     if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) throw new ModelProblem('slow');
     throw err;
   }
-  if (res.status === 429) throw new ModelProblem('quota');
+  // The per-minute limit passes like an overload; only the daily one counts as out of quota.
+  if (res.status === 429) throw new ModelProblem((await quotaKind(res)) === 'day' ? 'quota' : 'overloaded');
   if (res.status === 404) throw new ModelProblem('not-found');
   if (res.status === 503 || res.status === 500) throw new ModelProblem('overloaded');
   if (!res.ok) {

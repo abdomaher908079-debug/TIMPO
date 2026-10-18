@@ -1,6 +1,6 @@
 // Turns a piece of an episode's audio into a timed transcript with Gemini ("cloud listening").
 // Web-standard APIs only (fetch, JSON), like moments.ts.
-import { DEFAULT_GEMINI_MODEL, MomentsError, type Segment } from './moments.ts';
+import { DailyLimit, DEFAULT_GEMINI_MODEL, MomentsError, quotaKind, RateLimited, type Segment } from './moments.ts';
 
 // The browser sends the episode in pieces of this length, so each request stays quick and timings stay accurate.
 export const PIECE_SECONDS = 5 * 60;
@@ -134,12 +134,12 @@ export async function listen(
       console.error(`Gemini countTokens ${model}:`, err instanceof Error ? err.message : err);
     }
   }
-  if (tokens === null) throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+  if (tokens === null) throw new RateLimited();
   if (tokens > (length + AUDIO_SLACK_SECONDS) * AUDIO_TOKENS_PER_SECOND) {
     console.error(`Audio piece of ${length} s holds about ${Math.round(tokens / AUDIO_TOKENS_PER_SECOND)} s`);
     throw new AudioTooLong();
   }
-  // Every model said "out of quota" (429): the free AI's daily limit is used up, so retrying soon won't help.
+  // Every model said its daily limit is used up, so retrying soon won't help.
   let allQuota = true;
   for (const { apiKey, model } of attempts) {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -148,18 +148,14 @@ export async function listen(
         return { segments: toSegments(lines, offset, length), usage: { model, paid: apiKey === paidKey, input, output } };
       } catch (err) {
         if (!(err instanceof Busy)) throw err;
-        if (err.message !== '429') allQuota = false;
+        if (err.message !== '429-day') allQuota = false;
         console.error(`Gemini ${model}: ${err.message}`);
         if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
       }
     }
   }
-  throw new MomentsError(
-    allQuota
-      ? 'Isla is very busy today and has reached its daily AI limit. Please try again tomorrow, or listen on this device.'
-      : 'Our AI is busy right now. Please try again in a minute.',
-    503,
-  );
+  if (allQuota) throw new DailyLimit('Isla is very busy today and has reached its daily AI limit. Please try again tomorrow, or listen on this device.');
+  throw new RateLimited();
 }
 
 /** How many tokens the audio alone is, from Gemini's free token counter. */
@@ -195,7 +191,8 @@ async function ask(model: string, apiKey: string, type: string, data: string): P
       generationConfig: { temperature: 0, ...thinking },
     }),
   });
-  if (res.status === 429 || res.status === 404 || res.status >= 500) throw new Busy(`${res.status}`);
+  if (res.status === 429) throw new Busy(`429-${await quotaKind(res)}`);
+  if (res.status === 404 || res.status >= 500) throw new Busy(`${res.status}`);
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     if (res.status === 400 && 'thinkingConfig' in thinking && /thinking/i.test(detail)) {
