@@ -1,7 +1,7 @@
 // Checkout page: opens Paddle's checkout for the plan in the URL, as the signed-in user.
 // Paddle charges the card and handles tax; its webhook then updates the plan (paddle-webhook).
 import { effectivePlan, type Billing, type ProfileRow } from '../supabase/functions/_shared/plans';
-import { PACK_PRICE_ID, PRICE_IDS } from './lib/billing';
+import { PACK_PRICE_ID, paymentsReady, PRICE_IDS } from './lib/billing';
 import { supabase } from './lib/supabase';
 
 interface PaddleJs {
@@ -32,7 +32,7 @@ async function main() {
   const priceId = pack ? PACK_PRICE_ID : plan === 'pro' || plan === 'studio' ? PRICE_IDS[plan][billing] : undefined;
   const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN as string | undefined;
   const Paddle = (window as unknown as { Paddle?: PaddleJs }).Paddle;
-  if (!supabase || !token || !priceId) return fail('Payments aren’t set up yet.');
+  if (!paymentsReady || !supabase || !token || !priceId) return fail('Paid plans are coming soon. The Free plan is open now.');
   if (!Paddle) return fail('The checkout couldn’t load. Check your internet connection or turn off ad blockers for this page.');
 
   const { data } = await supabase.auth.getSession();

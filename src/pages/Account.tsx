@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { keepPlan, openBillingPortal, PACK_PRICE_ID, startPackCheckout } from '../lib/billing';
+import { keepPlan, openBillingPortal, PACK_PRICE_ID, paymentsReady, startPackCheckout } from '../lib/billing';
 import { PACK } from '../../supabase/functions/_shared/plans';
 import { cloudAvailable } from '../lib/cloud';
 import { formatDuration } from '../lib/format';
@@ -180,7 +180,7 @@ export default function Account() {
               the hours because each AI pick costs about the same whatever an episode's length, so lots of short files count
               as episodes rather than hours. Cloud listening isn't included.
             </p>
-            {!member && PACK_PRICE_ID && (
+            {!member && paymentsReady && PACK_PRICE_ID && (
               <button type="button" className="btn btn-outline btn-inline" onClick={startPackCheckout}>
                 Get +{PACK.hours} hours · ${PACK.price}
               </button>

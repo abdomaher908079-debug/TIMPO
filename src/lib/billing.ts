@@ -16,7 +16,9 @@ export const PRICE_IDS: Record<Exclude<PlanId, 'free'>, Record<Billing, string |
 // The one-time hour pack (+10 hours and +20 episodes).
 export const PACK_PRICE_ID = import.meta.env.VITE_PADDLE_PRICE_HOURS_PACK as string | undefined;
 
-export const paymentsReady = !!supabase && !!import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+// New purchases open only when VITE_PAYMENTS_OPEN=true; until then paid plans show "Coming soon".
+export const paymentsOpen = import.meta.env.VITE_PAYMENTS_OPEN === 'true';
+export const paymentsReady = paymentsOpen && !!supabase && !!import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
 
 /** Opens Paddle's checkout for a plan, on its own page (see checkout.html). */
 export function startCheckout(plan: Exclude<PlanId, 'free'>, billing: Billing) {
