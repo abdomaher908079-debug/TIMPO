@@ -8,13 +8,14 @@ import {
   Input,
   Mp4OutputFormat,
   Output,
-  QUALITY_HIGH,
+  QUALITY_VERY_HIGH,
   WebMOutputFormat,
 } from 'mediabunny';
 import type { BrandKit } from './brandKits';
-import { captionFromGroups, cropAt, editedLook, fadeAt, fixWords, proParts, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { captionFromGroups, cropAt, editedLook, FADE_SECONDS, fadeAt, fixWords, proParts, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
 import { breathe } from './device';
 import { drawCaption, drawHeadline, drawLogo, drawWatermark } from './draw';
+import { cleanEdges, loudnessGain, processSound } from './sound';
 
 // Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
 export const SIZES = {
@@ -72,6 +73,13 @@ export async function renderClip(
   try {
     const track = await input.getPrimaryVideoTrack();
     if (!track) throw new Error('This video has no picture.');
+    // Tidy edges (no dead air, no clipped last word) and the sound's loudness, from the exact word times.
+    const { start, end } = cleanEdges(clip.start, clip.end, captions, await input.computeDuration());
+    const gain = await loudnessGain(input, start, end).catch((err) => {
+      console.warn('Loudness not measured', err);
+      return 1;
+    });
+    const duration = end - start;
 
     // MP4 (H.264 + AAC) uploads everywhere. Browsers that can't encode H.264 get WebM (VP9 + Opus).
     const videoCodec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width: OUT_W, height: OUT_H });
@@ -101,6 +109,9 @@ export async function renderClip(
 
     const canvas = new OffscreenCanvas(OUT_W, OUT_H);
     const ctx = canvas.getContext('2d')!;
+    // The crop is usually enlarged (a 1080p episode's 9:16 crop is 608 pixels wide): the best scaling keeps it sharp.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     // The blurred background: drawn tiny, then stretched (much cheaper than a blur filter on phones).
     const blur = new OffscreenCanvas(18, 32);
     const blurCtx = blur.getContext('2d')!;
@@ -109,10 +120,10 @@ export async function renderClip(
       input,
       output,
       showWarnings: false,
-      trim: { start: clip.start, end: clip.end },
+      trim: { start, end },
       video: {
         codec: videoCodec,
-        bitrate: QUALITY_HIGH,
+        bitrate: QUALITY_VERY_HIGH,
         forceTranscode: true,
         processedWidth: OUT_W,
         processedHeight: OUT_H,
@@ -120,7 +131,7 @@ export async function renderClip(
           // One frame at a time with a pause in between, so the page (and the phone) stays responsive.
           await breathe();
           // Sample times start at 0 at the clip's start.
-          const t = clip.start + sample.timestamp;
+          const t = start + sample.timestamp;
           const left = ((srcW - cropW) * cropAt(clip, t, parts.follow)) / 100;
           const top = (srcH - cropH) / 2;
           const zoom = zoomAt(zooms, t) * extraZoom;
@@ -150,7 +161,7 @@ export async function renderClip(
           if (logo) drawLogo(ctx, logo.image, logo.corner, OUT_W, OUT_H);
           if (caption) drawCaption(ctx, caption, look, OUT_W, OUT_H);
           if (watermark) drawWatermark(ctx, OUT_W, OUT_H);
-          const dark = fadeAt(clip, t);
+          const dark = fadeAt({ start, end, edit: clip.edit }, t);
           if (dark > 0) {
             ctx.fillStyle = `rgba(0, 0, 0, ${dark})`;
             ctx.fillRect(0, 0, OUT_W, OUT_H);
@@ -158,7 +169,17 @@ export async function renderClip(
           return canvas;
         },
       },
-      audio: audioCodec ? { codec: audioCodec, bitrate: 160_000 } : { discard: true },
+      audio: audioCodec
+        ? {
+            codec: audioCodec,
+            bitrate: 192_000,
+            // Otherwise matching sound is copied as it is, skipping the processing below.
+            forceTranscode: true,
+            // Platform loudness, no clipping, no clicks at the cuts, and fading with the picture.
+            process: (sample) =>
+              processSound(sample, gain, duration, clip.edit?.fadeIn ? FADE_SECONDS : 0, clip.edit?.fadeOut ? FADE_SECONDS : 0),
+          }
+        : { discard: true },
     });
     if (!conversion.isValid) {
       console.error('Clip export not possible', conversion.discardedTracks);
