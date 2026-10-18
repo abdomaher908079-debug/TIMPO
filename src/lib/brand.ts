@@ -6,7 +6,7 @@ export const ORB = { green: '#9dff3c', yellow: '#e0b51e', orange: '#ff6a13', vis
 // Shown on the legal pages and footer. Set these before launch (see LAUNCH.md).
 export const LEGAL = {
   // The person or company that runs Isla.
-  owner: (import.meta.env.VITE_LEGAL_NAME as string | undefined) || BRAND_NAME,
+  owner: (import.meta.env.VITE_LEGAL_NAME as string | undefined) || 'Abdullah Mohamed Maher Hassan Elewa',
   email: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'support@islaclips.com',
   updated: 'October 18, 2026',
 };
