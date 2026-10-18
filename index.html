@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // The old address moves to the real domain, keeping the page and any sign-in details.
+      if (location.hostname === "hookcut.pages.dev") location.replace("https://islaclips.com" + location.pathname + location.search + location.hash);
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f6eadf" />
