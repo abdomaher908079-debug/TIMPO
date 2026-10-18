@@ -4,24 +4,55 @@ import { useAuth } from '../lib/auth';
 
 const MIN_PASSWORD = 8;
 
-/** Where the "forgot password" email lands: the link signs them in, then they choose a new password. */
+/**
+ * Where the "forgot password" email lands (?token_hash=…). The code is only used when they tap Continue:
+ * email apps and link scanners often open links before the person does, and would otherwise use it up.
+ */
 export default function ResetPassword() {
-  const { user, loading, setNewPassword } = useAuth();
+  const { user, loading, redeemRecoveryCode, setNewPassword } = useAuth();
   const navigate = useNavigate();
+  const [tokenHash] = useState(() => new URLSearchParams(window.location.search).get('token_hash'));
+  const [failed, setFailed] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (loading) return <main className="auth" />;
 
+  if (failed || (!user && !tokenHash)) {
+    return (
+      <main className="auth">
+        <h1 className="page-title">This link no longer works</h1>
+        <p className="muted">
+          Each link works once, for one hour. Ask for a new one: it arrives in a minute, and you can ask again right away if
+          it doesn't.
+        </p>
+        <Link className="btn btn-primary" to="/login?forgot=1">
+          Send me a new link
+        </Link>
+      </main>
+    );
+  }
+
+  async function verify() {
+    setBusy(true);
+    try {
+      await redeemRecoveryCode(tokenHash!);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!user) {
     return (
       <main className="auth">
-        <h1 className="page-title">This link has expired</h1>
-        <p className="muted">Password links work once, for one hour. Ask for a new one and use the latest email.</p>
-        <Link className="btn btn-primary" to="/login">
-          Back to log in
-        </Link>
+        <h1 className="page-title">Reset your password</h1>
+        <p className="muted">Tap continue to choose a new password.</p>
+        <button className="btn btn-primary" disabled={busy} onClick={() => void verify()}>
+          {busy ? 'Please wait…' : 'Continue'}
+        </button>
       </main>
     );
   }

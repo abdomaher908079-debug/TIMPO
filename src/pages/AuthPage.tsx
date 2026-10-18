@@ -14,7 +14,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
-  const [forgot, setForgot] = useState(false);
+  // Expired password links send people here with ?forgot=1.
+  const [forgot, setForgot] = useState(() => mode === 'login' && new URLSearchParams(window.location.search).has('forgot'));
   const [resetSent, setResetSent] = useState(false);
   const isSignup = mode === 'signup';
 

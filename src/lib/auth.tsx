@@ -19,6 +19,9 @@ interface AuthContextValue {
   signUpWithEmail(email: string, password: string): Promise<{ needsConfirmation: boolean }>;
   // Emails a link to /reset-password, which signs them in so they can choose a new password.
   sendPasswordReset(email: string): Promise<void>;
+  // Signs in with the code from a password email. Done on a tap, not on page load, so email apps and link
+  // scanners that open the link first don't use it up.
+  redeemRecoveryCode(tokenHash: string): Promise<void>;
   setNewPassword(password: string): Promise<void>;
   signOut(): Promise<void>;
 }
@@ -125,6 +128,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
         });
+        if (error) throw error;
+      },
+      async redeemRecoveryCode(tokenHash) {
+        if (!supabase) return;
+        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
         if (error) throw error;
       },
       async setNewPassword(password) {
