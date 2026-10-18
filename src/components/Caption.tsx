@@ -11,10 +11,11 @@ export default function Caption({ caption, look, inline }: { caption: CaptionDat
     color: look.textColor,
     '--cap-accent': look.accentColor,
     '--cap-box': look.boxColor,
-    ...(inline ? {} : { top: `${look.position * 100}%` }),
+    ...(inline ? {} : { top: `${look.position * 100}%`, fontSize: look.size ? `calc(clamp(1.1rem, 6.5cqw, 1.7rem) * ${look.size})` : undefined }),
   } as CSSProperties;
   return (
-    <span className={`caption caption-${look.style} ${inline ? 'caption-inline' : ''}`} style={style}>
+    // dir="auto": Arabic and other right-to-left captions read from the right, like on the exported clip.
+    <span className={`caption caption-${look.style} ${inline ? 'caption-inline' : ''} ${!inline && look.motion ? `caption-${look.motion}` : ''}`} style={style} dir="auto">
       {caption.words.map((w, i) => (
         <span
           key={i}

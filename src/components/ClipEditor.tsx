@@ -11,6 +11,10 @@ import {
   captionLook,
   clock,
   cropAt,
+  editedLook,
+  fadeAt,
+  fixWords,
+  type ClipEdit,
   PRO_PARTS,
   proParts,
   rememberProOff,
@@ -136,12 +140,14 @@ export default function ClipEditor(props: Props) {
   const estimated = useMemo(() => groupWords(estimateWords(segments, win.from, win.to)), [segments, win]);
   // The Pro edit: on paid plans, and shown on Pro-only clips so Free users can see it.
   const parts = proParts(clip, props.paid || props.locked);
-  const groups = exactCaptions ?? estimated;
+  const groups = useMemo(() => fixWords(exactCaptions ?? estimated, clip.edit?.fixes), [exactCaptions, estimated, clip.edit?.fixes]);
   const caption = inClip ? captionFromGroups(groups, t, parts.highlight ? clip.emphasis : undefined) : null;
   const zooms = useMemo(() => (parts.zoom ? zoomsFor(groups.flatMap((g) => g.words), clip.punchIns) : []), [parts.zoom, groups, clip.punchIns]);
-  const zoom = inClip ? zoomAt(zooms, t) : 1;
+  const zoom = (inClip ? zoomAt(zooms, t) : 1) * (clip.edit?.zoom ?? 1);
+  const dark = inClip ? fadeAt(clip, t) : 0;
   const headlineAlpha = !parts.headline || !clip.headline || !inClip ? 0 : clip.layout === 'fit' ? 1 : Math.max(0, Math.min(1, (4 - (t - clip.start)) / 0.4));
-  const { look, kit } = captionLook(clip, kits);
+  const { look: baseLook, kit } = captionLook(clip, kits);
+  const look = editedLook(baseLook, clip.edit);
   const { plan } = useAccount();
   const sample = { words: ['Best', 'moment'], active: 1 };
   const lines = useMemo(() => segments.filter((s) => s.end > win.from && s.start < win.to), [segments, win]);
@@ -202,7 +208,9 @@ export default function ClipEditor(props: Props) {
                 {clip.headline}
               </span>
             )}
-            {caption && <Caption caption={caption} look={look} />}
+            {/* Keyed by its words, so fade and pop start again for each new caption. */}
+            {caption && <Caption key={caption.words.join(' ')} caption={caption} look={look} />}
+            {dark > 0 && <span className="phone-fade" style={{ opacity: dark }} />}
             {!playing && !unplayable && (
               <span className="phone-play" aria-hidden="true">
                 ▶
@@ -396,6 +404,8 @@ export default function ClipEditor(props: Props) {
             </p>
           )}
 
+          <StyleAndEffects clip={clip} showHeadline={parts.headline && !!clip.headline} onChange={onChange} />
+
           <span className="field-label">Transcript</span>
           <p className="muted small">Tap a line to jump to it, then set the clip's start or end there.</p>
           <div className="nudges">
@@ -557,5 +567,133 @@ function ProEditControl({
       <b>🔒 Pro edit</b>
       <span className="muted small">{what}. Open a 🔒 Pro clip to see it, or upgrade to get it on every clip.</span>
     </Link>
+  );
+}
+
+const COLORS: [string | undefined, string][] = [
+  [undefined, 'Style color'],
+  ['#ffffff', 'White'],
+  ['#ffd23f', 'Yellow'],
+  ['#9dff3c', 'Green'],
+  ['#ff6a13', 'Orange'],
+  ['#5ec8ff', 'Blue'],
+  ['#ff5fa2', 'Pink'],
+];
+
+/** The person's own touches: headline text, caption size, place, color, motion, word fixes, zoom and fades. */
+function StyleAndEffects({ clip, showHeadline, onChange }: { clip: Clip; showHeadline: boolean; onChange: (c: Clip) => void }) {
+  const edit = clip.edit ?? {};
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const set = (patch: Partial<ClipEdit>) => {
+    const next: ClipEdit = { ...edit, ...patch };
+    // Defaults aren't stored, so older and untouched clips look the same.
+    (Object.keys(next) as (keyof ClipEdit)[]).forEach((k) => next[k] === undefined && delete next[k]);
+    onChange({ ...clip, edit: Object.keys(next).length ? next : undefined });
+  };
+  const choice = <T extends string>(label: string, value: T | undefined, options: [T | undefined, string][], onPick: (v: T | undefined) => void) => (
+    <div className="edit-row">
+      <span className="edit-label">{label}</span>
+      <div className="edit-chips" role="radiogroup" aria-label={label}>
+        {options.map(([v, name]) => (
+          <button key={name} type="button" role="radio" aria-checked={value === v} className={`chip ${value === v ? 'chip-on' : ''}`} onClick={() => onPick(v)}>
+            {name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <>
+      <span className="field-label">Style &amp; effects</span>
+      <div className="edit-panel">
+        {showHeadline && (
+          <div className="edit-row">
+            <label className="edit-label" htmlFor="clip-headline">
+              Headline
+            </label>
+            <input id="clip-headline" type="text" dir="auto" maxLength={80} value={clip.headline ?? ''} onChange={(e) => onChange({ ...clip, headline: e.target.value })} />
+          </div>
+        )}
+        {choice('Caption size', edit.captionSize, [['small', 'Small'], [undefined, 'Normal'], ['large', 'Large']], (v) => set({ captionSize: v }))}
+        {choice('Caption place', edit.captionPlace, [['top', 'Top'], ['middle', 'Middle'], [undefined, 'Bottom']], (v) => set({ captionPlace: v }))}
+        {choice('Caption animation', edit.captionMotion, [[undefined, 'None'], ['fade', 'Fade in'], ['pop', 'Pop']], (v) => set({ captionMotion: v }))}
+        <div className="edit-row">
+          <span className="edit-label">Caption color</span>
+          <div className="edit-swatches" role="radiogroup" aria-label="Caption color">
+            {COLORS.map(([c, name]) => (
+              <button
+                key={name}
+                type="button"
+                role="radio"
+                aria-checked={edit.captionColor === c}
+                aria-label={name}
+                title={name}
+                className={`swatch ${edit.captionColor === c ? 'swatch-on' : ''} ${c ? '' : 'swatch-default'}`}
+                style={c ? { background: c } : undefined}
+                onClick={() => set({ captionColor: c })}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="edit-row">
+          <span className="edit-label">Fix a word in the captions</span>
+          {edit.fixes?.map((f, i) => (
+            <span key={i} className="edit-fix">
+              <span dir="auto">{f.from}</span> → <b dir="auto">{f.to}</b>
+              <button type="button" className="link-button" aria-label={`Remove fix ${f.from}`} onClick={() => set({ fixes: edit.fixes!.filter((_, k) => k !== i) })}>
+                Remove
+              </button>
+            </span>
+          ))}
+          <form
+            className="edit-fix-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!from.trim() || !to.trim()) return;
+              set({ fixes: [...(edit.fixes ?? []), { from: from.trim(), to: to.trim() }] });
+              setFrom('');
+              setTo('');
+            }}
+          >
+            <input type="text" dir="auto" placeholder="Wrong word" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Wrong word" />
+            <input type="text" dir="auto" placeholder="Right word" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Right word" />
+            <button type="submit" className="chip">
+              Fix
+            </button>
+          </form>
+        </div>
+        <div className="edit-row">
+          <label className="edit-label" htmlFor="clip-zoom">
+            Zoom in · {Math.round((edit.zoom ?? 1) * 100)}%
+          </label>
+          <input
+            id="clip-zoom"
+            type="range"
+            className="slider"
+            min={100}
+            max={150}
+            step={5}
+            value={Math.round((edit.zoom ?? 1) * 100)}
+            onChange={(e) => set({ zoom: Number(e.target.value) === 100 ? undefined : Number(e.target.value) / 100 })}
+          />
+        </div>
+        <div className="edit-row edit-checks">
+          <label className="pro-part">
+            <input type="checkbox" checked={!!edit.fadeIn} onChange={(e) => set({ fadeIn: e.target.checked || undefined })} />
+            <span>Fade in at the start</span>
+          </label>
+          <label className="pro-part">
+            <input type="checkbox" checked={!!edit.fadeOut} onChange={(e) => set({ fadeOut: e.target.checked || undefined })} />
+            <span>Fade out at the end</span>
+          </label>
+        </div>
+        {clip.edit && (
+          <button type="button" className="link-button" onClick={() => onChange({ ...clip, edit: undefined })}>
+            Undo all style &amp; effects
+          </button>
+        )}
+      </div>
+    </>
   );
 }

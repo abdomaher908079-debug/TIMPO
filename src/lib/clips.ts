@@ -71,6 +71,75 @@ export interface Clip {
   captionStyle: CaptionStyleId;
   // A brand kit's look instead of captionStyle. undefined = not chosen yet (the first kit is used).
   brandKitId?: string | null;
+  // The person's own touches (editor → Style & effects).
+  edit?: ClipEdit;
+}
+
+/** The person's own touches on a clip. Everything optional: absent means the default. */
+export interface ClipEdit {
+  captionSize?: 'small' | 'large';
+  captionPlace?: 'top' | 'middle' | 'bottom';
+  // Text color of the captions, over the style's or brand kit's.
+  captionColor?: string;
+  // How each caption appears: fading in, or popping in. Absent: it simply appears.
+  captionMotion?: 'fade' | 'pop';
+  // Words the AI misheard, replaced wherever they appear in the clip's captions.
+  fixes?: { from: string; to: string }[];
+  // Extra zoom on the picture (1 = none), on top of the Pro edit's zoom-ins.
+  zoom?: number;
+  // The picture fades in from black at the start and out to black at the end.
+  fadeIn?: boolean;
+  fadeOut?: boolean;
+}
+
+export const CAPTION_SIZES = { small: 0.82, large: 1.22 } as const;
+export const CAPTION_PLACES = { top: 0.2, middle: 0.44, bottom: 0.66 } as const;
+export const FADE_SECONDS = 0.5;
+
+/** The caption look with the clip's own touches (size, place, color, motion) applied. */
+export function editedLook(look: CaptionLook, edit: ClipEdit | undefined): CaptionLook {
+  if (!edit) return look;
+  return {
+    ...look,
+    size: edit.captionSize ? CAPTION_SIZES[edit.captionSize] : look.size,
+    position: edit.captionPlace ? CAPTION_PLACES[edit.captionPlace] : look.position,
+    textColor: edit.captionColor ?? look.textColor,
+    motion: edit.captionMotion ?? look.motion,
+  };
+}
+
+/** Caption groups with the clip's word fixes applied (matching whole words, keeping punctuation). */
+export function fixWords(groups: CaptionGroup[], fixes: ClipEdit['fixes']): CaptionGroup[] {
+  const list = (fixes ?? []).filter((f) => normWord(f.from) && f.to.trim());
+  if (!list.length) return groups;
+  const swap = new Map(list.map((f) => [normWord(f.from), f.to.trim()]));
+  return groups.map((g) => ({
+    ...g,
+    words: g.words.map((w) => {
+      const to = swap.get(normWord(w.text));
+      if (!to) return w;
+      // Keep the punctuation around the word (a comma or full stop after it).
+      const [, before = '', after = ''] = /^([^\p{L}\p{N}]*)[\s\S]*?([^\p{L}\p{N}]*)$/u.exec(w.text) ?? [];
+      return { ...w, text: `${before}${to}${after}` };
+    }),
+  }));
+}
+
+/** How dark the picture is at time `t` (0 = normal, 1 = black) from the clip's fade in and out. */
+export function fadeAt(clip: Pick<Clip, 'start' | 'end' | 'edit'>, t: number): number {
+  const e = clip.edit;
+  if (!e) return 0;
+  if (e.fadeIn && t < clip.start + FADE_SECONDS) return Math.max(0, 1 - (t - clip.start) / FADE_SECONDS);
+  if (e.fadeOut && t > clip.end - FADE_SECONDS) return Math.min(1, (t - (clip.end - FADE_SECONDS)) / FADE_SECONDS);
+  return 0;
+}
+
+/** How a caption that has been up for `since` seconds is drawn: its opacity and scale. */
+export function captionMotion(look: CaptionLook, since: number | undefined): { alpha: number; scale: number } {
+  if (since === undefined || !look.motion) return { alpha: 1, scale: 1 };
+  if (look.motion === 'fade') return { alpha: Math.min(1, since / 0.2), scale: 1 };
+  const x = Math.min(1, since / 0.15);
+  return { alpha: Math.min(1, since / 0.08), scale: 0.78 + 0.22 * (1 - (1 - x) * (1 - x)) };
 }
 
 /** Everything that decides how captions look, from a basic style or a brand kit. */
@@ -85,6 +154,9 @@ export interface CaptionLook {
   boxColor: string;
   // Top of the captions, as a fraction of the video's height.
   position: number;
+  // Size relative to the normal one (1), and how each caption appears.
+  size?: number;
+  motion?: 'fade' | 'pop';
 }
 
 const PHOSPHOR = '#9dff3c';
@@ -150,6 +222,8 @@ export interface Caption {
   active: number;
   // Words highlighted by the Pro edit.
   emphasis?: boolean[];
+  // Seconds since this caption appeared (for fade and pop).
+  since?: number;
 }
 
 const normWord = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
@@ -200,6 +274,7 @@ export function captionFromGroups(groups: CaptionGroup[], t: number, emphasis?: 
   return {
     words: g.words.map((w) => w.text),
     active,
+    since: t - g.start,
     ...(marked ? { emphasis: g.words.map((w) => marked.has(normWord(w.text))) } : {}),
   };
 }

@@ -12,7 +12,7 @@ import {
   WebMOutputFormat,
 } from 'mediabunny';
 import type { BrandKit } from './brandKits';
-import { captionFromGroups, cropAt, proParts, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
+import { captionFromGroups, cropAt, editedLook, fadeAt, fixWords, proParts, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
 import { breathe } from './device';
 import { drawCaption, drawHeadline, drawLogo, drawWatermark } from './draw';
 
@@ -59,6 +59,10 @@ export async function renderClip(
   },
 ): Promise<RenderedClip> {
   const { width: OUT_W, height: OUT_H } = SIZES[size];
+  // The person's own touches: caption size, place, color and motion, fixed words, zoom and fades.
+  look = editedLook(look, clip.edit);
+  captions = fixWords(captions, clip.edit?.fixes);
+  const extraZoom = clip.edit?.zoom ?? 1;
   // Captions are drawn on a canvas, which only uses fonts that are already loaded.
   const { ensureFont } = await import('./brandKits');
   await ensureFont(look.font);
@@ -119,7 +123,7 @@ export async function renderClip(
           const t = clip.start + sample.timestamp;
           const left = ((srcW - cropW) * cropAt(clip, t, parts.follow)) / 100;
           const top = (srcH - cropH) / 2;
-          const zoom = zoomAt(zooms, t);
+          const zoom = zoomAt(zooms, t) * extraZoom;
           if (fit) {
             sample.draw(blurCtx, left, top, cropW, cropH, 0, 0, blur.width, blur.height);
             ctx.imageSmoothingQuality = 'high';
@@ -146,6 +150,11 @@ export async function renderClip(
           if (logo) drawLogo(ctx, logo.image, logo.corner, OUT_W, OUT_H);
           if (caption) drawCaption(ctx, caption, look, OUT_W, OUT_H);
           if (watermark) drawWatermark(ctx, OUT_W, OUT_H);
+          const dark = fadeAt(clip, t);
+          if (dark > 0) {
+            ctx.fillStyle = `rgba(0, 0, 0, ${dark})`;
+            ctx.fillRect(0, 0, OUT_W, OUT_H);
+          }
           return canvas;
         },
       },

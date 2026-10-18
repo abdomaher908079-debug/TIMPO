@@ -578,3 +578,25 @@ h1, h2, h3 { text-wrap: balance; }
 }
 .isla-status { color: var(--text); font-weight: 600; margin: 4px 0 10px; }
 @media (prefers-reduced-motion: reduce) { .isla-drift { animation: none; } .isla-scan { animation: none; left: 50%; } }
+
+/* Caption motion (editor → Style & effects); the editor restarts it for each new caption. */
+.caption-fade { animation: caption-fade 0.2s ease-out; }
+.caption-pop { animation: caption-pop 0.15s ease-out; }
+@keyframes caption-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes caption-pop { from { opacity: 0; transform: scale(0.78); } 50% { opacity: 1; } to { transform: scale(1); } }
+.phone-fade { position: absolute; inset: 0; background: #000; pointer-events: none; }
+
+/* Editor → Style & effects */
+.edit-panel { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.edit-row { display: grid; gap: 6px; }
+.edit-label { font-size: 0.85rem; font-weight: 600; color: var(--title); }
+.edit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.chip-on { border-color: var(--orange); color: var(--title); background: var(--surface-2); }
+.edit-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
+.swatch-on { outline: 2px solid var(--orange); outline-offset: 2px; }
+.swatch-default { background: conic-gradient(#fff 0 25%, #9dff3c 0 50%, #fff 0 75%, #9dff3c 0); }
+.edit-fix { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; flex-wrap: wrap; }
+.edit-fix-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
+.edit-fix-form input { min-width: 0; }
+.edit-checks { gap: 8px; }

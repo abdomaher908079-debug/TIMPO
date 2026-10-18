@@ -1,6 +1,6 @@
 import { BRAND_NAME, ORB } from './brand';
 import type { BrandKit } from './brandKits';
-import type { Caption, CaptionLook } from './clips';
+import { captionMotion, type Caption, type CaptionLook } from './clips';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -9,6 +9,7 @@ export const CAPTION_FONT = 'Inter, system-ui, sans-serif';
 // Pro edit: the color of highlighted words when the style's own accent already marks the spoken word.
 export const EMPHASIS_COLOR = '#ffd23f';
 const EMPHASIS_SCALE = 1.12;
+const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/;
 
 /**
  * Draws a caption onto a W×H video frame, matching the editor preview: centered, with its top at the
@@ -19,7 +20,11 @@ export function drawCaption(ctx: Ctx, caption: Caption, look: CaptionLook, W: nu
   const style = look.style;
   if (style === 'none' || !caption.words.length) return;
   const upper = style !== 'boxed';
-  const size = Math.round(W * 0.075);
+  const size = Math.round(W * 0.075 * (look.size ?? 1));
+  // Arabic, Hebrew and other right-to-left words are laid out from the right.
+  const rtl = caption.words.some((w) => RTL.test(w));
+  const { alpha, scale } = captionMotion(look, caption.since);
+  if (alpha <= 0) return;
   const words = caption.words.map((w) => (upper ? w.toUpperCase() : w));
   const em = (i: number) => !!caption.emphasis?.[i];
   const font = (i: number) => `${look.weight} ${Math.round(size * (em(i) ? EMPHASIS_SCALE : 1))}px "${look.font}", ${CAPTION_FONT}`;
@@ -51,11 +56,19 @@ export function drawCaption(ctx: Ctx, caption: Caption, look: CaptionLook, W: nu
 
   const lineHeight = size * 1.15 * (caption.emphasis?.some(Boolean) ? 1.05 : 1);
   const top = H * look.position;
+  // Fade and pop: drawn with the caption's opacity, scaled around its middle.
+  ctx.globalAlpha = alpha;
+  if (scale !== 1) {
+    const cy = top + (lineHeight * lines.length) / 2;
+    ctx.translate(W / 2, cy);
+    ctx.scale(scale, scale);
+    ctx.translate(-W / 2, -cy);
+  }
   lines.forEach((line, li) => {
     const total = line.reduce((n, i, k) => n + widths[i]! + (k ? space : 0), 0);
     let x = (W - total) / 2;
     const y = top + lineHeight * (li + 0.5);
-    for (const i of line) {
+    for (const i of rtl ? [...line].reverse() : line) {
       const on = i === caption.active;
       ctx.font = font(i);
       if (style === 'boxed') {

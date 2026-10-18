@@ -115,6 +115,10 @@ For each clip give:
 - score: 0 to 100 for how well it will perform: hook 40 points, stands alone 20, payoff 25, energy 15. Be strict and
   spread the scores out; most clips are not 90+.
 
+Language: write the title, headline and reason in the language the episode is spoken in (for an Arabic episode,
+Arabic, in the same dialect and tone the speakers use). Never translate them into English unless the episode is in
+English. hook, emphasis and punchIns are copied from the transcript as they are.
+
 Return the clips best first.`;
 
 const RESPONSE_SCHEMA = {
