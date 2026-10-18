@@ -1,5 +1,7 @@
 # Isla launch posts
 
+Tone: professional, no emojis.
+
 Facts to keep straight in every post: Isla is free during early launch. Free (early access) = 3 episodes a week, up to 2 hours each,
 all 10 best clips exportable, small "Made with Isla" watermark. Pro and Studio are "coming soon".
 On a computer the video never leaves the device; on phones only the audio is sent to be transcribed.
@@ -53,7 +55,7 @@ I'd love your feedback, especially from podcasters: what would make you use it f
 ## X / Threads (build in public)
 
 **Launch post:**
-I just launched Isla 🎙️→📱
+I just launched Isla.
 
 Upload a podcast episode. Isla finds the best moments and turns them into vertical clips with captions for TikTok,
 Reels and Shorts.
@@ -70,7 +72,7 @@ islaclips.com
 
 ## TikTok / Reels / Shorts caption
 
-This clip was made by AI from a 1-hour podcast in 2 minutes 🤯 Try it free: islaclips.com
+This clip was made by AI from a 1-hour podcast in 2 minutes. Try it free: islaclips.com
 #podcast #podcastclips #contentcreator #aitools
 
 ## DM to small podcasters
@@ -81,7 +83,7 @@ feedback.
 
 ## Arabic: launch post (Facebook groups, X)
 
-أطلقت Isla 🎙️→📱
+أطلقت Isla.
 
 ارفع حلقة البودكاست، وIsla تختار أفضل اللحظات وتحوّلها لمقاطع رأسية جاهزة بالترجمة على الشاشة لتيك توك وريلز
 وشورتس.
@@ -97,5 +99,11 @@ islaclips.com
 
 ## Arabic: TikTok caption
 
-المقطع ده اتعمل بالذكاء الاصطناعي من بودكاست ساعة في دقيقتين 🤯 جرّبه مجاناً: islaclips.com
+المقطع ده اتعمل بالذكاء الاصطناعي من بودكاست ساعة في دقيقتين. جرّبه مجاناً: islaclips.com
 #بودكاست #صناع_محتوى #ذكاء_اصطناعي
+
+## TikTok bio (160 characters max)
+
+**English:** Isla finds the best moments in your podcast and turns them into vertical clips with captions. Free during early access: islaclips.com
+
+**Arabic:** Isla بتختار أفضل لحظات البودكاست وتحوّلها لمقاطع رأسية بالترجمة. مجاناً خلال الإطلاق المبكر: islaclips.com
