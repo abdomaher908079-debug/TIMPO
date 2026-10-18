@@ -51,7 +51,7 @@ export default function PricingPage() {
           Every plan has the full editor and auto framing. Pro and Studio add our best AI, every clip, no watermark and your own
           look.
         </p>
-        {!paymentsOpen && <p className="notice">Pro and Studio are coming soon. The Free plan is open now.</p>}
+        {!paymentsOpen && <p className="notice">Pro and Studio are coming soon. The Free plan is open now; tap Notify me and we'll email you when they open.</p>}
       </section>
 
       <Pricing />

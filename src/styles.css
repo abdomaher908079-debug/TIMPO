@@ -193,6 +193,7 @@ h1, h2, h3 { text-wrap: balance; }
 .episode-facts dt { color: var(--muted); font-size: 0.75rem; }
 .episode-facts dd { margin: 0; color: var(--title); font-family: 'Share Tech Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 .notice { background: var(--surface-2); border-left: 3px solid var(--amber); border-radius: 8px; padding: 10px 12px; margin: 14px 0 0; font-size: 0.9rem; }
+.notify-done { margin: 0; padding: 10px 0; color: var(--phosphor); font-weight: 600; font-size: 0.9rem; text-align: center; }
 
 /* Processing */
 .processing-name { margin-top: 18px; }

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { openBillingPortal, paymentsReady, startCheckout, switchPlan } from '../lib/billing';
+import { openBillingPortal, paymentsOpen, paymentsReady, startCheckout, switchPlan } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
 import { SEAT_PRICE } from '../lib/team';
+import { joinWaitlist, waitlistPlan, type WaitlistPlan } from '../lib/waitlist';
 import { PACK } from '../../supabase/functions/_shared/plans';
 
 export default function Pricing() {
@@ -74,7 +75,7 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   if (!user) {
     return (
       <Link to="/signup" className={style}>
-        {plan.id === 'free' ? 'Start free' : `Get ${plan.name}`}
+        {plan.id === 'free' ? 'Start free' : paymentsOpen ? `Get ${plan.name}` : 'Start free, get notified'}
       </Link>
     );
   }
@@ -140,9 +141,51 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
     );
   }
   if (plan.id === 'free') return null;
+  if (!paymentsOpen) return <NotifyButton plan={plan} style={style} />;
   return (
     <button type="button" className={style} disabled={!paymentsReady} onClick={() => startCheckout(plan.id as 'pro' | 'studio', yearly ? 'yearly' : 'monthly')}>
       {paymentsReady ? `Upgrade to ${plan.name}` : 'Coming soon'}
     </button>
+  );
+}
+
+/** While paid plans are closed: ask to be emailed when they open. */
+function NotifyButton({ plan, style }: { plan: Plan; style: string }) {
+  const { user } = useAuth();
+  const [joined, setJoined] = useState<WaitlistPlan | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) void waitlistPlan(user.id).then(setJoined);
+  }, [user]);
+
+  if (joined === plan.id) {
+    return (
+      <p className="notify-done">
+        ✓ We'll email you at {user?.email} when {plan.name} opens.
+      </p>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className={style}
+        disabled={busy || !user}
+        onClick={() => {
+          if (!user) return;
+          setBusy(true);
+          setError(null);
+          joinWaitlist(user.id, user.email, plan.id as WaitlistPlan)
+            .then(() => setJoined(plan.id as WaitlistPlan))
+            .catch((e: Error) => setError(e.message))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? 'Saving…' : `Notify me when ${plan.name} opens`}
+      </button>
+      {error && <p className="error small">{error}</p>}
+    </>
   );
 }

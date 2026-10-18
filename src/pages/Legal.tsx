@@ -77,7 +77,8 @@ export function Privacy() {
         We keep your email address, your plan, and how much of your plan you've used (the length of each episode processed and
         a code identifying the file, not the file itself). For each AI request we also note which AI model was used and how
         much of it, without any of your content, for 90 days; after that only monthly totals are kept. If you sign in with
-        Google, we receive your name and email from Google.
+        Google, we receive your name and email from Google. If you tap "Notify me" on a paid plan, we keep that request with
+        your email until the plan opens and we've told you, or until you ask us to remove it.
       </p>
 
       <h2>Payments</h2>
