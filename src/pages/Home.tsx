@@ -63,6 +63,7 @@ export default function Home() {
   const startLink = '/signup';
   return (
     <main className="home">
+      <div className="hero-row">
       <section className="hero">
         <p className="eyebrow">For podcasters</p>
         <h1 className="hero-title">
@@ -76,9 +77,14 @@ export default function Home() {
           Try it free, {LIMITS.free.episodesPerPeriod === 1 ? '1 episode' : `${LIMITS.free.episodesPerPeriod} episodes`} every week
         </Link>
         <p className="privacy-note">
-          Your video never leaves your computer. No upload wait. <Link to="/privacy">Privacy</Link>
+          Your video stays on your device. No upload wait. <Link to="/privacy">Privacy</Link>
         </p>
       </section>
+      {/* Isla herself, beside the pitch on wide screens. */}
+      <div className="hero-isla welcome-logo" aria-hidden="true">
+        <LivingIsla />
+      </div>
+      </div>
 
       <section className="card demo" aria-label="Example result">
         <div className="demo-head">
@@ -89,7 +95,7 @@ export default function Home() {
         <div className="clip-grid">
           {SAMPLE_CLIPS.map((c) => (
             <div key={c.title} className="clip-card">
-              <div className="clip-thumb">
+              <div className="clip-thumb clip-thumb-art">
                 <span className="clip-score">{c.score}</span>
                 <span className="clip-len">{c.length}</span>
                 <span className="clip-caption">{c.caption}</span>

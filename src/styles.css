@@ -652,3 +652,34 @@ h1, h2, h3 { text-wrap: balance; }
   .tab-here .tab-avatar { border-color: var(--orange); color: var(--orange); }
 }
 .account-logout { margin-top: 24px; }
+
+/* Polish */
+/* Signed-in pages share one width, centered, so titles line up from page to page. */
+.page-app .account-page, .page-app .library, .page-app .new-episode:not(.new-episode-wide) { max-width: 720px; margin: 0 auto; padding-left: 0; padding-right: 0; }
+.page-app .account-page > .page-title, .page-app .account-page > .muted, .page-app .account-page > .notice, .page-app .account-card { max-width: none; }
+.page-app main { padding-top: 28px; }
+@media (min-width: 960px) { .account-logout { display: none; } }
+/* Home: Isla beside the pitch on wide screens. */
+.hero-row { display: grid; gap: 24px; align-items: center; }
+.hero-isla { display: none; justify-self: center; }
+@media (min-width: 900px) { .hero-row { grid-template-columns: minmax(0, 1fr) 260px; } .hero-isla { display: block; } }
+/* The example clips look like video stills: a warm scene with someone talking. */
+.clip-thumb-art { overflow: hidden; }
+.clip-thumb-art::before, .clip-thumb-art::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); background: rgba(20, 14, 10, 0.55); }
+.clip-thumb-art::before { top: 26%; width: 30%; aspect-ratio: 1; border-radius: 50%; }
+.clip-thumb-art::after { top: 52%; width: 70%; height: 60%; border-radius: 45% 45% 0 0; }
+.clip-thumb-art > * { z-index: 1; }
+.clip-card:nth-child(1) .clip-thumb-art { background: linear-gradient(160deg, #ff9a4d, #b8430f); }
+.clip-card:nth-child(2) .clip-thumb-art { background: linear-gradient(160deg, #7fbf4d, #2f6a1a); }
+.clip-card:nth-child(3) .clip-thumb-art { background: linear-gradient(160deg, #e0b51e, #8a5a0a); }
+.clip-card:nth-child(4) .clip-thumb-art { background: linear-gradient(160deg, #ff6a8a, #8a2445); }
+/* Log in and sign up: a card with Isla on top. */
+.auth-card { max-width: 440px; margin: 12px auto 0; padding: 28px 24px; }
+.auth-isla { display: flex; justify-content: center; margin-bottom: 6px; }
+.auth-card .page-title, .auth-card > .muted { text-align: center; }
+.btn-google { display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--border); }
+.divider { display: flex; align-items: center; gap: 12px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+/* Pricing: room between the notice and the monthly/yearly switch. */
+.pricing-hero .notice { margin-bottom: 18px; }
+.pricing-note { text-align: center; }
