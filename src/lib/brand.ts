@@ -7,6 +7,6 @@ export const ORB = { green: '#9dff3c', yellow: '#e0b51e', orange: '#ff6a13', vis
 export const LEGAL = {
   // The person or company that runs Isla.
   owner: (import.meta.env.VITE_LEGAL_NAME as string | undefined) || BRAND_NAME,
-  email: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'hookcutofficial@gmail.com',
+  email: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'support@islaclips.com',
   updated: 'October 15, 2026',
 };
