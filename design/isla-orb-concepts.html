@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Isla Orb Designs</title>
+<style>
+  :root { --bg: #0d0f12; --card: #161a1f; --line: #2a3038; --text: #e9edf1; --muted: #8b95a3; --green: #9dff3c; --orange: #ff6a13; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Inter, system-ui, sans-serif; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px 16px; margin: 0 auto 18px; max-width: 520px; }
+  .tag { color: var(--green); font-weight: 700; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; margin: 0; }
+  h2 { margin: 4px 0 6px; font-size: 1.2rem; }
+  p { color: var(--muted); margin: 6px 0 0; font-size: .95rem; }
+  .stage { height: 190px; display: grid; place-items: center; }
+  .float { animation: float 3.2s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  .blink { transform-box: fill-box; transform-origin: center; animation: blink 4.5s infinite; }
+  @keyframes blink { 0%,93%,100% { transform: scaleY(1); } 96% { transform: scaleY(.08); } }
+  .bar { transform-box: fill-box; transform-origin: center; animation: talk 1.2s ease-in-out infinite; }
+  @keyframes talk { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(.4); } }
+  .spin { transform-box: view-box; transform-origin: 80px 80px; animation: spin 10s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .pulse { transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.08); opacity: 1; } }
+  .morph { animation: morph 6s ease-in-out infinite; }
+  @keyframes morph {
+    0%,100% { d: path("M80 22 C113 22 138 47 138 80 C138 113 113 138 80 138 C47 138 22 113 22 80 C22 47 47 22 80 22 Z"); }
+    33% { d: path("M82 20 C118 24 140 50 136 82 C132 116 110 140 78 138 C44 136 20 112 24 78 C28 46 48 18 82 20 Z"); }
+    66% { d: path("M78 24 C112 18 142 46 138 80 C134 114 114 136 80 140 C46 142 24 116 22 82 C20 48 44 30 78 24 Z"); }
+  }
+
+  /* demo */
+  .demo { position: relative; height: 300px; border-radius: 14px; overflow: hidden; background: #0b0d10; border: 1px solid var(--line); }
+  .video { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); width: 120px; height: 200px; border-radius: 12px; overflow: hidden;
+    background: linear-gradient(160deg, #3a2a20, #1d2733 60%, #0f1418); border: 1px solid #333c47; }
+  .video .cap { position: absolute; left: 8px; right: 8px; bottom: 26px; text-align: center; font-weight: 800; font-size: .8rem; color: #fff; text-shadow: 0 1px 2px #000; }
+  .video .cap b { color: var(--green); }
+  .video .scan { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--orange); box-shadow: 0 0 10px var(--orange); animation: scan 3s linear infinite; }
+  @keyframes scan { from { left: -3px; } to { left: 100%; } }
+  .video .snip { position: absolute; left: 0; right: 0; top: 0; height: 100%; border: 2px solid var(--green); border-radius: 12px; opacity: 0; animation: snip 6s infinite; }
+  @keyframes snip { 0%,55% { opacity: 0; } 60%,80% { opacity: 1; } 100% { opacity: 0; } }
+  .flyer { position: absolute; width: 64px; height: 64px; offset-path: path("M 40 60 C 120 10, 260 20, 300 80 S 260 210, 180 230 S 30 200, 40 60"); animation: fly 9s ease-in-out infinite; offset-rotate: 0deg; }
+  @keyframes fly { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  .status { position: absolute; left: 12px; top: 10px; font-size: .8rem; color: var(--muted); }
+  .status::after { content: 'Isla is watching your episode…'; animation: status 9s steps(1) infinite; }
+  @keyframes status { 0% { content: 'Isla is watching your episode…'; } 55% { content: 'Isla found a moment ✨'; } 80% { content: 'Isla is cutting it…'; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } .flyer { offset-distance: 20%; } }
+</style>
+</head>
+<body>
+  <h1>Isla: orb designs</h1>
+  <p class="lead">Four looks for Isla's orb. All animated. At the bottom: a demo of her flying around and watching a video being edited.</p>
+
+  <!-- 1 Glass -->
+  <section class="card">
+    <p class="tag">Design 1</p>
+    <h2>Glass orb</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Glass orb">
+      <defs>
+        <radialGradient id="g1in" cx="50%" cy="62%" r="60%"><stop offset="0" stop-color="#ff6a13" stop-opacity=".9"/><stop offset=".45" stop-color="#ff6a13" stop-opacity=".25"/><stop offset=".75" stop-color="#9dff3c" stop-opacity=".18"/><stop offset="1" stop-color="#0d0f12" stop-opacity="0"/></radialGradient>
+        <radialGradient id="g1body" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#2a323c"/><stop offset="1" stop-color="#0f1317"/></radialGradient>
+        <linearGradient id="g1rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9dff3c"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
+        <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <circle cx="80" cy="80" r="56" fill="#9dff3c" opacity=".08" class="pulse"/>
+      <circle cx="80" cy="80" r="50" fill="url(#g1body)"/>
+      <circle cx="80" cy="80" r="50" fill="url(#g1in)"/>
+      <circle cx="80" cy="80" r="50" fill="none" stroke="url(#g1rim)" stroke-width="2.5" filter="url(#glow1)" opacity=".9"/>
+      <ellipse cx="62" cy="52" rx="16" ry="9" fill="#fff" opacity=".18" transform="rotate(-25 62 52)"/>
+      <g class="blink" fill="#fff" filter="url(#glow1)"><rect x="61" y="64" width="9" height="16" rx="4.5"/><rect x="90" y="64" width="9" height="16" rx="4.5"/></g>
+      <g fill="#9dff3c"><rect class="bar" x="66" y="92" width="4" height="8" rx="2"/><rect class="bar" style="animation-delay:.1s" x="72" y="89" width="4" height="14" rx="2"/><rect class="bar" style="animation-delay:.2s" x="78" y="87" width="4" height="18" rx="2" fill="#ff6a13"/><rect class="bar" style="animation-delay:.3s" x="84" y="89" width="4" height="14" rx="2"/><rect class="bar" style="animation-delay:.4s" x="90" y="92" width="4" height="8" rx="2"/></g>
+    </svg></div>
+    <p>A dark glass sphere with a warm orange light glowing inside and a green-to-orange rim. Modern "assistant" eyes, and a tiny voice wave that moves when she talks or listens.</p>
+  </section>
+
+  <!-- 2 Halo -->
+  <section class="card">
+    <p class="tag">Design 2</p>
+    <h2>Halo orb</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Halo orb">
+      <defs>
+        <radialGradient id="g2core" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#ffb07a"/><stop offset=".5" stop-color="#ff6a13"/><stop offset="1" stop-color="#9a3a06"/></radialGradient>
+        <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <g class="spin"><ellipse cx="80" cy="80" rx="66" ry="20" fill="none" stroke="#9dff3c" stroke-width="2.5" stroke-dasharray="70 18 8 18" filter="url(#glow2)" transform="rotate(-18 80 80)"/></g>
+      <circle cx="80" cy="80" r="40" fill="url(#g2core)" filter="url(#glow2)"/>
+      <ellipse cx="68" cy="64" rx="11" ry="6" fill="#fff" opacity=".35" transform="rotate(-25 68 64)"/>
+      <g class="blink" fill="#1a0c04"><ellipse cx="68" cy="82" rx="5" ry="7"/><ellipse cx="92" cy="82" rx="5" ry="7"/></g>
+      <g fill="#fff" opacity=".9"><circle cx="70" cy="79" r="1.6"/><circle cx="94" cy="79" r="1.6"/></g>
+    </svg></div>
+    <p>A warm orange core, like a small sun, with a green ring orbiting around her, like the planet of sound. Very recognizable; the ring spins faster when she's working.</p>
+  </section>
+
+  <!-- 3 Soft blob -->
+  <section class="card">
+    <p class="tag">Design 3</p>
+    <h2>Living blob</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Living blob">
+      <defs>
+        <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9dff3c"/><stop offset=".55" stop-color="#d8c22a"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
+        <filter id="glow3" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <path class="morph" d="M80 22 C113 22 138 47 138 80 C138 113 113 138 80 138 C47 138 22 113 22 80 C22 47 47 22 80 22 Z" fill="url(#g3)" filter="url(#glow3)" opacity=".95"/>
+      <ellipse cx="62" cy="50" rx="15" ry="8" fill="#fff" opacity=".35" transform="rotate(-25 62 50)"/>
+      <g class="blink" fill="#0d0f12"><ellipse cx="66" cy="80" rx="7" ry="10"/><ellipse cx="94" cy="80" rx="7" ry="10"/></g>
+      <g fill="#fff"><circle cx="69" cy="76" r="2.4"/><circle cx="97" cy="76" r="2.4"/></g>
+      <path d="M72 100 Q80 106 88 100" fill="none" stroke="#0d0f12" stroke-width="3" stroke-linecap="round"/>
+    </svg></div>
+    <p>A soft, slowly morphing shape in a green-to-orange gradient, like a friendly living light. The cutest and most emotional; she can squish, stretch and smile.</p>
+  </section>
+
+  <!-- 4 Minimal light -->
+  <section class="card">
+    <p class="tag">Design 4</p>
+    <h2>Pure light</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Pure light orb">
+      <defs>
+        <radialGradient id="g4" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffffff"/><stop offset=".25" stop-color="#ffd2b0"/><stop offset=".55" stop-color="#ff6a13"/><stop offset="1" stop-color="#ff6a13" stop-opacity="0"/></radialGradient>
+        <radialGradient id="g4h" cx="50%" cy="50%" r="50%"><stop offset=".6" stop-color="#9dff3c" stop-opacity="0"/><stop offset=".8" stop-color="#9dff3c" stop-opacity=".35"/><stop offset="1" stop-color="#9dff3c" stop-opacity="0"/></radialGradient>
+      </defs>
+      <circle class="pulse" cx="80" cy="80" r="70" fill="url(#g4h)"/>
+      <circle cx="80" cy="80" r="46" fill="url(#g4)"/>
+      <g class="blink" fill="#3a1500"><rect x="66" y="72" width="7" height="13" rx="3.5"/><rect x="87" y="72" width="7" height="13" rx="3.5"/></g>
+    </svg></div>
+    <p>Just a glowing ball of warm light with two small eyes and a green aura. The simplest, like a firefly or a spirit; elegant, and the lightest to animate everywhere.</p>
+  </section>
+
+  <!-- Demo -->
+  <section class="card">
+    <p class="tag">In the app</p>
+    <h2>Isla watching your episode</h2>
+    <div class="demo">
+      <div class="status"></div>
+      <div class="video">
+        <div class="scan"></div>
+        <div class="snip"></div>
+        <div class="cap">THIS <b>CHANGED</b> EVERYTHING</div>
+      </div>
+      <svg class="flyer" viewBox="0 0 160 160" aria-hidden="true">
+        <circle cx="80" cy="80" r="50" fill="url(#g1body)"/>
+        <circle cx="80" cy="80" r="50" fill="url(#g1in)"/>
+        <circle cx="80" cy="80" r="50" fill="none" stroke="url(#g1rim)" stroke-width="4" filter="url(#glow1)"/>
+        <g id="look"><g class="blink" fill="#fff"><rect x="61" y="64" width="10" height="18" rx="5"/><rect x="90" y="64" width="10" height="18" rx="5"/></g></g>
+      </svg>
+    </div>
+    <p>She floats around the screen while working, keeps her eyes on your video, and reacts: watching, finding a moment, then cutting it. (Shown with Design 1.)</p>
+  </section>
+<script>
+  // Her eyes follow the video wherever she flies.
+  const flyer = document.querySelector('.flyer');
+  const video = document.querySelector('.video');
+  const look = document.getElementById('look');
+  function track() {
+    const f = flyer.getBoundingClientRect();
+    const v = video.getBoundingClientRect();
+    const dx = v.left + v.width / 2 - (f.left + f.width / 2);
+    const dy = v.top + v.height / 2 - (f.top + f.height / 2);
+    const d = Math.hypot(dx, dy) || 1;
+    look.setAttribute('transform', `translate(${(dx / d) * 12} ${(dy / d) * 10})`);
+    requestAnimationFrame(track);
+  }
+  track();
+</script>
+</body>
+</html>
