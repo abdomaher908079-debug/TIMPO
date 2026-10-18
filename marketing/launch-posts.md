@@ -1,7 +1,7 @@
 # Isla launch posts
 
-Facts to keep straight in every post: Isla is free during early launch. Free = 1 episode a week, up to 30 minutes,
-10 best clips found, 3 exported, small "Made with Isla" watermark. Pro and Studio are "coming soon".
+Facts to keep straight in every post: Isla is free during early launch. Free (early access) = 3 episodes a week, up to 2 hours each,
+all 10 best clips exportable, small "Made with Isla" watermark. Pro and Studio are "coming soon".
 On a computer the video never leaves the device; on phones only the audio is sent to be transcribed.
 
 ## Reddit: r/podcasting (feedback post)
@@ -19,7 +19,7 @@ How it works:
 - It frames them vertically with captions, and you can edit the start and end, the captions and the style.
 - On a computer, your video never leaves your device. Nothing is uploaded.
 
-It's free right now (1 episode a week, up to 30 minutes). I'd really like to know:
+It's free right now (3 episodes a week, up to 2 hours each). I'd really like to know:
 1. Did it pick the moments you would have picked?
 2. What's missing before you'd use it every week?
 

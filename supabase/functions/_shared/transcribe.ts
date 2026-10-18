@@ -139,6 +139,8 @@ export async function listen(
     console.error(`Audio piece of ${length} s holds about ${Math.round(tokens / AUDIO_TOKENS_PER_SECOND)} s`);
     throw new AudioTooLong();
   }
+  // Every model said "out of quota" (429): the free AI's daily limit is used up, so retrying soon won't help.
+  let allQuota = true;
   for (const { apiKey, model } of attempts) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -146,12 +148,18 @@ export async function listen(
         return { segments: toSegments(lines, offset, length), usage: { model, paid: apiKey === paidKey, input, output } };
       } catch (err) {
         if (!(err instanceof Busy)) throw err;
+        if (err.message !== '429') allQuota = false;
         console.error(`Gemini ${model}: ${err.message}`);
         if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
       }
     }
   }
-  throw new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
+  throw new MomentsError(
+    allQuota
+      ? 'Isla is very busy today and has reached its daily AI limit. Please try again tomorrow, or listen on this device.'
+      : 'Our AI is busy right now. Please try again in a minute.',
+    503,
+  );
 }
 
 /** How many tokens the audio alone is, from Gemini's free token counter. */

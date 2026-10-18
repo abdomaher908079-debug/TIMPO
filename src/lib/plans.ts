@@ -1,4 +1,4 @@
-import { LIMITS, type PlanId, type PlanLimits } from '../../supabase/functions/_shared/plans';
+import { EARLY_ACCESS, LIMITS, type PlanId, type PlanLimits } from '../../supabase/functions/_shared/plans';
 
 export type { PlanId };
 export { LIMITS };
@@ -14,18 +14,28 @@ export interface Plan extends PlanLimits {
 export const PLANS: Plan[] = [
   {
     ...LIMITS.free,
-    name: 'Free',
+    name: EARLY_ACCESS ? 'Free (early access)' : 'Free',
     monthly: 0,
     yearlyPerMonth: 0,
-    features: [
-      '1 episode every week (4 a month)',
-      'Episodes up to 30 minutes long',
-      'Quick AI: good clips, fast',
-      'See all 10 best clips, export 3',
-      'Full editor, 1080p export, auto framing',
-      'Cloud listening for phones and slow devices: 1 a week',
-      'Small "Made with Isla" watermark',
-    ],
+    features: EARLY_ACCESS
+      ? [
+          '3 episodes every week',
+          'Episodes up to 2 hours long',
+          'Quick AI: good clips, fast',
+          'Export all 10 best clips',
+          'Full editor, 1080p export, auto framing',
+          'Cloud listening for phones and slow devices: 3 a week',
+          'Small "Made with Isla" watermark',
+        ]
+      : [
+          '1 episode every week (4 a month)',
+          'Episodes up to 30 minutes long',
+          'Quick AI: good clips, fast',
+          'See all 10 best clips, export 3',
+          'Full editor, 1080p export, auto framing',
+          'Cloud listening for phones and slow devices: 1 a week',
+          'Small "Made with Isla" watermark',
+        ],
   },
   {
     ...LIMITS.pro,

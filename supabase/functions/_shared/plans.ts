@@ -29,21 +29,40 @@ export interface PlanLimits {
   cloudJobsPerPeriod: number | null;
 }
 
+// Early access: while paid plans are closed (VITE_PAYMENTS_OPEN), Free is more generous. Set to false when
+// payments open, so Free goes back to its normal limits.
+export const EARLY_ACCESS = true;
+
 export const LIMITS: Record<PlanId, PlanLimits> = {
-  free: {
-    id: 'free',
-    period: 'week',
-    hours: 0.5,
-    maxEpisodeSeconds: 30 * 60,
-    episodesPerPeriod: 1,
-    clipsFound: 10,
-    clipsExportable: 3,
-    watermark: true,
-    maxExport: '1080p',
-    quality: 'quick',
-    cloudSeconds: 30 * 60,
-    cloudJobsPerPeriod: 1,
-  },
+  free: EARLY_ACCESS
+    ? {
+        id: 'free',
+        period: 'week',
+        hours: 6,
+        maxEpisodeSeconds: 2 * 3600,
+        episodesPerPeriod: 3,
+        clipsFound: 10,
+        clipsExportable: 10,
+        watermark: true,
+        maxExport: '1080p',
+        quality: 'quick',
+        cloudSeconds: 6 * 3600,
+        cloudJobsPerPeriod: 3,
+      }
+    : {
+        id: 'free',
+        period: 'week',
+        hours: 0.5,
+        maxEpisodeSeconds: 30 * 60,
+        episodesPerPeriod: 1,
+        clipsFound: 10,
+        clipsExportable: 3,
+        watermark: true,
+        maxExport: '1080p',
+        quality: 'quick',
+        cloudSeconds: 30 * 60,
+        cloudJobsPerPeriod: 1,
+      },
   pro: {
     id: 'pro',
     period: 'month',

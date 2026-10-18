@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { LIMITS } from '../lib/plans';
 
 const MIN_PASSWORD = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -184,8 +185,16 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
         )}
       </p>
       {isSignup && (
-        <p className="muted small">Free plan: 1 episode every week, up to 30 minutes. By continuing you agree to the Terms and Privacy Policy.</p>
+        <p className="muted small">Free plan: {freeSummary()}. By continuing you agree to the Terms and Privacy Policy.</p>
       )}
     </main>
   );
+}
+
+/** "3 episodes every week, up to 2 hours each", from the Free plan's limits. */
+function freeSummary(): string {
+  const { episodesPerPeriod: n, maxEpisodeSeconds: max } = LIMITS.free;
+  const episodes = n === 1 ? '1 episode' : `${n} episodes`;
+  const length = max ? (max >= 3600 ? `${max / 3600} hour${max === 3600 ? '' : 's'}` : `${max / 60} minutes`) : 'any length';
+  return `${episodes} every week, up to ${length} each`;
 }

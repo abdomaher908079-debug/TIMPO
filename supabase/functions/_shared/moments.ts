@@ -193,6 +193,8 @@ export async function pickMoments(
   const after = FALLBACK_CHAIN.indexOf(model);
   const models = [model, ...(after >= 0 ? FALLBACK_CHAIN.slice(after + 1) : FALLBACK_CHAIN.slice(1))];
   let lastError: unknown;
+  // Every model said "out of quota": the free AI's daily limit is used up, so retrying soon won't help.
+  let allQuota = true;
   for (const m of models) {
     // Overload (503) is usually brief: one quick retry on the same model first.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -202,6 +204,7 @@ export async function pickMoments(
       } catch (err) {
         lastError = err;
         if (!(err instanceof ModelProblem)) throw err;
+        if (err.detail !== 'quota') allQuota = false;
         console.error(`Gemini ${m}: ${err.detail}`);
         if (err.detail !== 'overloaded' || attempt === 1) break;
         await new Promise((r) => setTimeout(r, 2000));
@@ -209,10 +212,12 @@ export async function pickMoments(
     }
   }
   if (backup) return pickMoments(request, backup);
-  throw lastError instanceof ModelProblem
-    ? new MomentsError('Our AI is busy right now. Please try again in a minute.', 503)
-    : lastError;
+  if (!(lastError instanceof ModelProblem)) throw lastError;
+  throw allQuota ? new MomentsError(DAILY_LIMIT_MESSAGE, 503) : new MomentsError('Our AI is busy right now. Please try again in a minute.', 503);
 }
+
+export const DAILY_LIMIT_MESSAGE =
+  'Isla is very busy today and has reached its daily AI limit. Please try again tomorrow; this episode wasn’t counted.';
 
 // The model can't answer right now, but another one might.
 class ModelProblem extends MomentsError {

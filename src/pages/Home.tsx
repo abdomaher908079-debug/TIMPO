@@ -5,6 +5,7 @@ import IslaOrb from '../components/IslaOrb';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { joinTeam, listTeam, type TeamMember } from '../lib/team';
+import { LIMITS } from '../lib/plans';
 
 // What Isla does, in the words a podcaster would use. Every item here is in the product.
 const FEATURES: { title: string; text: string }[] = [
@@ -72,7 +73,7 @@ export default function Home() {
           captions for TikTok, Reels and Shorts.
         </p>
         <Link to={startLink} className="btn btn-primary">
-          Try it free, 1 episode every week
+          Try it free, {LIMITS.free.episodesPerPeriod === 1 ? '1 episode' : `${LIMITS.free.episodesPerPeriod} episodes`} every week
         </Link>
         <p className="privacy-note">
           Your video never leaves your computer. No upload wait. <Link to="/privacy">Privacy</Link>
