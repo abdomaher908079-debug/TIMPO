@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Isla Visor Faces</title>
+<style>
+  :root { --bg: #0d0f12; --card: #161a1f; --line: #2a3038; --text: #e9edf1; --muted: #8b95a3; --green: #9dff3c; --orange: #ff6a13; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Inter, system-ui, sans-serif; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px 16px; margin: 0 auto 18px; max-width: 520px; }
+  .tag { color: var(--green); font-weight: 700; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; margin: 0; }
+  h2 { margin: 4px 0 6px; font-size: 1.2rem; }
+  p { color: var(--muted); margin: 6px 0 0; font-size: .95rem; }
+  .stage { height: 180px; display: grid; place-items: center; }
+  .moods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; margin-top: 6px; }
+  .moods span { display: block; color: var(--muted); font-size: .74rem; }
+  .float { animation: float 3.4s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  .blink { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
+  @keyframes blink { 0%,94%,100% { transform: scaleY(1); } 97% { transform: scaleY(.12); } }
+  .look { animation: look 6s ease-in-out infinite; }
+  @keyframes look { 0%,30%,100% { transform: translateX(0); } 40%,55% { transform: translateX(-5px); } 65%,85% { transform: translateX(5px); } }
+  .morph { animation: morph 7s ease-in-out infinite; }
+  @keyframes morph {
+    0%,100% { d: path("M80 22 C113 22 138 47 138 80 C138 113 113 138 80 138 C47 138 22 113 22 80 C22 47 47 22 80 22 Z"); }
+    33% { d: path("M82 20 C118 24 140 50 136 82 C132 116 110 140 78 138 C44 136 20 112 24 78 C28 46 48 18 82 20 Z"); }
+    66% { d: path("M78 24 C112 18 142 46 138 80 C134 114 114 136 80 140 C46 142 24 116 22 82 C20 48 44 30 78 24 Z"); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+  <h1>Isla: a calmer visor</h1>
+  <p class="lead">Still an agent, but calm and confident, not angry. Rounder eye-lights, a glass visor instead of a black band.</p>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9dff3c"/><stop offset=".5" stop-color="#e0b51e"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
+      <radialGradient id="shade" cx="35%" cy="28%" r="80%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>
+      <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c232b"/><stop offset="1" stop-color="#0b0e12"/></linearGradient>
+      <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="eyeglow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <symbol id="blob" viewBox="0 0 160 160">
+        <path class="morph" d="M80 22 C113 22 138 47 138 80 C138 113 113 138 80 138 C47 138 22 113 22 80 C22 47 47 22 80 22 Z" fill="url(#body)" filter="url(#glow)"/>
+        <path class="morph" d="M80 22 C113 22 138 47 138 80 C138 113 113 138 80 138 C47 138 22 113 22 80 C22 47 47 22 80 22 Z" fill="url(#shade)"/>
+        <ellipse cx="60" cy="46" rx="14" ry="6" fill="#fff" opacity=".25" transform="rotate(-25 60 46)"/>
+      </symbol>
+      <!-- smiling eyes: the bottom of each eye-light is cut by a curve -->
+      <mask id="smile" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160">
+        <rect width="160" height="160" fill="#fff"/>
+        <ellipse cx="67" cy="86" rx="9" ry="5.5" fill="#000"/><ellipse cx="93" cy="86" rx="9" ry="5.5" fill="#000"/>
+      </mask>
+      <!-- the glass visor: rounder, with a soft reflection -->
+      <symbol id="visorband" viewBox="0 0 160 160">
+        <rect x="42" y="62" width="76" height="30" rx="15" fill="url(#visor)" opacity=".92"/>
+        <rect x="42" y="62" width="76" height="30" rx="15" fill="none" stroke="#fff" stroke-opacity=".12"/>
+        <path d="M52 67 L74 67" stroke="#fff" stroke-opacity=".18" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- 1 -->
+  <section class="card">
+    <p class="tag">Version 1</p>
+    <h2>Calm</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Calm Isla">
+      <use href="#blob"/><use href="#visorband"/>
+      <g class="blink"><g class="look" fill="#9dff3c" filter="url(#eyeglow)"><rect x="61" y="70" width="12" height="14" rx="6"/><rect x="87" y="70" width="12" height="14" rx="6"/></g></g>
+    </svg></div>
+    <p>Round, open eye-lights: relaxed and attentive, like she's ready for your next episode. Neutral, neither sweet nor angry.</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="card">
+    <p class="tag">Version 2</p>
+    <h2>Calm, slight smile in the eyes</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Warm Isla">
+      <use href="#blob"/><use href="#visorband"/>
+      <g class="blink"><g filter="url(#eyeglow)"><g fill="#9dff3c" mask="url(#smile)">
+        <rect x="61" y="70" width="12" height="14" rx="6"/><rect x="87" y="70" width="12" height="14" rx="6"/>
+      </g></g></g>
+    </svg></div>
+    <p>The bottom of each eye-light curves up a little, like a quiet, confident smile. Friendly but still serious. This is the "in between" you asked for.</p>
+  </section>
+
+  <!-- 3 -->
+  <section class="card">
+    <p class="tag">Version 3</p>
+    <h2>Focused but kind</h2>
+    <div class="stage"><svg class="float" width="160" height="160" viewBox="0 0 160 160" aria-label="Focused Isla">
+      <use href="#blob"/><use href="#visorband"/>
+      <g class="blink"><g class="look" fill="#9dff3c" filter="url(#eyeglow)"><rect x="60" y="73" width="14" height="9" rx="4.5"/><rect x="86" y="73" width="14" height="9" rx="4.5"/></g></g>
+    </svg></div>
+    <p>Wider, softer eye-lights at a level angle: concentrated when she's working, but never frowning.</p>
+  </section>
+
+  <!-- moods -->
+  <section class="card">
+    <p class="tag">Moods (Version 2)</p>
+    <h2>How she reacts</h2>
+    <div class="moods">
+      <div><svg width="80" height="80" viewBox="0 0 160 160"><use href="#blob"/><use href="#visorband"/>
+        <g filter="url(#eyeglow)"><g fill="#9dff3c" mask="url(#smile)"><rect x="61" y="70" width="12" height="14" rx="6"/><rect x="87" y="70" width="12" height="14" rx="6"/></g></g></svg><span>Hello</span></div>
+      <div><svg width="80" height="80" viewBox="0 0 160 160"><use href="#blob"/><use href="#visorband"/>
+        <g fill="#9dff3c" filter="url(#eyeglow)"><rect x="60" y="74" width="14" height="7" rx="3.5"/><rect x="86" y="74" width="14" height="7" rx="3.5"/></g></svg><span>Listening</span></div>
+      <div><svg width="80" height="80" viewBox="0 0 160 160"><use href="#blob"/><use href="#visorband"/>
+        <g fill="#ff6a13" filter="url(#eyeglow)"><rect x="60" y="68" width="14" height="18" rx="7"/><rect x="86" y="68" width="14" height="18" rx="7"/></g></svg><span>Found it!</span></div>
+      <div><svg width="80" height="80" viewBox="0 0 160 160"><use href="#blob"/><use href="#visorband"/>
+        <g fill="none" stroke="#9dff3c" stroke-width="4" stroke-linecap="round" filter="url(#eyeglow)"><path d="M60 80 Q67 72 74 80"/><path d="M86 80 Q93 72 100 80"/></g></svg><span>Done</span></div>
+    </div>
+    <p>Hello: calm smile. Listening: eye-lights narrow and move. Found it: they grow and turn orange. Done: two soft arcs, satisfied.</p>
+  </section>
+</body>
+</html>
