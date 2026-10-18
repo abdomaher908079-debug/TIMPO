@@ -4,14 +4,8 @@ import { supabase } from './lib/supabase';
 
 const OWNERS = ['abdomaher908079@gmail.com', 'islaclipsofficial@gmail.com'];
 
-interface Stats {
-  users: { total: number; today: number; week: number; google: number };
-  active: { today: number; week: number };
-  episodes: { total: number; today: number; week: number; cloud_today: number; in_line: number };
-  ai_today: number;
-  waitlist: { pro: number; studio: number; emails: { email: string; plan: string; at: string }[] };
-  recent: { email: string; at: string; via: string | null; episodes: number }[];
-}
+// Sections of "name: number" (or a plain list), worded on the server (owner_stats).
+type Section = { title: string; rows?: [string, number][]; list?: string[] };
 
 const app = document.getElementById('app')!;
 const WHEN = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -80,53 +74,26 @@ async function showStats(email: string) {
     app.innerHTML = `<p class="error">Couldn’t load the numbers: ${esc(error.message)}</p>`;
     return;
   }
-  const s = data as Stats;
-  const tile = (value: number, label: string, warn = false) => `<div class="tile${warn ? ' warn' : ''}"><b>${value}</b><span>${esc(label)}</span></div>`;
+  const sections = data as Section[];
   app.innerHTML = `
     <div class="bar">
-      <div><h1>Isla owner</h1><p class="muted">Signed in as ${esc(email)} · updated ${esc(WHEN.format(new Date()))}</p></div>
+      <div><h1>Isla owner</h1><p class="muted">Updated ${esc(WHEN.format(new Date()))}</p></div>
       <div><button id="refresh">Refresh</button> <button id="out">Sign out</button></div>
     </div>
-
-    <h2>People</h2>
-    <div class="tiles">
-      ${tile(s.users.total, 'accounts in total')}
-      ${tile(s.users.today, 'new today')}
-      ${tile(s.users.week, 'new in the last 7 days')}
-      ${tile(s.active.week, 'made an episode, last 7 days')}
-    </div>
-
-    <h2>Episodes</h2>
-    <div class="tiles">
-      ${tile(s.episodes.today, 'today')}
-      ${tile(s.episodes.week, 'last 7 days')}
-      ${tile(s.episodes.total, 'in total')}
-      ${tile(s.episodes.cloud_today, 'phone (cloud) today')}
-      ${tile(s.episodes.in_line, 'waiting in line now', s.episodes.in_line > 0)}
-      ${tile(s.ai_today, 'AI requests today')}
-    </div>
-
-    <h2>Notify me (paid plans)</h2>
-    <div class="tiles">
-      ${tile(s.waitlist.pro + s.waitlist.studio, 'people waiting')}
-      ${tile(s.waitlist.pro, 'want Pro')}
-      ${tile(s.waitlist.studio, 'want Studio')}
-    </div>
-    ${
-      s.waitlist.emails.length
-        ? `<div class="card table" style="margin-top:10px"><table><tr><th>Email</th><th>Plan</th><th>When</th></tr>${s.waitlist.emails
-            .map((w) => `<tr><td class="email">${esc(w.email)}</td><td>${esc(w.plan)}</td><td>${esc(WHEN.format(new Date(w.at)))}</td></tr>`)
-            .join('')}</table></div>`
-        : ''
-    }
-
-    <h2>Newest accounts</h2>
-    <div class="card table"><table>
-      <tr><th>Email</th><th>Joined</th><th>With</th><th>Episodes</th></tr>
-      ${s.recent
-        .map((u) => `<tr><td class="email">${esc(u.email)}</td><td>${esc(WHEN.format(new Date(u.at)))}</td><td>${esc(u.via ?? '')}</td><td>${u.episodes}</td></tr>`)
-        .join('')}
-    </table></div>`;
+    ${sections
+      .map(
+        (sec) => `
+      <h2>${esc(sec.title)}</h2>
+      <div class="card rows">${
+        sec.rows
+          ? sec.rows.map(([name, value]) => `<div class="row"><span>${esc(name)}</span><b>${esc(value)}</b></div>`).join('')
+          : sec.list?.length
+            ? sec.list.map((item) => `<div class="row"><span class="email">${esc(item)}</span></div>`).join('')
+            : '<div class="row"><span class="muted">None yet</span></div>'
+      }</div>`,
+      )
+      .join('')}
+    <p class="muted">Signed in as ${esc(email)}</p>`;
   document.getElementById('refresh')!.addEventListener('click', () => void showStats(email));
   document.getElementById('out')!.addEventListener('click', async () => {
     await supabase!.auth.signOut();
