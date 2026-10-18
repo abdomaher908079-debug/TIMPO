@@ -175,6 +175,8 @@ export function parseRequest(body: unknown): PickMomentsRequest {
 /** Asks Gemini for the best moments and turns its answer into clips with exact times. */
 // When a model is overloaded, out of quota or gone, step down to the next one rather than fail.
 const FALLBACK_CHAIN = ['gemini-pro-latest', DEFAULT_GEMINI_MODEL, 'gemini-flash-lite-latest'];
+// Longest wait for one answer; a slow model then steps down to the next (also keeps a step in its time).
+const GEMINI_TIMEOUT_MS = 55_000;
 
 /** Tokens one AI request used, for working out what it cost. */
 export interface AiUsage {
@@ -214,7 +216,7 @@ export async function pickMoments(
 
 // The model can't answer right now, but another one might.
 class ModelProblem extends MomentsError {
-  constructor(readonly detail: 'overloaded' | 'quota' | 'not-found') {
+  constructor(readonly detail: 'overloaded' | 'quota' | 'not-found' | 'slow') {
     super(detail, 503);
   }
 }
@@ -228,15 +230,23 @@ async function askGemini(
   const length = clock(segments[segments.length - 1]!.end);
   const prompt = `Episode length: ${length}. Pick the ${count} best clips.\n\nTranscript:\n${transcript}`;
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.4 },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      // A model that hangs moves on to the next one (no second try), so the step stays within its time.
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.4 },
+      }),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) throw new ModelProblem('slow');
+    throw err;
+  }
   if (res.status === 429) throw new ModelProblem('quota');
   if (res.status === 404) throw new ModelProblem('not-found');
   if (res.status === 503 || res.status === 500) throw new ModelProblem('overloaded');

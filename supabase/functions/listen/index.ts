@@ -33,6 +33,8 @@ const PARALLEL = 4;
 const STEP_MS = 75_000;
 const MAX_ATTEMPTS = 3;
 const KEEP_DAYS = 7;
+// A job still "finishing" after this long has stopped (a step can't run longer): it's picked up again.
+const FINISH_STALE_MS = 3 * 60_000;
 
 interface Job {
   id: string;
@@ -149,8 +151,22 @@ const audioPath = (job: Job, idx: number) => `${job.user_id}/${job.id}/${idx}.og
 /** Transcribes uploaded pieces for up to STEP_MS, then hands over to a new step if work is left. */
 async function work(jobId: string) {
   const started = Date.now();
-  const { data: job } = await admin.from('listen_jobs').select('*').eq('id', jobId).maybeSingle<Job>();
-  if (!job || (job.status !== 'listening' && job.status !== 'uploading')) return;
+  const { data: job } = await admin.from('listen_jobs').select('*').eq('id', jobId).maybeSingle<Job & { updated_at: string }>();
+  if (!job) return;
+  // Picking the moments stopped without finishing (the step ran out of time): take it over again.
+  if (job.status === 'finishing') {
+    const cutoff = new Date(Date.now() - FINISH_STALE_MS).toISOString();
+    const { data: mine } = await admin
+      .from('listen_jobs')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', job.id)
+      .eq('status', 'finishing')
+      .lt('updated_at', cutoff)
+      .select('id');
+    if (mine?.length) await finish(job, (await workspaceOf(job.user_id)).plan);
+    return;
+  }
+  if (job.status !== 'listening' && job.status !== 'uploading') return;
   const { plan, workspaceId, periodStart } = await workspaceOf(job.user_id);
   const listener = listenerFor(LIMITS[plan].quality, (name) => Deno.env.get(name));
   if (!listener) return fail(job, 'The AI isn’t set up on the server yet.');
@@ -229,7 +245,8 @@ async function work(jobId: string) {
   }
 
   const { data: won } = await admin.rpc('finish_listen_job', { p_job: job.id });
-  if (won) return finish(job, plan);
+  // Picking the moments gets a step of its own, with its full time (this one has used most of its own).
+  if (won) return kickSelf(job.id, 'finish');
   // Work left (or still uploading): the next step picks it up.
   const { count: left } = await admin.from('listen_pieces').select('idx', { count: 'exact', head: true }).eq('job_id', job.id).in('status', ['pending', 'running']);
   if (left) kickSelf(job.id);
@@ -241,12 +258,12 @@ function cloudLimitMessage(plan: PlanId): string {
   return `You've reached your cloud listening for this ${l.period}. You can still listen on this device${plan === 'studio' ? '' : ', or upgrade for more'}.`;
 }
 
-function kickSelf(jobId: string) {
+function kickSelf(jobId: string, action: 'kick' | 'finish' = 'kick') {
   EdgeRuntime.waitUntil(
     fetch(SELF_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SERVICE_KEY}` },
-      body: JSON.stringify({ action: 'kick', job: jobId }),
+      body: JSON.stringify({ action, job: jobId }),
     }).catch((err) => console.error('kick failed', err)),
   );
 }
@@ -335,6 +352,19 @@ Deno.serve(async (req) => {
     if (body.action === 'kick') {
       const job = await ownJob(userId, body.job);
       EdgeRuntime.waitUntil(work(job.id));
+      return json({ ok: true });
+    }
+    // Our own step that picks the moments, right after the last piece was heard.
+    if (body.action === 'finish' && internal) {
+      const job = await ownJob(null, body.job);
+      if (job.status === 'finishing') {
+        EdgeRuntime.waitUntil(
+          (async () => {
+            await admin.from('listen_jobs').update({ updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'finishing');
+            await finish(job, (await workspaceOf(job.user_id)).plan);
+          })(),
+        );
+      }
       return json({ ok: true });
     }
     return json({ error: 'Unknown request.' }, 400);
