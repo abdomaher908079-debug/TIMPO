@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Isla Color Options</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0d0f12; color: #e9edf1; font: 16px/1.5 Inter, system-ui, sans-serif; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: #8b95a3; margin: 0 0 22px; }
+  .opt { max-width: 420px; margin: 0 auto 26px; }
+  .opt h2 { font-size: 1.1rem; margin: 0 0 2px; }
+  .opt p { color: #8b95a3; margin: 0 0 10px; font-size: .92rem; }
+  .swatches { display: flex; gap: 6px; margin: 0 0 10px; }
+  .swatches i { width: 26px; height: 26px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); }
+  /* the mini app */
+  .app { border-radius: 18px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; }
+  .brand { display: flex; align-items: center; gap: 7px; font-weight: 800; color: var(--title); }
+  .badge { font-size: .6rem; font-weight: 800; letter-spacing: .08em; padding: 2px 7px; border-radius: 99px; background: linear-gradient(135deg, #f4f6f8, #c9ced4 45%, #eef0f3 60%, #b8bec6); color: #0d0f12; }
+  .nav { display: flex; gap: 10px; align-items: center; font-size: .85rem; color: var(--muted); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-size: .7rem; font-weight: 700; background: var(--surface2); }
+  .welcome { text-align: center; padding: 16px 14px 18px; background: var(--hero); }
+  .welcome p { margin: 8px 0 12px; color: var(--text); }
+  .btn { display: inline-block; padding: 10px 26px; border-radius: 12px; background: var(--primary); color: var(--onPrimary); font-weight: 700; box-shadow: 0 6px 20px var(--primaryGlow); }
+  .card { margin: 0 14px 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); text-align: left; }
+  .card b { color: var(--title); display: block; }
+  .card small { color: var(--muted); }
+  .pill { display: inline-block; margin-top: 6px; font-size: .72rem; padding: 2px 9px; border-radius: 99px; color: var(--accent); border: 1px solid var(--accent); background: var(--accentSoft); }
+</style>
+</head>
+<body>
+  <h1>Isla: color options</h1>
+  <p class="lead">Same app, different colors. Isla herself stays green and orange in all of them.</p>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <linearGradient id="ob" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9dff3c"/><stop offset=".5" stop-color="#e0b51e"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
+    <symbol id="orb" viewBox="0 0 160 160"><circle cx="80" cy="80" r="58" fill="url(#ob)"/><ellipse cx="60" cy="46" rx="14" ry="6" fill="#fff" opacity=".28" transform="rotate(-25 60 46)"/><rect x="42" y="62" width="76" height="30" rx="15" fill="#10151b"/><rect x="61" y="70" width="12" height="14" rx="6" fill="#9dff3c"/><rect x="87" y="70" width="12" height="14" rx="6" fill="#9dff3c"/></symbol>
+  </defs></svg>
+
+  <template id="mini">
+    <div class="app">
+      <div class="bar"><span class="brand"><svg width="20" height="20"><use href="#orb"/></svg>Isla <span class="badge">STUDIO</span></span><span class="nav">Pricing <span class="avatar">AM</span></span></div>
+      <div class="welcome"><svg width="84" height="84"><use href="#orb"/></svg><p>Good evening, Abdo.</p><span class="btn">New episode</span></div>
+      <div class="card"><b>Episode 48 · 10 clips ready</b><small>Isla found 10 moments worth sharing</small><br /><span class="pill">Score 94</span></div>
+    </div>
+  </template>
+
+  <section class="opt" style="--bg:#0d0f12;--surface:#161a1f;--surface2:#1e232a;--border:#2a3038;--text:#e9edf1;--title:#fff;--muted:#8b95a3;--primary:#ff6a13;--onPrimary:#fff;--primaryGlow:rgba(255,106,19,.3);--accent:#9dff3c;--accentSoft:rgba(157,255,60,.12);--hero:transparent">
+    <h2>1. Now</h2>
+    <p>Near-black, orange buttons, neon-green details. Strong, a bit harsh.</p>
+    <div class="swatches"><i style="background:#0d0f12"></i><i style="background:#161a1f"></i><i style="background:#ff6a13"></i><i style="background:#9dff3c"></i></div>
+    <div data-mini></div>
+  </section>
+
+  <section class="opt" style="--bg:#0b1020;--surface:#131a2e;--surface2:#1a2340;--border:#26304d;--text:#e6ebf5;--title:#fff;--muted:#8d97b3;--primary:#ff7a2e;--onPrimary:#fff;--primaryGlow:rgba(255,122,46,.32);--accent:#b6f36a;--accentSoft:rgba(182,243,106,.12);--hero:radial-gradient(circle at 50% 30%,rgba(255,122,46,.12),transparent 60%)">
+    <h2>2. Midnight</h2>
+    <p>Deep night blue instead of black. Warmer orange and a softer green. Calm and premium; Isla glows like a light at night.</p>
+    <div class="swatches"><i style="background:#0b1020"></i><i style="background:#131a2e"></i><i style="background:#ff7a2e"></i><i style="background:#b6f36a"></i></div>
+    <div data-mini></div>
+  </section>
+
+  <section class="opt" style="--bg:#141210;--surface:#1f1b18;--surface2:#29241f;--border:#36302a;--text:#efe9e2;--title:#fff8f0;--muted:#a69b8f;--primary:linear-gradient(135deg,#ff8a3d,#ff5a1f);--onPrimary:#fff;--primaryGlow:rgba(255,106,31,.3);--accent:#a8f25a;--accentSoft:rgba(168,242,90,.12);--hero:radial-gradient(circle at 50% 30%,rgba(255,138,61,.12),transparent 60%)">
+    <h2>3. Warm studio</h2>
+    <p>Warm dark brown-gray, like a cozy editing room. Orange gradient buttons. Friendly and creative.</p>
+    <div class="swatches"><i style="background:#141210"></i><i style="background:#1f1b18"></i><i style="background:#ff7a2e"></i><i style="background:#a8f25a"></i></div>
+    <div data-mini></div>
+  </section>
+
+  <section class="opt" style="--bg:#111317;--surface:#1a1d23;--surface2:#22262d;--border:#2c313a;--text:#e9ecf1;--title:#fff;--muted:#8f97a5;--primary:#f4f5f7;--onPrimary:#111317;--primaryGlow:rgba(255,255,255,.12);--accent:#ff8a3d;--accentSoft:rgba(255,138,61,.12);--hero:radial-gradient(circle at 50% 30%,rgba(157,255,60,.08),transparent 60%)">
+    <h2>4. Clean graphite</h2>
+    <p>Soft dark gray, white buttons, orange only for small details. The most minimal and "big tech"; Isla is the only bright color on screen.</p>
+    <div class="swatches"><i style="background:#111317"></i><i style="background:#1a1d23"></i><i style="background:#f4f5f7"></i><i style="background:#ff8a3d"></i></div>
+    <div data-mini></div>
+  </section>
+
+  <section class="opt" style="--bg:#f6f4f0;--surface:#ffffff;--surface2:#ece8e1;--border:#e3ddd3;--text:#2a2622;--title:#14110e;--muted:#7a7268;--primary:#ff6a13;--onPrimary:#fff;--primaryGlow:rgba(255,106,19,.28);--accent:#3b9a1b;--accentSoft:rgba(59,154,27,.1);--hero:radial-gradient(circle at 50% 30%,rgba(255,106,19,.08),transparent 60%)">
+    <h2>5. Light</h2>
+    <p>Warm off-white, like paper. Orange buttons, darker green for details. Fresh and friendly in daylight; a dark version can be added for night.</p>
+    <div class="swatches"><i style="background:#f6f4f0"></i><i style="background:#ffffff"></i><i style="background:#ff6a13"></i><i style="background:#3b9a1b"></i></div>
+    <div data-mini></div>
+  </section>
+
+  <script>
+    const tpl = document.getElementById('mini');
+    document.querySelectorAll('[data-mini]').forEach((el) => el.replaceWith(tpl.content.cloneNode(true)));
+  </script>
+</body>
+</html>
