@@ -52,7 +52,7 @@ function view(o: OrderRow, status = o.status) {
     priceUntil: o.price_expires_at,
     received: o.actually_paid != null ? Number(o.actually_paid) : 0,
     status,
-    applied: !!o.applied_at,
+    applied: !!o.done_at,
   };
 }
 
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       if (!UUID.test(id)) return json({ error: 'Order not found.' }, 404);
       const { data: o } = await admin.from('crypto_orders').select('*').eq('id', id).eq('user_id', user.id).maybeSingle<OrderRow>();
       if (!o) return json({ error: 'Order not found.' }, 404);
-      if (o.payment_id && !o.applied_at) {
+      if (o.payment_id && !o.done_at) {
         // Ask NOWPayments directly; settle() records it and applies a paid order (once).
         const res = await fetch(`${API}/payment/${encodeURIComponent(o.payment_id)}`, { headers: { 'x-api-key': apiKey } });
         if (res.ok) {
@@ -92,9 +92,10 @@ Deno.serve(async (req) => {
     }
     if (action !== 'start' && action !== 'invoice') return json({ error: 'Unknown request.' }, 400);
 
-    // Team members use their owner's plan; only the owner buys.
-    const { data: team } = await admin.from('team_members').select('owner_id').eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
-    if (team) return json({ error: 'Your team owner manages the plan.' }, 400);
+    // Members of a team whose owner has Studio use the owner's plan; only the owner buys. (A team whose owner's
+    // Studio has ended doesn't count, as in workspace_of.)
+    const { data: ws } = await admin.rpc('workspace_of', { uid: user.id }).maybeSingle<{ is_team_member: boolean }>();
+    if (ws?.is_team_member) return json({ error: 'Your team owner manages the plan.' }, 400);
     const { data: profile } = await admin
       .from('profiles')
       .select('plan, subscription_status, paddle_subscription_id')

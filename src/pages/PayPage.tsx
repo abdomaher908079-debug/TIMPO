@@ -147,28 +147,35 @@ export default function PayPage() {
       .finally(() => setLoading(false));
   }, [orderId, order]);
 
+  const orderKey = order?.id ?? null;
+  const refreshAccount = account.refresh;
   const refreshOrder = useCallback(async () => {
-    if (!order) return;
-    const o = await paymentStatus(order.id);
+    if (!orderKey) return;
+    const o = await paymentStatus(orderKey);
     setOrder(o);
     if (o.applied) {
-      void account.refresh();
+      void refreshAccount();
       setStep('done');
     } else if (FAILED.includes(o.status)) setStep('problem');
-  }, [order, account]);
+  }, [orderKey, refreshAccount]);
 
-  // While waiting: ask every 10 seconds for 5 minutes, then every 30.
+  // While waiting: ask every 10 seconds for 5 minutes, then every 30. Keyed on the order's id (not the order
+  // object, which every answer replaces), so the timer isn't restarted by its own answers.
   useEffect(() => {
-    if (step !== 'wait' || !order) return;
+    if (step !== 'wait' || !orderKey) return;
     const started = Date.now();
     let timer = 0;
-    const tick = () => {
-      void refreshOrder().catch(() => undefined);
-      timer = window.setTimeout(tick, Date.now() - started < 5 * 60_000 ? 10_000 : 30_000);
+    let live = true;
+    const tick = async () => {
+      await refreshOrder().catch(() => undefined);
+      if (live) timer = window.setTimeout(() => void tick(), Date.now() - started < 5 * 60_000 ? 10_000 : 30_000);
     };
-    timer = window.setTimeout(tick, 5000);
-    return () => clearTimeout(timer);
-  }, [step, order, refreshOrder]);
+    timer = window.setTimeout(() => void tick(), 5000);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [step, orderKey, refreshOrder]);
 
   if (demo || !paymentsReady) {
     return (
@@ -190,6 +197,16 @@ export default function PayPage() {
     );
   }
   if (loading) return <Shell><p className="loading">Loading your payment…</p></Shell>;
+  // An order that couldn't be opened (not yours, or the server refused): say why.
+  if (step === 'problem' && !order) {
+    return (
+      <Shell>
+        <h1 className="page-title">We couldn't open this payment</h1>
+        <p>{error ?? 'Something went wrong.'}</p>
+        <Link className="btn btn-primary" to="/pricing">Back to plans</Link>
+      </Shell>
+    );
+  }
   if (!purchase) {
     return (
       <Shell>
@@ -256,7 +273,10 @@ export default function PayPage() {
           {switching && (
             <p className="notice">
               You're on {account.plan.name} now. {planById(purchase.kind === 'plan' ? purchase.plan : 'pro').name} starts as soon as your
-              payment arrives, and the paid days left on {account.plan.name} are added to it.
+              payment arrives
+              {account.profile?.paid_with
+                ? `, and the paid days left on ${account.plan.name} are added to it.`
+                : `. Your ${account.plan.name} was a gift from us, so its days left end then and aren't carried over.`}
             </p>
           )}
           <p className="muted small">

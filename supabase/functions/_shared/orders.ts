@@ -3,7 +3,7 @@
 // create-invoice's 'status' (asking NOWPayments directly, in case a notice is late or lost).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { button, DATE, p, send, sign, SITE } from './email.ts';
-import { type Billing, PACK, PRICE_USD } from './plans.ts';
+import { addMonths, type Billing, PACK, PRICE_USD } from './plans.ts';
 
 const DAY = 86_400_000;
 // 'confirmed': seen on the blockchain; 'finished': passed on to our wallet. Either means paid.
@@ -19,7 +19,9 @@ export interface Order {
   plan: 'pro' | 'studio' | null;
   billing: Billing | null;
   price_usd: number;
+  // Claimed for applying (set first) and really applied (set after).
   applied_at: string | null;
+  done_at: string | null;
 }
 
 /** A payment's details from NOWPayments (its signed notice, or GET /v1/payment/:id). */
@@ -35,12 +37,6 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
   auth: { persistSession: false },
 });
 
-function addMonths(from: Date, months: number): Date {
-  const d = new Date(from);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d;
-}
-
 interface PlanRow {
   plan: 'free' | 'pro' | 'studio';
   billing: Billing | null;
@@ -49,6 +45,7 @@ interface PlanRow {
   current_period_end: string | null;
   extra_seats: number;
   paid_with: string | null;
+  paid_from: string | null;
   updated_at: string | null;
 }
 
@@ -66,7 +63,7 @@ async function applyPlan(order: Order): Promise<Date> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: p, error: readError } = await admin
       .from('profiles')
-      .select('plan, billing, subscription_status, current_period_start, current_period_end, extra_seats, paid_with, updated_at')
+      .select('plan, billing, subscription_status, current_period_start, current_period_end, extra_seats, paid_with, paid_from, updated_at')
       .eq('id', order.user_id)
       .single<PlanRow>();
     if (readError || !p) throw readError ?? new Error('Profile not found.');
@@ -75,16 +72,19 @@ async function applyPlan(order: Order): Promise<Date> {
     const same = running && p.plan === plan;
     let start = now;
     let end: Date;
+    // From when the time is paid for: a plan we gave stays free up to its end, and only what's bought counts.
+    let paidFrom = now;
     if (same) {
       // The same plan again: it runs on from the current end date.
       start = new Date(p.current_period_start ?? now);
       end = addMonths(new Date(p.current_period_end!), months);
+      paidFrom = p.paid_with && p.paid_from ? new Date(p.paid_from) : new Date(p.current_period_end!);
     } else {
-      // A different plan starts now. Days left on a plan that was paid for are kept, valued at what they cost;
-      // a plan we gave for free isn't turned into paid time.
-      const paidLeft = running && p.paid_with === 'nowpayments';
-      const leftDays = paidLeft ? (new Date(p.current_period_end!).getTime() - now.getTime()) / DAY : 0;
-      const credit = paidLeft ? (leftDays * dayValue(p.plan as 'pro' | 'studio', p.billing)) / dayValue(plan, order.billing) : 0;
+      // A different plan starts now. Paid days left on the old plan are kept, valued at what they cost; days
+      // we gave for free aren't turned into paid time.
+      const paidStart = p.paid_with && p.paid_from ? Math.max(now.getTime(), new Date(p.paid_from).getTime()) : null;
+      const leftDays = running && paidStart !== null ? Math.max(0, new Date(p.current_period_end!).getTime() - paidStart) / DAY : 0;
+      const credit = leftDays ? (leftDays * dayValue(p.plan as 'pro' | 'studio', p.billing)) / dayValue(plan, order.billing) : 0;
       end = new Date(addMonths(now, months).getTime() + Math.round(credit * DAY));
     }
     let update = admin
@@ -100,6 +100,7 @@ async function applyPlan(order: Order): Promise<Date> {
         pending_billing: null,
         extra_seats: same && plan === 'studio' ? p.extra_seats : 0,
         paid_with: 'nowpayments',
+        paid_from: paidFrom.toISOString(),
         // An ended Paddle subscription (create-invoice refuses live ones) no longer applies.
         paddle_subscription_id: null,
         updated_at: now.toISOString(),
@@ -180,11 +181,14 @@ export async function settle(order: Order, payment: PaymentInfo): Promise<string
     console.error('Price mismatch', order.id, payment.price_amount, payment.price_currency);
     return status;
   }
+  // Claim it: unclaimed, or claimed over 10 minutes ago without finishing (that try died half-way).
+  const stale = new Date(Date.now() - 10 * 60_000).toISOString();
   const { data: claimed } = await admin
     .from('crypto_orders')
     .update({ applied_at: new Date().toISOString(), paid_at: new Date().toISOString() })
     .eq('id', order.id)
-    .is('applied_at', null)
+    .is('done_at', null)
+    .or(`applied_at.is.null,applied_at.lt.${stale}`)
     .select('id');
   if (!claimed?.length) return status;
   let until: Date;
@@ -195,6 +199,7 @@ export async function settle(order: Order, payment: PaymentInfo): Promise<string
     await admin.from('crypto_orders').update({ applied_at: null }).eq('id', order.id);
     throw err;
   }
+  await admin.from('crypto_orders').update({ done_at: new Date().toISOString() }).eq('id', order.id);
   // Applied for good from here: a failed receipt must never apply the order again.
   await receipt(order, until).catch((err) => console.error('Receipt', order.id, err));
   return status;

@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
       // Back to Free, unless the plan was renewed meanwhile (a new end date).
       await admin
         .from('profiles')
-        .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, paid_with: null, updated_at: new Date().toISOString() })
+        .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, paid_with: null, paid_from: null, updated_at: new Date().toISOString() })
         .eq('id', g.id)
         .eq('current_period_end', g.current_period_end)
         .is('paddle_subscription_id', null);

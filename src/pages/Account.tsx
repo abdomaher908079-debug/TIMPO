@@ -21,19 +21,6 @@ export default function Account() {
   const [keepError, setKeepError] = useState<string | null>(null);
   const canPay = useCanPay();
   const navigate = useNavigate();
-  // Back from NOWPayments: crypto takes a few minutes to confirm; the plan or pack turns on by itself.
-  const [paying, setPaying] = useState(params.get('paid') === '1');
-  useEffect(() => {
-    if (!paying) return;
-    const started = Date.now();
-    const timer = setInterval(() => {
-      if (Date.now() - started > 20 * 60_000) clearInterval(timer);
-      else void refresh();
-    }, 15_000);
-    return () => clearInterval(timer);
-  }, [paying, refresh]);
-
-
 
   function billing(target?: 'payment') {
     setOpening(true);
@@ -110,25 +97,6 @@ export default function Account() {
     <main className="account-page">
       <h1 className="page-title">Plan & settings</h1>
       <p className="muted">{user?.email}</p>
-
-      {paying && (
-        <div className="notice" role="status">
-          <p>
-            Thanks for your payment! Crypto payments take a few minutes to confirm (sometimes up to an hour). Your plan or extra
-            hours turn on by themselves, and we'll email you when they do.
-          </p>
-          <button
-            type="button"
-            className="btn btn-outline btn-inline"
-            onClick={() => {
-              setPaying(false);
-              setParams({}, { replace: true });
-            }}
-          >
-            OK
-          </button>
-        </div>
-      )}
 
       {activating && (
         <p className="notice" role="status">
@@ -232,7 +200,8 @@ export default function Account() {
               the hours because each AI pick costs about the same whatever an episode's length, so lots of short files count
               as episodes rather than hours. Cloud listening isn't included.
             </p>
-            {!member && paymentsReady && canPay !== false && (
+            {/* Paddle subscribers are refused here (their plan is billed in Paddle). */}
+            {!member && !paddle && paymentsReady && canPay !== false && (
               <button type="button" className="btn btn-outline btn-inline" disabled={canPay === null} onClick={() => navigate(checkoutPath({ kind: 'pack' }))}>
                 Get +{PACK.hours} hours · ${PACK.price}
               </button>

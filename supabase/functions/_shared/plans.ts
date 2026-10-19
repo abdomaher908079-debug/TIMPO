@@ -115,7 +115,8 @@ export const PICKS_PER_EPISODE = 4;
 export const MAX_CHARS_PER_SECOND = 40;
 
 /** Adds whole months in UTC, keeping the day of the month (or the month's last day when it's shorter). */
-function addMonths(date: Date, months: number): Date {
+/** `months` later, on the same day, or the month's last day if it has no such day (Jan 31 → Feb 28). */
+export function addMonths(date: Date, months: number): Date {
   const y = date.getUTCFullYear();
   const m = date.getUTCMonth() + months;
   const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
