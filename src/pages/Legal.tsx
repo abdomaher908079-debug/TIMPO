@@ -81,7 +81,9 @@ export function Privacy() {
         Google, we receive your name and email from Google. If you tap "Notify me" on a paid plan, we keep that request with
         your email until the plan opens and we've told you, or until you ask us to remove it. If you sign up with someone's
         invite link, we keep who invited you, to give you both the reward; the person who invited you sees how many friends
-        joined, not who.
+        joined, not who. If you tell us how you heard about {BRAND_NAME} (asked once after you sign up), or arrive through a
+        link marked with where it was shared (like "?ref=tiktok"), we keep that with your account, only to know which
+        places bring people.
       </p>
       <p>
         When we change something on your account ourselves (for example giving you a plan or extra hours, resetting your

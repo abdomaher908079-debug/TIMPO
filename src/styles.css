@@ -768,3 +768,12 @@ h1, h2, h3 { text-wrap: balance; }
 .pay-full { color: var(--muted); font-size: 1.3rem; font-weight: 700; margin-right: 4px; }
 .invite-card .pay-copy-row { margin-top: 12px; }
 .invite-card .btn-primary { margin-top: 12px; }
+.source-question { max-width: 720px; margin: 0 auto 14px; }
+.source-title { margin: 0 0 10px; font-weight: 800; color: var(--title); }
+.source-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.source-chip { font: inherit; font-size: 0.9rem; padding: 8px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--white); color: var(--text); cursor: pointer; }
+.source-chip:hover:not(:disabled) { border-color: var(--orange); }
+.source-other { display: flex; gap: 8px; }
+.source-other input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font: inherit; background: var(--white); }
+.source-other .btn { margin-top: 0; width: auto; }
+.source-skip { margin-top: 10px; color: var(--muted); }

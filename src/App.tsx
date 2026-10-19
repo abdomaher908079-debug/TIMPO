@@ -19,6 +19,7 @@ import ResetPassword from './pages/ResetPassword';
 import StatusPage from './pages/StatusPage';
 import { useClaimInvite } from './lib/invite';
 import { usePageMeta } from './lib/seo';
+import SourceQuestion from './components/SourceQuestion';
 
 export default function App() {
   const { demo, user } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
         <ScrollOnNavigate />
         <Header />
         <BackButton />
+        <SourceQuestion />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<GuestOnly><AuthPage key="login" mode="login" /></GuestOnly>} />
