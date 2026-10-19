@@ -3,7 +3,7 @@
 // create-invoice's 'status' (asking NOWPayments directly, in case a notice is late or lost).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { button, DATE, p, send, sign, SITE } from './email.ts';
-import { addMonths, type Billing, PACK, PRICE_USD } from './plans.ts';
+import { addMonths, type Billing, MAX_EXTRA_SEATS, PACK, PRICE_USD } from './plans.ts';
 
 const DAY = 86_400_000;
 // 'confirmed': seen on the blockchain; 'finished': passed on to our wallet. Either means paid.
@@ -15,10 +15,12 @@ export interface Order {
   status: string;
   id: string;
   user_id: string;
-  kind: 'plan' | 'pack';
+  kind: 'plan' | 'pack' | 'seats';
   plan: 'pro' | 'studio' | null;
   billing: Billing | null;
   price_usd: number;
+  // Studio people beyond the 3 included: the team size bought with a plan, or how many a 'seats' order adds.
+  extra_seats: number;
   // Claimed for applying (set first) and really applied (set after).
   applied_at: string | null;
   done_at: string | null;
@@ -98,7 +100,8 @@ async function applyPlan(order: Order): Promise<Date> {
         cancel_at: null,
         pending_plan: null,
         pending_billing: null,
-        extra_seats: same && plan === 'studio' ? p.extra_seats : 0,
+        // Studio's team as bought (adding time to a running Studio keeps the team it has).
+        extra_seats: plan === 'studio' ? (same ? p.extra_seats : order.extra_seats) : 0,
         paid_with: 'nowpayments',
         paid_from: paidFrom.toISOString(),
         // An ended Paddle subscription (create-invoice refuses live ones) no longer applies.
@@ -110,6 +113,28 @@ async function applyPlan(order: Order): Promise<Date> {
     const { data: written, error } = await update.select('id');
     if (error) throw error;
     if (written?.length) return end;
+  }
+  throw new Error('Profile kept changing; try again.');
+}
+
+/** Adds the bought people to the running Studio team, for the rest of the plan. Returns the plan's end. */
+async function applySeats(order: Order): Promise<Date> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: p, error: readError } = await admin
+      .from('profiles')
+      .select('extra_seats, current_period_end, updated_at')
+      .eq('id', order.user_id)
+      .single<{ extra_seats: number; current_period_end: string | null; updated_at: string }>();
+    if (readError || !p) throw readError ?? new Error('Profile not found.');
+    const now = new Date();
+    const { data: written, error } = await admin
+      .from('profiles')
+      .update({ extra_seats: Math.min(MAX_EXTRA_SEATS, p.extra_seats + order.extra_seats), updated_at: now.toISOString() })
+      .eq('id', order.user_id)
+      .eq('updated_at', p.updated_at)
+      .select('id');
+    if (error) throw error;
+    if (written?.length) return new Date(p.current_period_end ?? now);
   }
   throw new Error('Profile kept changing; try again.');
 }
@@ -145,12 +170,21 @@ async function receipt(order: Order, until: Date) {
     });
     return;
   }
+  if (order.kind === 'seats') {
+    const people = `${order.extra_seats} more ${order.extra_seats === 1 ? 'person' : 'people'}`;
+    await send(email, {
+      subject: `Payment received: ${people} on your Isla team`,
+      html: p('Hi,') + p(`Thanks! We received your payment of ${paid}. Your Studio team now has room for <b>${people}</b>, until your plan renews on <b>${when}</b>.`) + button('Invite them', `${SITE}/account`) + sign,
+    });
+    return;
+  }
   const name = order.plan === 'pro' ? 'Pro' : 'Studio';
+  const team = order.plan === 'studio' && order.extra_seats ? `, with a team of <b>${3 + order.extra_seats} people</b>,` : '';
   await send(email, {
     subject: `Payment received: Isla ${name} until ${when}`,
     html:
       p('Hi,') +
-      p(`Thanks! We received your payment of ${paid}. Your Isla <b>${name}</b> plan is active until <b>${when}</b>.`) +
+      p(`Thanks! We received your payment of ${paid}. Your Isla <b>${name}</b> plan${team} is active until <b>${when}</b>.`) +
       p("It doesn't renew on its own: we'll email you before it ends, and you can add more time from the pricing page whenever you like.") +
       button('Make clips', `${SITE}/new`) +
       sign,
@@ -193,7 +227,7 @@ export async function settle(order: Order, payment: PaymentInfo): Promise<string
   if (!claimed?.length) return status;
   let until: Date;
   try {
-    until = order.kind === 'pack' ? await applyPack(order) : await applyPlan(order);
+    until = order.kind === 'pack' ? await applyPack(order) : order.kind === 'seats' ? await applySeats(order) : await applyPlan(order);
   } catch (err) {
     // Not applied: the next notice (or status check) tries again.
     await admin.from('crypto_orders').update({ applied_at: null }).eq('id', order.id);

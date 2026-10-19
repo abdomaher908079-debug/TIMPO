@@ -18,12 +18,16 @@ export const paymentsOpen = import.meta.env.VITE_PAYMENTS_OPEN === 'true';
 export const paymentsReady = paymentsOpen && !!supabase;
 
 /** What's being bought on the checkout page (/pay). */
-export type Purchase = { kind: 'plan'; plan: Exclude<PlanId, 'free'>; billing: Billing } | { kind: 'pack' };
+// seats: Studio people beyond the 3 included, chosen with a Studio plan, or added to a running one ('seats').
+export type Purchase =
+  | { kind: 'plan'; plan: Exclude<PlanId, 'free'>; billing: Billing; seats?: number }
+  | { kind: 'pack' }
+  | { kind: 'seats'; seats: number };
 
 /** A payment on our checkout page, as the server describes it (supabase/functions/create-invoice). */
 export interface PayOrder {
   id: string;
-  kind: 'plan' | 'pack';
+  kind: 'plan' | 'pack' | 'seats';
   plan: Exclude<PlanId, 'free'> | null;
   billing: Billing | null;
   price: number;
@@ -33,6 +37,7 @@ export interface PayOrder {
   memo: string | null;
   priceUntil: string | null;
   received: number;
+  seats: number;
   status: string;
   applied: boolean;
 }
@@ -76,7 +81,9 @@ export async function openOtherCoins(purchase: Purchase): Promise<void> {
 
 /** Our checkout page for a plan (a month or a year, paid upfront) or an hour pack. */
 export function checkoutPath(purchase: Purchase): string {
-  return purchase.kind === 'pack' ? '/pay?pack=1' : `/pay?plan=${purchase.plan}&billing=${purchase.billing}`;
+  if (purchase.kind === 'pack') return '/pay?pack=1';
+  if (purchase.kind === 'seats') return `/pay?seats=${purchase.seats}`;
+  return `/pay?plan=${purchase.plan}&billing=${purchase.billing}${purchase.seats ? `&seats=${purchase.seats}` : ''}`;
 }
 
 export async function previewExtraSeats(extraSeats: number): Promise<{ action: 'charge' | 'credit' | 'none'; amount: number; currency: string }> {

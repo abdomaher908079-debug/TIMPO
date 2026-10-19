@@ -759,3 +759,7 @@ h1, h2, h3 { text-wrap: balance; }
   width: 64px; height: 64px; border-radius: 50%; background: var(--orange); color: #fff; font-size: 34px; font-weight: 900;
   display: grid; place-items: center; margin: 8px 0 14px;
 }
+.pay-team { margin-top: 12px; }
+.pay-stepper { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.pay-stepper .btn { width: 52px; margin: 0; padding: 10px 0; font-size: 1.3rem; }
+.pay-stepper span { font-size: 1.05rem; }

@@ -221,7 +221,9 @@ export function Terms() {
         yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
         over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run
-        out, and only while you're on a paid plan. Studio includes a team of 3; larger teams are arranged by email.
+        out, and only while you're on a paid plan. Studio includes a team of 3; each extra person, up to 10, is $8 a month
+        or $80 a year, paid with the plan. People added in the middle of a plan are paid for the days left on it, and stay
+        until the plan ends; adding time to a running Studio plan pays for the team it has.
       </p>
 
       <h2>Gifts</h2>
@@ -291,7 +293,8 @@ export function Refunds() {
         If you're not happy with your first paid plan, ask for a full refund within <b>14 days of paying</b>, no questions
         asked. Later purchases (more time, or another plan) can be refunded within 14 days if you haven't processed any
         episodes since buying them. Extra hour packs can be refunded within 14 days if none of their hours or episodes have
-        been used. A refunded plan ends straight away and your account moves to the Free plan. Gifts from us are free, so
+        been used. Extra people bought for a Studio team can be refunded within 14 days if nobody has joined in their place.
+        A refunded plan ends straight away and your account moves to the Free plan. Gifts from us are free, so
         there's nothing to refund.
       </p>
       <h2>How refunds are paid</h2>

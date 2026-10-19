@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { previewExtraSeats, setExtraSeats } from '../lib/billing';
+import { checkoutPath, paymentsReady, previewExtraSeats, setExtraSeats } from '../lib/billing';
+import { useCanPay } from '../lib/country';
+import { CRYPTO_MIN_USD, seatsForRest } from '../../supabase/functions/_shared/plans';
 import { invite, joinTeam, listTeam, removeMember, MAX_EXTRA_SEATS, SEAT_PRICE, TEAM_SIZE, type TeamMember } from '../lib/team';
 
 // Studio teams on the Plan & settings page: the owner invites up to 2 people, who share the plan's hours,
@@ -160,13 +162,10 @@ export default function Team() {
               </li>
             ))}
           </ul>
-          {/* Seats are billed through a Paddle subscription; plans paid upfront (crypto) or given by us get
-              more seats by email, set from the owner page. */}
+          {/* Plans paid upfront (or given by us) buy more people on the checkout page, for the rest of the plan;
+              Paddle subscriptions change seats in Paddle (below). */}
           {!profile?.paddle_subscription_id ? (
-            <p className="muted small">
-              Studio includes {TEAM_SIZE} people{extraSeats ? `, plus your ${extraSeats} extra` : ''}. Need more? Email{' '}
-              <a href="mailto:support@islaclips.com">support@islaclips.com</a>.
-            </p>
+            <AddPeople extraSeats={extraSeats} />
           ) : (
           <div className="seat-row">
             <span className="muted small">
@@ -218,5 +217,55 @@ export default function Team() {
         )
       )}
     </section>
+  );
+}
+
+/** More people for a Studio plan paid upfront: paid for the days left on the plan, on the checkout page. */
+function AddPeople({ extraSeats }: { extraSeats: number }) {
+  const { profile } = useAccount();
+  const navigate = useNavigate();
+  const canPay = useCanPay();
+  const [more, setMore] = useState(1);
+  const room = MAX_EXTRA_SEATS - extraSeats;
+  const end = profile?.current_period_end ? new Date(profile.current_period_end) : null;
+  const price = end ? seatsForRest(more, profile?.billing ?? null, end) : 0;
+  const perPerson = profile?.billing === 'yearly' ? `$${SEAT_PRICE.yearly} a year` : `$${SEAT_PRICE.monthly} a month`;
+  if (room <= 0) {
+    return <p className="muted small">Your team has the most people Studio allows ({TEAM_SIZE + MAX_EXTRA_SEATS}).</p>;
+  }
+  if (!paymentsReady || canPay === false || !end) {
+    return (
+      <p className="muted small">
+        Studio includes {TEAM_SIZE} people{extraSeats ? `, plus your ${extraSeats} extra` : ''}.
+      </p>
+    );
+  }
+  return (
+    <div className="seat-row seat-add">
+      <span className="muted small">
+        Studio includes {TEAM_SIZE} people{extraSeats ? `, plus your ${extraSeats} extra` : ''}. Each extra person is {perPerson}; you pay
+        only for the days left on your plan.
+      </span>
+      <div className="pay-stepper">
+        <button type="button" className="btn btn-outline" aria-label="Fewer" disabled={more <= 1} onClick={() => setMore(more - 1)}>
+          −
+        </button>
+        <span>
+          <b>+{more}</b> {more === 1 ? 'person' : 'people'} · ${price.toFixed(2)}
+        </span>
+        <button type="button" className="btn btn-outline" aria-label="More" disabled={more >= room} onClick={() => setMore(more + 1)}>
+          +
+        </button>
+      </div>
+      {price < CRYPTO_MIN_USD ? (
+        <p className="muted small">
+          Crypto payments start at ${CRYPTO_MIN_USD}: add more people at once, or choose your team size when you renew.
+        </p>
+      ) : (
+        <button type="button" className="btn btn-outline btn-inline" onClick={() => navigate(checkoutPath({ kind: 'seats', seats: more }))}>
+          Add {more} {more === 1 ? 'person' : 'people'}
+        </button>
+      )}
+    </div>
   );
 }

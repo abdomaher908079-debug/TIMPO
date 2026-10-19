@@ -105,6 +105,23 @@ export const PRICE_USD: Record<Exclude<PlanId, 'free'>, Record<Billing, number>>
   pro: { monthly: 15, yearly: 144 },
   studio: { monthly: 29, yearly: 288 },
 };
+
+// Studio teams: the owner plus 2 people included; up to 7 more, each paid with the plan.
+export const TEAM_INCLUDED = 3;
+export const MAX_EXTRA_SEATS = 7;
+export const SEAT_USD: Record<Billing, number> = { monthly: 8, yearly: 80 };
+// NOWPayments won't take a crypto payment below about $11–13; anything we sell starts above this.
+export const CRYPTO_MIN_USD = 12;
+
+/**
+ * What adding `count` people costs for the rest of a Studio plan ending at `end`: the seat price per day
+ * (monthly or yearly, as the plan was bought) for each day left, rounded up to the cent.
+ */
+export function seatsForRest(count: number, billing: Billing | null, end: Date, now = new Date()): number {
+  const days = Math.max(0, (end.getTime() - now.getTime()) / 86_400_000);
+  const perDay = billing === 'yearly' ? SEAT_USD.yearly / 365 : SEAT_USD.monthly / 30;
+  return Math.ceil(count * perDay * days * 100) / 100;
+}
 const PACK_HINT = `Need more? Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price} in Plan & settings.`;
 
 // Times the AI may pick the moments of one episode in a period: the first time plus 3 free re-picks.

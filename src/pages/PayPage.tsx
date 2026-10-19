@@ -3,10 +3,11 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { openOtherCoins, paymentsReady, paymentStatus, startPayment, type PayOrder, type Purchase } from '../lib/billing';
+import { checkoutPath, openOtherCoins, paymentsReady, paymentStatus, startPayment, type PayOrder, type Purchase } from '../lib/billing';
 import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { planById } from '../lib/plans';
-import { PACK, PRICE_USD } from '../../supabase/functions/_shared/plans';
+import { CRYPTO_MIN_USD, MAX_EXTRA_SEATS, PACK, PRICE_USD, SEAT_USD, seatsForRest, TEAM_INCLUDED } from '../../supabase/functions/_shared/plans';
+import type { ProfileRow } from '../../supabase/functions/_shared/plans';
 
 // Our checkout: one small step per screen, so paying with crypto feels as simple as it can.
 //   1 Your order → 2 How to pay → 3 Before you send (a short guide) → 4 Send → 5 Done
@@ -65,13 +66,42 @@ const FAILED = ['failed', 'refunded', 'expired', 'partially_paid'];
 /** What's being bought, from the address: ?plan=pro&billing=monthly or ?pack=1. */
 function purchaseFrom(params: URLSearchParams): Purchase | null {
   if (params.get('pack') === '1') return { kind: 'pack' };
+  const add = Number(params.get('seats'));
+  if (!params.get('plan') && add >= 1 && add <= MAX_EXTRA_SEATS) return { kind: 'seats', seats: Math.round(add) };
   const plan = params.get('plan');
   const billing = params.get('billing');
-  if ((plan === 'pro' || plan === 'studio') && (billing === 'monthly' || billing === 'yearly')) return { kind: 'plan', plan, billing };
+  if ((plan === 'pro' || plan === 'studio') && (billing === 'monthly' || billing === 'yearly')) {
+    return { kind: 'plan', plan, billing, seats: plan === 'studio' && add >= 0 && add <= MAX_EXTRA_SEATS ? Math.round(add) || 0 : 0 };
+  }
   return null;
 }
 
-function describe(p: Purchase): { title: string; price: number; lines: string[] } {
+/** A running Studio plan, if there is one: its team and the plan's end, for pricing seats. */
+function runningStudio(profile: ProfileRow | null): { seats: number; billing: ProfileRow['billing']; end: Date } | null {
+  if (!profile || profile.plan !== 'studio' || profile.subscription_status !== 'active' || !profile.current_period_end) return null;
+  const end = new Date(profile.current_period_end);
+  return end > new Date() ? { seats: profile.extra_seats ?? 0, billing: profile.billing, end } : null;
+}
+
+/** $29, or $13.47 when there are cents. */
+const money = (usd: number) => (Number.isInteger(usd) ? `$${usd}` : `$${usd.toFixed(2)}`);
+
+const DAY_FORMAT = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+
+function describe(p: Purchase, profile: ProfileRow | null): { title: string; price: number; lines: string[] } {
+  const studio = runningStudio(profile);
+  if (p.kind === 'seats') {
+    const people = `${p.seats} more ${p.seats === 1 ? 'person' : 'people'}`;
+    return {
+      title: `Studio team: ${people}`,
+      price: studio ? seatsForRest(p.seats, studio.billing, studio.end) : 0,
+      lines: [
+        studio ? `Your team grows to ${TEAM_INCLUDED + studio.seats + p.seats} people` : 'For a running Studio plan',
+        studio ? `Paid only for the days left, until ${DAY_FORMAT.format(studio.end)}` : '',
+        'They share your plan’s hours and brand kits',
+      ].filter(Boolean),
+    };
+  }
   if (p.kind === 'pack') {
     return {
       title: `Extra hours: +${PACK.hours} hours and +${PACK.episodes} episodes`,
@@ -80,10 +110,18 @@ function describe(p: Purchase): { title: string; price: number; lines: string[] 
     };
   }
   const plan = planById(p.plan);
+  // Adding time to a running Studio keeps its team (and pays for it); a new Studio uses the chosen size.
+  const seats = p.plan === 'studio' ? (studio ? studio.seats : (p.seats ?? 0)) : 0;
   return {
     title: `Isla ${plan.name}, 1 ${p.billing === 'yearly' ? 'year' : 'month'}`,
-    price: PRICE_USD[p.plan][p.billing],
-    lines: [plan.features[0]!, plan.features[2]!, plan.features[5]!, 'Paid once: it doesn’t renew on its own'],
+    price: PRICE_USD[p.plan][p.billing] + seats * SEAT_USD[p.billing],
+    lines: [
+      plan.features[0]!,
+      plan.features[2]!,
+      plan.features[5]!,
+      ...(p.plan === 'studio' ? [`A team of ${TEAM_INCLUDED + seats} people`] : []),
+      'Paid once: it doesn’t renew on its own',
+    ],
   };
 }
 
@@ -105,7 +143,8 @@ function remember(id: string) {
   }
 }
 
-const orderPurchase = (o: PayOrder): Purchase => (o.kind === 'pack' ? { kind: 'pack' } : { kind: 'plan', plan: o.plan!, billing: o.billing! });
+const orderPurchase = (o: PayOrder): Purchase =>
+  o.kind === 'pack' ? { kind: 'pack' } : o.kind === 'seats' ? { kind: 'seats', seats: o.seats } : { kind: 'plan', plan: o.plan!, billing: o.billing!, seats: o.seats };
 
 /** The step an order belongs on, from its status. */
 function stepFor(o: PayOrder): Step {
@@ -216,8 +255,30 @@ export default function PayPage() {
     );
   }
 
-  const item = describe(purchase);
+  const item = describe(purchase, account.profile);
   const current = account.plan.id;
+  const studio = runningStudio(account.profile);
+  // A new Studio chooses its team size here; a running one keeps its team (more people are added on their own).
+  const chooseTeam = purchase.kind === 'plan' && purchase.plan === 'studio' && !studio;
+  const teamSeats = purchase.kind === 'plan' ? (purchase.seats ?? 0) : 0;
+  // Adding people needs a running Studio, and enough days left to reach the crypto minimum.
+  const seatsProblem =
+    purchase.kind !== 'seats'
+      ? null
+      : !studio
+        ? 'Extra people are for a running Studio plan.'
+        : studio.seats + purchase.seats > MAX_EXTRA_SEATS
+          ? `A Studio team can have up to ${TEAM_INCLUDED + MAX_EXTRA_SEATS} people.`
+          : item.price < CRYPTO_MIN_USD
+            ? `That's $${item.price.toFixed(2)}, below the $${CRYPTO_MIN_USD} minimum for crypto payments. Add more people at once, or choose your team size when you renew.`
+            : null;
+  const setTeam = (seats: number) => {
+    if (purchase.kind !== 'plan') return;
+    const next = { ...purchase, seats };
+    setPurchase(next);
+    const path = checkoutPath(next);
+    setParams(new URLSearchParams(path.slice(path.indexOf('?') + 1)), { replace: true });
+  };
   const switching = purchase.kind === 'plan' && current !== 'free' && current !== purchase.plan;
   const adding = purchase.kind === 'plan' && current === purchase.plan;
 
@@ -251,7 +312,10 @@ export default function PayPage() {
   function startOver() {
     setOrder(null);
     setError(null);
-    if (purchase) setParams(purchase.kind === 'pack' ? { pack: '1' } : { plan: purchase.plan, billing: purchase.billing }, { replace: true });
+    if (purchase) {
+      const path = checkoutPath(purchase);
+      setParams(new URLSearchParams(path.slice(path.indexOf('?') + 1)), { replace: true });
+    }
     setStep('coin');
   }
 
@@ -262,14 +326,35 @@ export default function PayPage() {
           <h1 className="page-title">Your order</h1>
           <div className="card pay-summary">
             <p className="pay-item">{item.title}</p>
-            <p className="pay-price">${item.price}</p>
+            <p className="pay-price">{money(item.price)}</p>
             <ul className="pay-lines">
               {item.lines.map((l) => (
                 <li key={l}>{l}</li>
               ))}
             </ul>
           </div>
+          {chooseTeam && (
+            <div className="card pay-team">
+              <p className="pay-item">How many people in your team?</p>
+              <p className="muted small">
+                {TEAM_INCLUDED} included (you and 2 others). Each extra person is ${SEAT_USD[purchase.kind === 'plan' ? purchase.billing : 'monthly']}{' '}
+                {purchase.kind === 'plan' && purchase.billing === 'yearly' ? 'a year' : 'a month'}.
+              </p>
+              <div className="pay-stepper">
+                <button type="button" className="btn btn-outline" aria-label="Fewer people" disabled={teamSeats <= 0} onClick={() => setTeam(teamSeats - 1)}>
+                  −
+                </button>
+                <span>
+                  <b>{TEAM_INCLUDED + teamSeats}</b> people
+                </span>
+                <button type="button" className="btn btn-outline" aria-label="More people" disabled={teamSeats >= MAX_EXTRA_SEATS} onClick={() => setTeam(teamSeats + 1)}>
+                  +
+                </button>
+              </div>
+            </div>
+          )}
           {adding && <p className="notice">You already have {account.plan.name}. This adds the time to the end of your current plan.</p>}
+          {seatsProblem && <p className="notice notice-error">{seatsProblem}</p>}
           {switching && (
             <p className="notice">
               You're on {account.plan.name} now. {planById(purchase.kind === 'plan' ? purchase.plan : 'pro').name} starts as soon as your
@@ -283,10 +368,10 @@ export default function PayPage() {
             You'll pay with crypto, step by step. It takes about 5 minutes. By paying you agree to our{' '}
             <Link to="/terms">terms</Link> and <Link to="/refunds">refund policy</Link>.
           </p>
-          <button type="button" className="btn btn-primary pay-next" onClick={() => setStep('coin')}>
+          <button type="button" className="btn btn-primary pay-next" disabled={!!seatsProblem} onClick={() => setStep('coin')}>
             Continue
           </button>
-          <BackLink onClick={() => navigate('/pricing')} />
+          <BackLink onClick={() => (purchase.kind === 'plan' ? navigate('/pricing') : navigate('/account'))} />
         </>
       )}
 
@@ -383,7 +468,9 @@ export default function PayPage() {
           <p>
             {order.kind === 'pack'
               ? `Your extra ${PACK.hours} hours and ${PACK.episodes} episodes are ready.`
-              : `Isla ${planById(order.plan!).name} is on${account.profile?.current_period_end ? ` until ${new Date(account.profile.current_period_end).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`}{' '}
+              : order.kind === 'seats'
+                ? `Your team now has room for ${order.seats} more ${order.seats === 1 ? 'person' : 'people'}. Invite them in Plan & settings.`
+                : `Isla ${planById(order.plan!).name} is on${account.profile?.current_period_end ? ` until ${new Date(account.profile.current_period_end).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`}{' '}
             We've emailed you a receipt.
           </p>
           <button type="button" className="btn btn-primary pay-next" onClick={() => navigate('/new')}>
@@ -576,13 +663,17 @@ function Wait({ coin, order, onCheck, onBack, error }: { coin: Coin | null; orde
   const steps: [string, boolean][] = [
     ['You sent it', true],
     ['Seen on the blockchain', seen],
-    ['Confirmed, turning on your ' + (order.kind === 'pack' ? 'extra hours' : 'plan'), ['confirmed', 'sending', 'finished'].includes(order.status)],
+    [
+      'Confirmed, ' + (order.kind === 'pack' ? 'adding your extra hours' : order.kind === 'seats' ? 'adding the people to your team' : 'turning on your plan'),
+      ['confirmed', 'sending', 'finished'].includes(order.status),
+    ],
   ];
   return (
     <>
       <h1 className="page-title">Waiting for your payment</h1>
       <p className="muted">
-        This takes {coin ? coin.minutes : 'a few minutes'}. You can leave this page: your {order.kind === 'pack' ? 'extra hours turn' : 'plan turns'} on by
+        This takes {coin ? coin.minutes : 'a few minutes'}. You can leave this page:{' '}
+        {order.kind === 'pack' ? 'your extra hours are added' : order.kind === 'seats' ? 'the people are added to your team' : 'your plan turns on'} by
         itself and we'll email you. This page updates on its own.
       </p>
       <ol className="pay-timeline">

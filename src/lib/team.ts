@@ -10,10 +10,12 @@ export interface TeamMember {
   status: 'invited' | 'active';
 }
 
-// Included with Studio: the owner plus 2 people. Up to 7 more as extra seats (supabase/functions/team-seats).
-export const TEAM_SIZE = 3;
-export const MAX_EXTRA_SEATS = 7;
-export const SEAT_PRICE = { monthly: 8, yearly: 80 };
+import { MAX_EXTRA_SEATS, SEAT_USD, TEAM_INCLUDED } from '../../supabase/functions/_shared/plans';
+
+// Included with Studio: the owner plus 2 people. Up to 7 more as extra seats.
+export const TEAM_SIZE = TEAM_INCLUDED;
+export { MAX_EXTRA_SEATS };
+export const SEAT_PRICE = SEAT_USD;
 
 function db() {
   if (!supabase) throw new Error('Teams need real accounts, so they aren’t available in demo mode.');

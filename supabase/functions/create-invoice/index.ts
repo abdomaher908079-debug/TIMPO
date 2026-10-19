@@ -12,7 +12,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { canBuyFrom, NOT_SOLD_HERE } from '../_shared/countries.ts';
 import { SITE } from '../_shared/email.ts';
 import { type Order, settle } from '../_shared/orders.ts';
-import { type Billing, PACK, PRICE_USD } from '../_shared/plans.ts';
+import { type Billing, CRYPTO_MIN_USD, MAX_EXTRA_SEATS, PACK, PRICE_USD, SEAT_USD, seatsForRest } from '../_shared/plans.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false },
@@ -51,6 +51,7 @@ function view(o: OrderRow, status = o.status) {
     memo: o.payin_extra_id,
     priceUntil: o.price_expires_at,
     received: o.actually_paid != null ? Number(o.actually_paid) : 0,
+    seats: o.extra_seats ?? 0,
     status,
     applied: !!o.done_at,
   };
@@ -98,32 +99,66 @@ Deno.serve(async (req) => {
     if (ws?.is_team_member) return json({ error: 'Your team owner manages the plan.' }, 400);
     const { data: profile } = await admin
       .from('profiles')
-      .select('plan, subscription_status, paddle_subscription_id')
+      .select('plan, billing, subscription_status, current_period_end, extra_seats, paddle_subscription_id')
       .eq('id', user.id)
-      .maybeSingle<{ plan: string; subscription_status: string | null; paddle_subscription_id: string | null }>();
+      .maybeSingle<{
+        plan: string;
+        billing: Billing | null;
+        subscription_status: string | null;
+        current_period_end: string | null;
+        extra_seats: number;
+        paddle_subscription_id: string | null;
+      }>();
     // A live Paddle subscription is changed in Paddle; an ended one (canceled) doesn't matter here.
     if (profile?.paddle_subscription_id && ['active', 'trialing', 'past_due'].includes(profile.subscription_status ?? '')) {
       return json({ error: 'Your plan is billed through Paddle. Manage it in Plan & settings.' }, 400);
     }
 
-    let order: { kind: 'plan' | 'pack'; plan: 'pro' | 'studio' | null; billing: Billing | null; price: number; description: string };
-    if (body.kind === 'pack') {
+    let order: { kind: 'plan' | 'pack' | 'seats'; plan: 'pro' | 'studio' | null; billing: Billing | null; price: number; seats: number; description: string };
+    const running = !!profile && profile.plan !== 'free' && profile.subscription_status === 'active' && !!profile.current_period_end &&
+      new Date(profile.current_period_end) > new Date();
+    if (body.kind === 'seats') {
+      // More people for the rest of a running Studio plan.
+      if (!running || profile!.plan !== 'studio') return json({ error: 'Extra people are for Studio.' }, 400);
+      const count = Math.round(Number(body.seats));
+      if (!(count >= 1 && profile!.extra_seats + count <= MAX_EXTRA_SEATS)) return json({ error: `A Studio team can have up to ${3 + MAX_EXTRA_SEATS} people.` }, 400);
+      const price = seatsForRest(count, profile!.billing, new Date(profile!.current_period_end!));
+      if (price < CRYPTO_MIN_USD) {
+        return json({ error: `That's $${price.toFixed(2)}, below the $${CRYPTO_MIN_USD} minimum for crypto payments. Add more people at once, or choose your team size when you renew.` }, 400);
+      }
+      order = { kind: 'seats', plan: null, billing: null, price, seats: count, description: `Isla Studio: ${count} more ${count === 1 ? 'person' : 'people'} until your plan renews` };
+    } else if (body.kind === 'pack') {
       // Bought hour packs work only on Pro or Studio, so they're sold only there.
       if (!profile || profile.plan === 'free' || profile.subscription_status !== 'active') return json({ error: 'Extra hours are for Pro and Studio.' }, 400);
-      order = { kind: 'pack', plan: null, billing: null, price: PACK.price, description: `Isla extra hours: +${PACK.hours} hours, +${PACK.episodes} episodes` };
+      order = { kind: 'pack', plan: null, billing: null, price: PACK.price, seats: 0, description: `Isla extra hours: +${PACK.hours} hours, +${PACK.episodes} episodes` };
     } else {
       const plan = body.plan === 'pro' || body.plan === 'studio' ? body.plan : null;
       const billing = body.billing === 'monthly' || body.billing === 'yearly' ? body.billing : null;
       if (!plan || !billing) return json({ error: 'Choose a plan.' }, 400);
       const name = plan === 'pro' ? 'Pro' : 'Studio';
-      order = { kind: 'plan', plan, billing, price: PRICE_USD[plan][billing], description: `Isla ${name}, 1 ${billing === 'yearly' ? 'year' : 'month'}` };
+      // Studio's team size is paid with the plan. Adding time to a running Studio keeps its team as it is
+      // (more people are added on their own, for the rest of the plan).
+      let seats = 0;
+      if (plan === 'studio') {
+        seats = running && profile!.plan === 'studio' ? profile!.extra_seats : Math.round(Number(body.seats ?? 0));
+        if (!(seats >= 0 && seats <= MAX_EXTRA_SEATS)) return json({ error: `A Studio team can have up to ${3 + MAX_EXTRA_SEATS} people.` }, 400);
+      }
+      const team = seats ? `, team of ${3 + seats}` : '';
+      order = {
+        kind: 'plan',
+        plan,
+        billing,
+        price: PRICE_USD[plan][billing] + seats * SEAT_USD[billing],
+        seats,
+        description: `Isla ${name}, 1 ${billing === 'yearly' ? 'year' : 'month'}${team}`,
+      };
     }
     const coin = String(body.coin ?? '');
     if (action === 'start' && !COINS.includes(coin)) return json({ error: 'Choose how to pay.' }, 400);
 
     const { data: row, error } = await admin
       .from('crypto_orders')
-      .insert({ user_id: user.id, kind: order.kind, plan: order.plan, billing: order.billing, price_usd: order.price, country })
+      .insert({ user_id: user.id, kind: order.kind, plan: order.plan, billing: order.billing, price_usd: order.price, extra_seats: order.seats, country })
       .select('*')
       .single<OrderRow>();
     if (error || !row) throw error ?? new Error('Order not saved.');
