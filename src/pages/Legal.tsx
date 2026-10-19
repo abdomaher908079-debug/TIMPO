@@ -79,7 +79,9 @@ export function Privacy() {
         a code identifying the file, not the file itself). For each AI request we also note which AI model was used and how
         much of it, without any of your content, for 90 days; after that only monthly totals are kept. If you sign in with
         Google, we receive your name and email from Google. If you tap "Notify me" on a paid plan, we keep that request with
-        your email until the plan opens and we've told you, or until you ask us to remove it.
+        your email until the plan opens and we've told you, or until you ask us to remove it. If you sign up with someone's
+        invite link, we keep who invited you, to give you both the reward; the person who invited you sees how many friends
+        joined, not who.
       </p>
       <p>
         When we change something on your account ourselves (for example giving you a plan or extra hours, resetting your
@@ -233,6 +235,11 @@ export function Terms() {
         hours and episodes work on every plan, the {free.name} plan included, and are used after your plan's own hours or
         episodes run out. We email you when we give or end a gift, and may end gifts given by mistake or used against these
         terms.
+      </p>
+      <p>
+        <b>Invite rewards:</b> when someone signs up with your invite link and makes their first episode, you both get a gift of
+        3 hours and 3 episodes for 60 days, up to 10 rewards a month. Rewards are only for real new users: accounts made to
+        collect rewards, or your own second account, don't count, and we may take back rewards gained that way.
       </p>
       <h2>When a plan ends</h2>
       <p>

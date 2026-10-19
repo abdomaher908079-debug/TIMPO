@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import InviteCard from '../components/InviteCard';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
@@ -220,6 +221,7 @@ export default function Account() {
       </section>
 
       <Team />
+      {!demo && <InviteCard />}
 
       {!member && (
         <p className="account-plans-link">

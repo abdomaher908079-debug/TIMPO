@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import IslaOrb from '../components/IslaOrb';
 import { useAuth } from '../lib/auth';
 import { LIMITS } from '../lib/plans';
+import { INVITE_REWARD, pendingInvite } from '../lib/invite';
 
 const MIN_PASSWORD = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -129,6 +130,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       <p className="muted">
         {isSignup ? 'Your episodes and clips, saved in one place.' : 'Log in to make clips from your episodes.'}
       </p>
+      {isSignup && pendingInvite() && (
+        <p className="notice">
+          You were invited! Make your first episode and you and your friend both get +{INVITE_REWARD.hours} free hours.
+        </p>
+      )}
 
       {/* Shown once the Google provider is turned on in Supabase (Authentication → Providers). */}
       {googleEnabled && (

@@ -5,7 +5,10 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AccountProvider } from './lib/account';
 import { AuthProvider } from './lib/auth';
+import { captureInvite } from './lib/invite';
 import './styles.css';
+
+captureInvite();
 
 // After an update, a page opened before it may ask for files that no longer exist: reload once to get the new ones.
 window.addEventListener('vite:preloadError', (event) => {

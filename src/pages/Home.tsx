@@ -6,6 +6,7 @@ import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { joinTeam, listTeam, type TeamMember } from '../lib/team';
 import { LIMITS } from '../lib/plans';
+import { INVITE_REWARD, pendingInvite } from '../lib/invite';
 
 // What Isla does, in the words a podcaster would use. Every item here is in the product.
 const FEATURES: { title: string; text: string }[] = [
@@ -73,6 +74,11 @@ export default function Home() {
           Isla listens to your whole episode, finds the moments people will share, and cuts vertical clips with
           captions for TikTok, Reels and Shorts.
         </p>
+        {!user && pendingInvite() && (
+          <p className="notice">
+            A friend invited you: sign up and make your first episode, and you both get +{INVITE_REWARD.hours} free hours.
+          </p>
+        )}
         <Link to={startLink} className="btn btn-primary">
           Try it free, {LIMITS.free.episodesPerPeriod === 1 ? '1 episode' : `${LIMITS.free.episodesPerPeriod} episodes`} every week
         </Link>
