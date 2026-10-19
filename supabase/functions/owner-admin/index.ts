@@ -133,7 +133,8 @@ function letterFor(action: string, d: Record<string, unknown>): Letter | null {
       };
     case 'message':
       return {
-        subject: escape(String(d.subject)),
+        // A subject is plain text, not HTML: no escaping, just no line breaks.
+        subject: String(d.subject).replace(/[\r\n]+/g, ' '),
         html: hi + String(d.text).split(/\n{2,}/).map((para) => p(escape(para).replace(/\n/g, '<br>'))).join('') + sign,
       };
   }
@@ -208,18 +209,21 @@ Deno.serve(async (req) => {
       // Keep the start when only extending the same plan, so usage keeps counting from it.
       const keep = p.plan === plan && p.subscription_status === 'active' && p.current_period_start;
       const start = keep ? p.current_period_start! : new Date().toISOString();
-      const days = (until.getTime() - new Date(start).getTime()) / 86_400_000;
+      // How long is left from today, not since the start: a monthly plan extended by a month stays monthly.
+      const days = (until.getTime() - Date.now()) / 86_400_000;
       await admin
         .from('profiles')
         .update({
           plan,
-          billing: days > 32 ? 'yearly' : 'monthly',
+          billing: days > 300 ? 'yearly' : 'monthly',
           subscription_status: 'active',
           current_period_start: start,
           current_period_end: until.toISOString(),
           cancel_at: null,
           pending_plan: null,
           pending_billing: null,
+          // Given by us from now on, even if it was paid for before (reminders then say "reply to renew").
+          paid_with: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id);

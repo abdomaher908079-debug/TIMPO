@@ -5,11 +5,9 @@
 // missing or Russian country is refused here too.
 // Secrets: NOWPAYMENTS_API_KEY, GEO_SECRET. Deploy: supabase functions deploy create-invoice
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { canBuyFrom, NOT_SOLD_HERE } from '../_shared/countries.ts';
+import { SITE } from '../_shared/email.ts';
 import { type Billing, PACK, PRICE_USD } from '../_shared/plans.ts';
-
-const SITE = 'https://islaclips.com';
-const BLOCKED_COUNTRIES = ['RU'];
-const NOT_HERE = 'Paid subscriptions are currently available for international users outside the Russian Federation.';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false },
@@ -24,7 +22,7 @@ Deno.serve(async (req) => {
     const geoSecret = Deno.env.get('GEO_SECRET');
     if (!geoSecret || req.headers.get('x-geo-secret') !== geoSecret) return json({ error: 'Not allowed.' }, 403);
     const country = (req.headers.get('x-isla-country') ?? '').toUpperCase();
-    if (!/^[A-Z]{2}$/.test(country) || BLOCKED_COUNTRIES.includes(country)) return json({ error: NOT_HERE, reason: 'country' }, 451);
+    if (!canBuyFrom(country)) return json({ error: NOT_SOLD_HERE, reason: 'country' }, 451);
 
     const apiKey = Deno.env.get('NOWPAYMENTS_API_KEY');
     if (!apiKey) return json({ error: 'Payments are not open yet.' }, 503);
@@ -42,7 +40,8 @@ Deno.serve(async (req) => {
       .select('plan, subscription_status, paddle_subscription_id')
       .eq('id', user.id)
       .maybeSingle<{ plan: string; subscription_status: string | null; paddle_subscription_id: string | null }>();
-    if (profile?.paddle_subscription_id && profile.subscription_status === 'active') {
+    // A live Paddle subscription is changed in Paddle; an ended one (canceled) doesn't matter here.
+    if (profile?.paddle_subscription_id && ['active', 'trialing', 'past_due'].includes(profile.subscription_status ?? '')) {
       return json({ error: 'Your plan is billed through Paddle. Manage it in Plan & settings.' }, 400);
     }
 

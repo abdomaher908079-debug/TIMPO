@@ -50,48 +50,76 @@ function addMonths(from: Date, months: number): Date {
   return d;
 }
 
-/** Turns on (or extends) the bought plan. Returns its new end date. */
+interface PlanRow {
+  plan: 'free' | 'pro' | 'studio';
+  billing: Billing | null;
+  subscription_status: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  extra_seats: number;
+  paid_with: string | null;
+  updated_at: string | null;
+}
+
+/** What one day of a paid plan is worth, at the price it was bought at. */
+const dayValue = (plan: 'pro' | 'studio', billing: Billing | null) =>
+  billing === 'yearly' ? PRICE_USD[plan].yearly / 365 : PRICE_USD[plan].monthly / 30;
+
+/**
+ * Turns on (or extends) the bought plan. Returns its new end date. The profile is written only if it hasn't
+ * changed since it was read (updated_at), so two orders paid at the same moment both count.
+ */
 async function applyPlan(order: Order): Promise<Date> {
   const plan = order.plan!;
   const months = order.billing === 'yearly' ? 12 : 1;
-  const { data: p } = await admin
-    .from('profiles')
-    .select('plan, subscription_status, current_period_start, current_period_end, extra_seats')
-    .eq('id', order.user_id)
-    .single<{ plan: 'free' | 'pro' | 'studio'; subscription_status: string | null; current_period_start: string | null; current_period_end: string | null; extra_seats: number }>();
-  const now = new Date();
-  const running = p && p.plan !== 'free' && p.subscription_status === 'active' && p.current_period_end && new Date(p.current_period_end) > now;
-  let start = now;
-  let end: Date;
-  if (running && p.plan === plan) {
-    // The same plan again: it runs on from the current end date.
-    start = new Date(p.current_period_start ?? now);
-    end = addMonths(new Date(p.current_period_end!), months);
-  } else {
-    // A different plan starts now; the days left on the old one are kept, valued at list prices.
-    const leftDays = running ? (new Date(p.current_period_end!).getTime() - now.getTime()) / DAY : 0;
-    const credit = running ? (leftDays * PRICE_USD[p.plan as 'pro' | 'studio'].monthly) / PRICE_USD[plan].monthly : 0;
-    end = new Date(addMonths(now, months).getTime() + Math.round(credit * DAY));
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: p, error: readError } = await admin
+      .from('profiles')
+      .select('plan, billing, subscription_status, current_period_start, current_period_end, extra_seats, paid_with, updated_at')
+      .eq('id', order.user_id)
+      .single<PlanRow>();
+    if (readError || !p) throw readError ?? new Error('Profile not found.');
+    const now = new Date();
+    const running = p.plan !== 'free' && p.subscription_status === 'active' && !!p.current_period_end && new Date(p.current_period_end) > now;
+    const same = running && p.plan === plan;
+    let start = now;
+    let end: Date;
+    if (same) {
+      // The same plan again: it runs on from the current end date.
+      start = new Date(p.current_period_start ?? now);
+      end = addMonths(new Date(p.current_period_end!), months);
+    } else {
+      // A different plan starts now. Days left on a plan that was paid for are kept, valued at what they cost;
+      // a plan we gave for free isn't turned into paid time.
+      const paidLeft = running && p.paid_with === 'nowpayments';
+      const leftDays = paidLeft ? (new Date(p.current_period_end!).getTime() - now.getTime()) / DAY : 0;
+      const credit = paidLeft ? (leftDays * dayValue(p.plan as 'pro' | 'studio', p.billing)) / dayValue(plan, order.billing) : 0;
+      end = new Date(addMonths(now, months).getTime() + Math.round(credit * DAY));
+    }
+    let update = admin
+      .from('profiles')
+      .update({
+        plan,
+        billing: same && p.billing === 'yearly' ? 'yearly' : order.billing,
+        subscription_status: 'active',
+        current_period_start: start.toISOString(),
+        current_period_end: end.toISOString(),
+        cancel_at: null,
+        pending_plan: null,
+        pending_billing: null,
+        extra_seats: same && plan === 'studio' ? p.extra_seats : 0,
+        paid_with: 'nowpayments',
+        // An ended Paddle subscription (create-invoice refuses live ones) no longer applies.
+        paddle_subscription_id: null,
+        updated_at: now.toISOString(),
+      })
+      .eq('id', order.user_id);
+    update = p.updated_at ? update.eq('updated_at', p.updated_at) : update.is('updated_at', null);
+    const { data: written, error } = await update.select('id');
+    if (error) throw error;
+    if (written?.length) return end;
   }
-  const days = (end.getTime() - start.getTime()) / DAY;
-  const { error } = await admin
-    .from('profiles')
-    .update({
-      plan,
-      billing: days > 32 ? 'yearly' : 'monthly',
-      subscription_status: 'active',
-      current_period_start: start.toISOString(),
-      current_period_end: end.toISOString(),
-      cancel_at: null,
-      pending_plan: null,
-      pending_billing: null,
-      extra_seats: running && p.plan === 'studio' && plan === 'studio' ? p.extra_seats : 0,
-      paid_with: 'nowpayments',
-      updated_at: now.toISOString(),
-    })
-    .eq('id', order.user_id);
-  if (error) throw error;
-  return end;
+  throw new Error('Profile kept changing; try again.');
 }
 
 async function applyPack(order: Order): Promise<Date> {
@@ -166,14 +194,16 @@ Deno.serve(async (req) => {
       .is('applied_at', null)
       .select('id');
     if (!claimed?.length) return new Response('ok');
+    let until: Date;
     try {
-      const until = order.kind === 'pack' ? await applyPack(order) : await applyPlan(order);
-      await receipt(order, until);
+      until = order.kind === 'pack' ? await applyPack(order) : await applyPlan(order);
     } catch (err) {
       // Not applied: let NOWPayments send it again.
       await admin.from('crypto_orders').update({ applied_at: null }).eq('id', order.id);
       throw err;
     }
+    // Applied for good from here: a failed receipt must never apply the order again.
+    await receipt(order, until).catch((err) => console.error('Receipt', order.id, err));
     return new Response('ok');
   } catch (err) {
     console.error(err);

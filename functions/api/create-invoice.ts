@@ -7,16 +7,16 @@ interface Context {
   env: { GEO_SECRET?: string };
 }
 
+import { canBuyFrom, NOT_SOLD_HERE } from '../../supabase/functions/_shared/countries';
+
 const SUPABASE_URL = 'https://medqkcnpxjogeedenkee.supabase.co';
-const BLOCKED = ['RU'];
-const NOT_HERE = 'Paid subscriptions are currently available for international users outside the Russian Federation.';
 
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
 export async function onRequestPost({ request, env }: Context): Promise<Response> {
   const country = request.cf?.country ?? '';
-  if (!country || BLOCKED.includes(country)) return json({ error: NOT_HERE, reason: 'country' }, 451);
+  if (!canBuyFrom(country)) return json({ error: NOT_SOLD_HERE, reason: 'country' }, 451);
   if (!env.GEO_SECRET) return json({ error: 'Payments are not open yet.' }, 503);
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-invoice`, {
     method: 'POST',

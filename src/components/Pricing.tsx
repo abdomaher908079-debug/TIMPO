@@ -5,7 +5,6 @@ import { useAuth } from '../lib/auth';
 import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { openBillingPortal, paymentsOpen, paymentsReady, startCheckout, switchPlan } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
-import { SEAT_PRICE } from '../lib/team';
 import { joinWaitlist, waitlistPlan, type WaitlistPlan } from '../lib/waitlist';
 import { PACK } from '../../supabase/functions/_shared/plans';
 
@@ -58,10 +57,8 @@ export default function Pricing() {
           , one time, for Pro and Studio. Usable for {PACK.days} days, after your monthly hours or episodes run out.
         </p>
         <p>
-          <b>
-            Bigger teams: ${SEAT_PRICE.monthly} a month (${SEAT_PRICE.yearly} a year) per extra person
-          </b>{' '}
-          on Studio, up to 10 people. Everyone shares the plan's hours.
+          <b>Bigger teams:</b> Studio includes 3 people; email{' '}
+          <a href="mailto:support@islaclips.com">support@islaclips.com</a> for up to 10. Everyone shares the plan's hours.
         </p>
       </div>
       <p className="muted small pricing-note">

@@ -160,6 +160,14 @@ export default function Team() {
               </li>
             ))}
           </ul>
+          {/* Seats are billed through a Paddle subscription; plans paid upfront (crypto) or given by us get
+              more seats by email, set from the owner page. */}
+          {!profile?.paddle_subscription_id ? (
+            <p className="muted small">
+              Studio includes {TEAM_SIZE} people{extraSeats ? `, plus your ${extraSeats} extra` : ''}. Need more? Email{' '}
+              <a href="mailto:support@islaclips.com">support@islaclips.com</a>.
+            </p>
+          ) : (
           <div className="seat-row">
             <span className="muted small">
               Studio includes {TEAM_SIZE} people. Each extra person is {seatPrice}, sharing the same hours.
@@ -181,6 +189,7 @@ export default function Team() {
               </button>
             )}
           </div>
+          )}
           {myTeam.length < teamSize - 1 && (
             <form
               className="team-invite-form"

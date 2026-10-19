@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
+import { canBuyFrom, NOT_SOLD_HERE } from '../../supabase/functions/_shared/countries';
 
-// Paid plans aren't sold in these countries (Russia: crypto payments for services are barred by
-// Federal Law 259-FZ). The server checks again when a payment starts.
-const BLOCKED = ['RU'];
-export const NOT_SOLD_HERE = 'Paid subscriptions are currently available for international users outside the Russian Federation.';
+// Paid plans aren't sold everywhere (see _shared/countries.ts). The server checks again when a payment starts.
+export { NOT_SOLD_HERE };
 
 let asked: Promise<string | null> | null = null;
 
@@ -21,7 +20,8 @@ export function useCanPay(): boolean | null {
   const [can, setCan] = useState<boolean | null>(null);
   useEffect(() => {
     let live = true;
-    void country().then((c) => live && setCan(!c || !BLOCKED.includes(c)));
+    // No answer at all (offline, or the demo without our API): leave it to the server.
+    void country().then((c) => live && setCan(c === null ? true : canBuyFrom(c)));
     return () => {
       live = false;
     };
