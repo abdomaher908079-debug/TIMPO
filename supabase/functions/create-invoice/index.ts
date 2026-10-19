@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
         ipn_callback_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/nowpayments-webhook`,
         success_url: `${SITE}/account?paid=1`,
         cancel_url: `${SITE}/pricing`,
-        is_fixed_rate: true,
+        // No fixed rate: NOWPayments' minimum with a fixed rate (about $20 in USDT) is above our $15 plan.
       }),
     });
     const invoice = (await res.json().catch(() => ({}))) as { id?: string | number; invoice_url?: string; message?: string };
