@@ -4,9 +4,9 @@ import { BRAND_NAME, LEGAL } from '../lib/brand';
 import { PLANS } from '../lib/plans';
 import { PACK, PICKS_PER_EPISODE } from '../../supabase/functions/_shared/plans';
 
-// Plain-language legal pages: Terms, Privacy and Refunds. Payments go through NOWPayments (crypto, or card
-// through its on-ramp), and paid plans aren't sold in the Russian Federation. Have them checked by a
-// lawyer before taking real payments.
+// Plain-language legal pages: Terms, Privacy and Refunds. Payments go through NOWPayments (crypto today;
+// cards through its on-ramp once approved), and paid plans aren't sold in the Russian Federation. Have them
+// checked by a lawyer.
 
 const mail = <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>;
 
@@ -81,18 +81,36 @@ export function Privacy() {
         Google, we receive your name and email from Google. If you tap "Notify me" on a paid plan, we keep that request with
         your email until the plan opens and we've told you, or until you ask us to remove it.
       </p>
+      <p>
+        When we change something on your account ourselves (for example giving you a plan or extra hours, resetting your
+        usage, or pausing an account that breaks our terms), we keep a record of what we changed and when, so we can answer
+        your questions and fix mistakes.
+      </p>
+
+      <h2>Emails we send</h2>
+      <p>
+        We email you only about your account: sign-in and password links, payment receipts, reminders before your plan ends,
+        changes we make to your account, and answers to your messages. If you tap "Notify me", we also email you once when
+        that plan opens. We don't send newsletters or advertising.
+      </p>
 
       <h2>Payments</h2>
       <p>
-        Payments are handled by NOWPayments, which takes crypto and, through its card partners, cards. NOWPayments and its card
-        partners collect what they need to take your payment (for cards, this can include an identity check) under{' '}
-        their own privacy policies (see <a href="https://nowpayments.io">nowpayments.io</a>). We never see your card number or
-        your wallet's private keys: we only receive what you bought, its price, the payment's status and its reference.
+        Payments are handled by NOWPayments. Today you pay in crypto; if we add card payments, they'll go through NOWPayments'
+        card partners. NOWPayments (and, for cards, its partners) collect what they need to take your payment, which for cards
+        can include an identity check, under their own privacy policies (see{' '}
+        <a href="https://nowpayments.io">nowpayments.io</a>). We never see your card number or your wallet's private keys.
+        For each order we keep what you bought, its price, its status, the payment's reference from NOWPayments and your
+        country (below). Crypto payments are recorded on a public blockchain, which neither we nor NOWPayments control.
       </p>
       <p>
         Paid plans aren't sold in the Russian Federation. To check this, when you open our pricing page or start a payment, we
         use the country Cloudflare, our host, works out from your internet address. We store the country with your order (for
         example "DE"), not your internet address.
+      </p>
+      <p>
+        We keep records of paid orders for as long as the law requires for accounting and to handle refunds. Orders that were
+        never paid are deleted after 30 days.
       </p>
 
       <h2>Who helps us run {BRAND_NAME}</h2>
@@ -106,7 +124,17 @@ export function Privacy() {
         <li><b>NOWPayments</b> and its card partners: payments.</li>
         <li><b>Brevo</b>: sends our emails (receipts, reminders and account messages).</li>
       </ul>
-      <p>We never sell your data.</p>
+      <p>
+        Some of these companies process data outside your country, including in the United States and the European Union.
+        We choose providers that protect it, and we never sell your data.
+      </p>
+
+      <h2>Why we use your data</h2>
+      <p>
+        We use your data to provide {BRAND_NAME} as you asked (our agreement with you), to keep it secure and prevent abuse
+        (our legitimate interest), and to meet legal duties such as keeping payment records. We don't use it for advertising
+        or sell it.
+      </p>
 
       <h2>Cookies and storage</h2>
       <p>
@@ -117,8 +145,10 @@ export function Privacy() {
 
       <h2>Your rights</h2>
       <p>
-        You can ask for a copy of your data, or for your account and data to be deleted, at any time: email {mail}. If you live
-        in the EU or UK you also have the right to complain to your data protection authority.
+        You can ask for a copy of your data, to correct it, or for your account and data to be deleted, at any time: email{' '}
+        {mail}. We answer within 30 days. We keep your account until you delete it or ask us to; payment records are kept as
+        the law requires (above). If you live in the EU or UK you also have the right to complain to your data protection
+        authority.
       </p>
 
       <h2>Children</h2>
@@ -155,7 +185,8 @@ export function Terms() {
       <h2>Acceptable use</h2>
       <p>
         Don't use {BRAND_NAME} for illegal content, content that infringes others' rights, or to overload, resell or reverse
-        engineer the service. We may suspend accounts that do.
+        engineer the service. Don't share your account, create accounts to get around plan limits, or remove the "Made with{' '}
+        {BRAND_NAME}" watermark from clips made on the {free.name} plan. We may suspend accounts that do.
       </p>
 
       <h2>Where paid plans are available</h2>
@@ -163,13 +194,16 @@ export function Terms() {
         <b>Paid subscriptions are intended for international users and unavailable within the Russian Federation.</b> We don't
         accept payments from the Russian Federation and block payments started there. Don't buy a paid plan for use in the
         Russian Federation or from there by any means, such as a VPN. If you do, we may cancel the plan and refund what
-        you paid.
+        you paid. You also confirm that you aren't subject to sanctions that would forbid us or our payment partner from
+        dealing with you. The {free.name} plan stays available.
       </p>
 
       <h2>Plans and payments</h2>
       <p>
-        The {free.name} plan is free. Paid plans are paid upfront, in US dollars, for one month or one year, through our payment
-        partner NOWPayments: in crypto (such as USDT), or by card through NOWPayments' card partners where we offer it. They{' '}
+        The {free.name} plan is free. While it's marked "early access", its limits are more generous than usual and may
+        change; we'll tell you before they do. Paid plans are paid upfront, in US dollars, for one month or one year, through
+        our payment partner NOWPayments: in crypto (such as USDT), or by card through NOWPayments' card partners once we
+        offer it. Prices are in US dollars; the crypto amount is worked out when you open the payment page. They{' '}
         <b>don't renew automatically</b>: when the time you paid for ends, your account moves to the {free.name} plan unless
         you buy more time. We email you before that. Buying more of the same plan adds the time to the end of your current
         one. Buying a different plan starts it as soon as the payment arrives, and the days left on your old plan are added
@@ -183,17 +217,26 @@ export function Terms() {
       </p>
       <p>
         Each plan's limits are shown on our{' '}
-        <Link to="/pricing">pricing</Link>: hours and episodes per month (counted from the day your subscription
-        started, also on yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
+        <Link to="/pricing">pricing</Link>: hours and episodes per month (counted from the day your plan started, also on
+        yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
         over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run
         out, and only while you're on a paid plan. Studio includes a team of 3; larger teams are arranged by email.
       </p>
+
+      <h2>Gifts</h2>
+      <p>
+        We sometimes give a plan, extra hours, extra episodes or team seats for free. A gift lasts until the date we tell
+        you, works like the paid version unless we say otherwise, can't be exchanged for money and isn't refundable. Gifted
+        hours and episodes work on every plan, the {free.name} plan included, and are used after your plan's own hours or
+        episodes run out. We email you when we give or end a gift, and may end gifts given by mistake or used against these
+        terms.
+      </p>
       <h2>When a plan ends</h2>
       <p>
         There's nothing to cancel: a plan simply ends when the time you paid for runs out. When it ends, extra seats are
-        removed and team members return to their own plan. Hour packs stay until they
-        expire and work again if you subscribe again. Brand kits are kept (locked beyond your plan's number). Your saved work is
+        removed and team members return to their own plan. Hour packs stay until they expire and work again if you buy a paid
+        plan again. Brand kits are kept (locked beyond your plan's number). Your saved work is
         kept for at least 30 days after a paid plan ends. Refunds follow our <Link to="/refunds">refund policy</Link>.
       </p>
 
@@ -207,13 +250,17 @@ export function Terms() {
       <h2>Ending your account</h2>
       <p>
         You can stop using {BRAND_NAME} at any time, and ask us to delete your account by emailing {mail}. Deleting your
-        account ends any paid plan without a refund, except as our <Link to="/refunds">refund policy</Link> says. We may suspend or close accounts that break these terms; if we close yours without a good
+        account ends any paid plan without a refund, except as our <Link to="/refunds">refund policy</Link> says. We may
+        suspend or close accounts that break these terms, and we'll normally email you when we do; if we close yours without a good
         reason, we'll refund the unused part of your plan.
       </p>
 
       <h2>Changes and availability</h2>
       <p>
-        We may change features, limits or prices. A price change never affects time you've already paid for. We work to keep {BRAND_NAME} running but can't promise it will always be available or error-free.
+        We may change features, limits or prices. A price change never affects time you've already paid for. We work to keep{' '}
+        {BRAND_NAME} running and show its health on our <Link to="/status">status page</Link>, but can't promise it will
+        always be available or error-free. When our AI provider's daily limit is reached, episodes may wait in line and
+        finish later.
       </p>
 
       <h2>Liability</h2>
@@ -244,14 +291,15 @@ export function Refunds() {
         If you're not happy with your first paid plan, ask for a full refund within <b>14 days of paying</b>, no questions
         asked. Later purchases (more time, or another plan) can be refunded within 14 days if you haven't processed any
         episodes since buying them. Extra hour packs can be refunded within 14 days if none of their hours or episodes have
-        been used. A refunded plan ends straight away and your account moves to the Free plan.
+        been used. A refunded plan ends straight away and your account moves to the Free plan. Gifts from us are free, so
+        there's nothing to refund.
       </p>
       <h2>How refunds are paid</h2>
       <p>
         Crypto payments can't be reversed to a card or bank account, so refunds are sent in USDT, or in the coin you paid
-        with, to a wallet address you give us, for the US dollar amount you paid, minus the network fee for sending it. This
-        also applies if you paid by card through NOWPayments' card partners, because your card payment was turned into crypto
-        when you paid. We send refunds within 10 business days of agreeing to them.
+        with, to a wallet address you give us, for the US dollar amount you paid, minus the network fee for sending it. Once
+        we offer card payments, this also applies to them, because a card payment is turned into crypto when you pay. We
+        send refunds within 10 business days of agreeing to them.
       </p>
       <h2>How to ask</h2>
       <p>
