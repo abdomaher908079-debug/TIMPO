@@ -196,13 +196,13 @@ export function limitProblem(plan: PlanId, reason: LimitReason, seconds: number,
 
 /**
  * Whether an episode of `seconds` fits the plan's limits, given this period's usage and what's left in
- * hour packs (`packs`, paid plans only). A quick check
+ * hour packs and gifts (`packs`: only the ones this plan may use; bought packs need Pro or Studio, gifts
+ * work on every plan). A quick check
  * for the page and before cloud listening; the server's reserve_pick (in the database) is the one that
  * counts, in a single locked step.
  */
 export function checkEpisode(plan: PlanId, usage: Usage, seconds: number, packs: Usage = { episodes: 0, seconds: 0 }): LimitProblem | null {
   const l = LIMITS[plan];
-  if (plan === 'free') packs = { episodes: 0, seconds: 0 };
   if (l.maxEpisodeSeconds !== null && seconds > l.maxEpisodeSeconds + GRACE_SECONDS) return limitProblem(plan, 'too-long', seconds);
   if (l.episodesPerPeriod !== null && usage.episodes >= l.episodesPerPeriod + packs.episodes) return limitProblem(plan, 'no-episodes-left', seconds);
   const left = Math.max(0, l.hours * 3600 - usage.seconds) + packs.seconds;

@@ -4,9 +4,8 @@
 // Emails go through Brevo's API (secret BREVO_API_KEY); without it, plans still end on time.
 // Deploy: supabase functions deploy plan-reminders --no-verify-jwt
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { button, DATE, type Letter, p, send as sendLetter, sign, SITE } from '../_shared/email.ts';
 
-const SITE = 'https://islaclips.com';
-const FROM = { name: 'Isla', email: 'support@islaclips.com' };
 const DAY = 86_400_000;
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
@@ -22,15 +21,10 @@ interface Gift {
 }
 
 const PLAN_NAMES = { pro: 'Pro', studio: 'Studio' };
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-function letter(kind: Kind, plan: Gift['plan'], end: Date): { subject: string; html: string } {
+function letter(kind: Kind, plan: Gift['plan'], end: Date): Letter {
   const name = PLAN_NAMES[plan];
   const when = DATE.format(end);
-  const p = (text: string) => `<p style="margin:0 0 14px;font:16px/1.5 Arial,sans-serif;color:#3a2a1e">${text}</p>`;
-  const button = (text: string, href: string) =>
-    `<p style="margin:22px 0"><a href="${href}" style="background:#f2600d;color:#fff;text-decoration:none;font:bold 16px Arial,sans-serif;padding:12px 22px;border-radius:10px;display:inline-block">${text}</a></p>`;
-  const sign = p('Isla<br><a href="mailto:support@islaclips.com" style="color:#f2600d">support@islaclips.com</a>');
   if (kind === 'ended') {
     return {
       subject: `Your Isla ${name} plan has ended`,
@@ -54,17 +48,8 @@ function letter(kind: Kind, plan: Gift['plan'], end: Date): { subject: string; h
   };
 }
 
-async function send(to: string, kind: Kind, plan: Gift['plan'], end: Date): Promise<boolean> {
-  const key = Deno.env.get('BREVO_API_KEY');
-  if (!key) return false;
-  const { subject, html } = letter(kind, plan, end);
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': key, 'Content-Type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ sender: FROM, replyTo: FROM, to: [{ email: to }], subject, htmlContent: html }),
-  });
-  if (!res.ok) console.error('Brevo', res.status, await res.text().catch(() => ''));
-  return res.ok;
+function send(to: string, kind: Kind, plan: Gift['plan'], end: Date): Promise<boolean> {
+  return sendLetter(to, letter(kind, plan, end));
 }
 
 /** The reminder due now, if any: only the nearest one, so a short gift doesn't get a late "7 days" email. */

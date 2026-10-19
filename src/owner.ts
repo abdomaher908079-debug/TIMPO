@@ -224,6 +224,10 @@ interface Account {
   episodes_30d: number;
   team_of: string | null;
   wants: string | null;
+  gift_seconds: number;
+  gift_episodes: number;
+  gift_until: string | null;
+  extra_seats: number;
 }
 
 const DAY = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -308,6 +312,12 @@ function accountCard(a: Account): string {
     a.team_of ? `on ${a.team_of}'s team` : '',
     a.wants ? `wants ${a.wants === 'pro' ? 'Pro' : 'Studio'}` : '',
   ].filter(Boolean);
+  const giftLeft = Number(a.gift_seconds) > 0 || Number(a.gift_episodes) > 0;
+  const gift = giftLeft
+    ? `Gift left: ${Math.round((Number(a.gift_seconds) / 3600) * 10) / 10} h and ${a.gift_episodes} episode${Number(a.gift_episodes) === 1 ? '' : 's'}` +
+      (a.gift_until ? `, until ${DAY.format(new Date(a.gift_until))}` : '')
+    : '';
+  const seatsOk = a.plan === 'studio' && a.gifted;
   return `
     <div class="card account" data-id="${a.id}">
       <div class="account-head">
@@ -315,17 +325,43 @@ function accountCard(a: Account): string {
         ${owner ? '<span class="badge">Owner</span>' : ''}
         ${a.blocked ? '<span class="badge badge-red">Blocked</span>' : ''}
       </div>
-      <p class="account-plan">${esc(planText(a))}</p>
+      <p class="account-plan">${esc(planText(a))}${a.plan === 'studio' ? ` · team of ${3 + Number(a.extra_seats)}` : ''}</p>
+      ${gift ? `<p class="small gift-left">${esc(gift)}</p>` : ''}
       <p class="muted small">${esc(facts.join(' · '))}</p>
       <div class="actions">
         <button data-do="give">Give or extend a plan</button>
+        <button data-do="gift">Gift hours or episodes</button>
+        ${seatsOk ? '<button data-do="seats">Team seats</button>' : ''}
+        ${giftLeft ? '<button data-do="take-back">Take back gifts</button>' : ''}
         ${a.plan !== 'free' && !a.paying ? '<button data-do="free">Move to Free</button>' : ''}
         <button data-do="reset-usage">Reset usage</button>
+        <button data-do="message">Send an email</button>
         <button data-do="reset-password">Send password reset</button>
         ${owner ? '' : a.blocked ? '<button data-do="unblock">Unblock</button>' : '<button data-do="block">Block</button>'}
         ${owner ? '' : '<button data-do="delete" class="danger">Delete</button>'}
       </div>
-      <form class="give" hidden>
+      <label class="notify small"><input type="checkbox" data-notify checked /> Email them about changes I make</label>
+      <form class="give" data-form="gift" hidden>
+        <div class="fields">
+          <label class="small">Hours <input type="number" name="hours" min="0" max="200" step="0.5" value="2" /></label>
+          <label class="small">Episodes <input type="number" name="episodes" min="0" max="200" step="1" value="3" /></label>
+          <label class="small">For days <input type="number" name="days" min="1" max="366" step="1" value="30" /></label>
+        </div>
+        <p class="muted small">Works on any plan, Free included. Used after their plan's own hours or episodes run out.</p>
+        <button type="submit" class="primary">Give gift</button>
+      </form>
+      <form class="give" data-form="seats" hidden>
+        <label class="small">People in the team, them included (3 to 10)
+          <input type="number" name="people" min="3" max="10" step="1" value="${3 + Number(a.extra_seats)}" /></label>
+        <button type="submit" class="primary">Save seats</button>
+      </form>
+      <form class="give" data-form="message" hidden>
+        <label class="small">Subject <input type="text" name="subject" maxlength="150" /></label>
+        <label class="small">Message <textarea name="text" rows="5" maxlength="5000"></textarea></label>
+        <p class="muted small">Starts with "Hi," and ends with "Isla, support@islaclips.com". Replies come to support@islaclips.com.</p>
+        <button type="submit" class="primary">Send email</button>
+      </form>
+      <form class="give" data-form="plan" hidden>
         <div class="chips">
           <label><input type="radio" name="plan-${a.id}" value="pro" ${a.plan === 'pro' ? 'checked' : ''} /> Pro</label>
           <label><input type="radio" name="plan-${a.id}" value="studio" ${a.plan !== 'pro' ? 'checked' : ''} /> Studio</label>
@@ -352,12 +388,19 @@ function wire(list: HTMLElement, accounts: Account[], reload: () => Promise<void
   list.querySelectorAll<HTMLElement>('.account').forEach((card) => {
     const a = accounts.find((x) => x.id === card.dataset.id)!;
     const msg = card.querySelector<HTMLElement>('[data-msg]')!;
-    const form = card.querySelector<HTMLFormElement>('form.give')!;
-    const run = async (body: Record<string, unknown>, done: string) => {
+    const form = card.querySelector<HTMLFormElement>('form[data-form="plan"]')!;
+    const forms = (name: string) => card.querySelector<HTMLFormElement>(`form[data-form="${name}"]`)!;
+    const notify = card.querySelector<HTMLInputElement>('[data-notify]')!;
+    const toggle = (shown: HTMLFormElement) =>
+      card.querySelectorAll<HTMLFormElement>('form.give').forEach((f) => (f.hidden = f === shown ? !f.hidden : true));
+    const run = async (body: Record<string, unknown>, said: string) => {
       msg.textContent = '';
       msg.classList.remove('ok');
       try {
-        await adminCall({ id: a.id, ...body });
+        const out = await adminCall<{ emailed?: boolean; emailReady?: boolean }>({ id: a.id, notify: notify.checked, ...body });
+        const done =
+          said +
+          (out.emailed ? ' Emailed them.' : notify.checked && out.emailReady === false && body.action !== 'reset-password' ? ' No email sent: emails are not set up yet.' : '');
         await reload();
         // The list was redrawn; say it on the fresh card.
         const fresh = list.querySelector<HTMLElement>(`.account[data-id="${a.id}"] [data-msg]`);
@@ -389,10 +432,38 @@ function wire(list: HTMLElement, accounts: Account[], reload: () => Promise<void
       }
       void run({ action: 'set-plan', plan: chosenPlan(), until: new Date(`${value}T23:59:00`).toISOString() }, 'Plan saved.');
     });
+    const value = (f: HTMLFormElement, name: string) => (f.elements.namedItem(name) as HTMLInputElement).value;
+    forms('gift').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = forms('gift');
+      const hours = Number(value(f, 'hours')) || 0;
+      const episodes = Number(value(f, 'episodes')) || 0;
+      const days = Number(value(f, 'days')) || 30;
+      if (confirm(`Give ${a.email} ${hours} h and ${episodes} episode${episodes === 1 ? '' : 's'} for ${days} days?`)) {
+        void run({ action: 'gift-pack', hours, episodes, days }, 'Gift given.');
+      }
+    });
+    forms('seats')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void run({ action: 'gift-seats', people: Number(value(forms('seats'), 'people')) }, 'Seats saved.');
+    });
+    forms('message').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = forms('message');
+      const subject = value(f, 'subject').trim();
+      const text = (f.elements.namedItem('text') as HTMLTextAreaElement).value.trim();
+      if (!subject || !text) {
+        msg.textContent = 'Write a subject and a message.';
+        return;
+      }
+      if (confirm(`Send this email to ${a.email}?`)) void run({ action: 'message', subject, text }, 'Email sent.');
+    });
     card.querySelectorAll<HTMLButtonElement>('[data-do]').forEach((b) =>
       b.addEventListener('click', () => {
         const what = b.dataset.do!;
-        if (what === 'give') form.hidden = !form.hidden;
+        if (what === 'give') toggle(form);
+        else if (what === 'gift' || what === 'seats' || what === 'message') toggle(forms(what));
+        else if (what === 'take-back' && confirm(`Take back the gifts ${a.email} hasn't used yet?`)) void run({ action: 'take-back-gifts' }, 'Gifts taken back.');
         else if (what === 'free' && confirm(`Move ${a.email} to Free now?`)) void run({ action: 'set-plan', plan: 'free' }, 'Moved to Free.');
         else if (what === 'reset-usage' && confirm(`Reset ${a.email}'s usage for this period? Their episodes count starts again from 0.`))
           void run({ action: 'reset-usage' }, 'Usage reset.');
@@ -414,12 +485,16 @@ function wire(list: HTMLElement, accounts: Account[], reload: () => Promise<void
 
 async function showHistory(content: HTMLElement) {
   try {
-    const { log } = await adminCall<{ log: { at: string; owner_email: string; target_email: string | null; action: string; details: Record<string, string> | null }[] }>({
+    const { log } = await adminCall<{ log: { at: string; owner_email: string; target_email: string | null; action: string; details: Record<string, string | number | boolean> | null }[] }>({
       action: 'log',
     });
     const words: Record<string, string> = {
       'set-plan': 'changed the plan of',
       'reset-usage': 'reset the usage of',
+      'gift-pack': 'gave a gift to',
+      'gift-seats': 'changed the team seats of',
+      'take-back-gifts': 'took back the gifts of',
+      message: 'emailed',
       'reset-password': 'sent a password reset to',
       block: 'blocked',
       unblock: 'unblocked',
@@ -428,7 +503,14 @@ async function showHistory(content: HTMLElement) {
     content.innerHTML = log.length
       ? `<div class="card rows">${log
           .map((l) => {
-            const extra = l.details?.plan ? ` → ${l.details.plan}${l.details.until ? ` until ${DAY.format(new Date(l.details.until))}` : ''}` : '';
+            const d = l.details ?? {};
+            const until = d.until ? ` until ${DAY.format(new Date(String(d.until)))}` : '';
+            const extra =
+              (l.action === 'set-plan' ? ` → ${d.plan}${until}` : '') +
+              (l.action === 'gift-pack' ? `: ${d.hours} h, ${d.episodes} episodes${until}` : '') +
+              (l.action === 'gift-seats' ? `: ${d.people} people` : '') +
+              (l.action === 'message' ? `: "${d.subject}"` : '') +
+              (d.emailed ? ' (emailed)' : '');
             return `<div class="row"><span>${esc(l.owner_email.split('@')[0])} ${esc(words[l.action] ?? l.action)} <b class="email">${esc(l.target_email ?? '')}</b>${esc(extra)}</span><span class="muted small">${esc(WHEN.format(new Date(l.at)))}</span></div>`;
           })
           .join('')}</div>`

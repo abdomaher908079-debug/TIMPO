@@ -487,7 +487,7 @@ export default function NewEpisode() {
               ? `${episodesLeft} of ${plan.episodesPerPeriod} episode${plan.episodesPerPeriod === 1 ? '' : 's'} left this ${plan.period}`
               : `${formatDuration(remainingSeconds)} of ${plan.hours} hours left this ${plan.period}` +
                 (episodesLeft !== null && episodesLeft <= 5 ? ` (${episodesLeft} episode${episodesLeft === 1 ? '' : 's'} left)` : '') +
-                (plan.id !== 'free' && packs.seconds > 0 ? ` + ${formatDuration(packs.seconds)} extra` : '')}{' '}
+                (packs.seconds > 0 ? ` + ${formatDuration(packs.seconds)} extra` : '')}{' '}
             · resets {RESETS.format(period.end)}
           </>
         )}

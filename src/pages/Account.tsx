@@ -164,6 +164,15 @@ export default function Account() {
               (plan.episodesPerPeriod !== null ? ` · ${usage.episodes} of ${plan.episodesPerPeriod} episodes` : '')}
           <span className="muted"> · resets {DATE.format(period.end)}</span>
         </p>
+        {plan.id === 'free' && !demo && (packs.seconds > 0 || packs.episodes > 0) && (
+          <div className="pack-box">
+            <p className="usage-text">
+              <b>Gift from Isla:</b> {formatDuration(packs.seconds)} and {packs.episodes} episode{packs.episodes === 1 ? '' : 's'} left
+              {packs.expires ? `, until ${DATE.format(packs.expires)}` : ''}
+            </p>
+            <p className="muted small">Used after this {plan.period}'s own hours or episodes run out.</p>
+          </div>
+        )}
         {plan.id !== 'free' && !demo && (
           <div className="pack-box">
             <p className="usage-text">

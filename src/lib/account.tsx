@@ -25,7 +25,7 @@ interface AccountValue {
   usage: Usage;
   // Cloud listening used this period (the transcribe function).
   cloudUsage: Usage;
-  // What's left in the workspace's hour packs (paid plans), and when the soonest one expires.
+  // What's left in the hour packs and gifts this plan can use, and when the soonest one expires.
   packs: Usage & { expires: Date | null };
   loading: boolean;
   refresh(): Promise<void>;
@@ -128,13 +128,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .eq('period_start', period.start.toISOString());
     const { data: packRows } = await supabase
       .from('hour_packs')
-      .select('seconds_left, episodes_left, expires_at')
+      .select('seconds_left, episodes_left, expires_at, any_plan')
       .eq('workspace_id', wsId)
       .is('refunded_at', null)
       .gt('expires_at', new Date().toISOString())
       .order('expires_at');
-    const live = ((packRows as { seconds_left: number; episodes_left: number; expires_at: string }[] | null) ?? []).filter(
-      (r) => Number(r.seconds_left) > 0 || r.episodes_left > 0,
+    // Bought packs work only on Pro or Studio; gifts from Isla (any_plan) on every plan.
+    const live = ((packRows as { seconds_left: number; episodes_left: number; expires_at: string; any_plan: boolean }[] | null) ?? []).filter(
+      (r) => (Number(r.seconds_left) > 0 || r.episodes_left > 0) && (plan !== 'free' || r.any_plan),
     );
     setPacks({
       seconds: live.reduce((n, r) => n + Number(r.seconds_left), 0),

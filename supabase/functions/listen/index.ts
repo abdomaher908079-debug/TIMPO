@@ -107,15 +107,17 @@ async function create(userId: string, body: { seconds?: unknown; fingerprint?: u
     admin.from('episodes').select('fingerprint, seconds').eq('workspace_id', workspaceId).eq('period_start', periodStart),
     admin
       .from('hour_packs')
-      .select('seconds_left, episodes_left')
+      .select('seconds_left, episodes_left, any_plan')
       .eq('workspace_id', workspaceId)
       .is('refunded_at', null)
       .gt('expires_at', new Date().toISOString()),
   ]);
-  // Hour packs count for the episode (as in reserve_pick), not for cloud listening.
+  // Hour packs count for the episode (as in reserve_pick), not for cloud listening. Bought packs need a
+  // paid plan; gifts (any_plan) work on every plan.
+  const usable = (packRows.data ?? []).filter((r) => plan !== 'free' || r.any_plan);
   const packs = {
-    seconds: (packRows.data ?? []).reduce((n, r) => n + Number(r.seconds_left), 0),
-    episodes: (packRows.data ?? []).reduce((n, r) => n + Number(r.episodes_left), 0),
+    seconds: usable.reduce((n, r) => n + Number(r.seconds_left), 0),
+    episodes: usable.reduce((n, r) => n + Number(r.episodes_left), 0),
   };
   if (cloud.error) throw cloud.error;
   if (episodes.error) throw episodes.error;
