@@ -229,7 +229,7 @@ function AddPeople({ extraSeats }: { extraSeats: number }) {
   const room = MAX_EXTRA_SEATS - extraSeats;
   const end = profile?.current_period_end ? new Date(profile.current_period_end) : null;
   const price = end ? seatsForRest(more, profile?.billing ?? null, end) : 0;
-  const perPerson = profile?.billing === 'yearly' ? `$${SEAT_PRICE.yearly} a year` : `$${SEAT_PRICE.monthly} a month`;
+  const perPerson = profile?.billing === 'yearly' ? `$${SEAT_PRICE.yearly} a year (instead of $${SEAT_PRICE.monthly * 12})` : `$${SEAT_PRICE.monthly} a month`;
   if (room <= 0) {
     return <p className="muted small">Your team has the most people Studio allows ({TEAM_SIZE + MAX_EXTRA_SEATS}).</p>;
   }

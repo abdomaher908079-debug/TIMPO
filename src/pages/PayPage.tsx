@@ -88,7 +88,8 @@ const money = (usd: number) => (Number.isInteger(usd) ? `$${usd}` : `$${usd.toFi
 
 const DAY_FORMAT = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 
-function describe(p: Purchase, profile: ProfileRow | null): { title: string; price: number; lines: string[] } {
+// full: what the same time costs paid month by month, shown crossed out next to a yearly price.
+function describe(p: Purchase, profile: ProfileRow | null): { title: string; price: number; full?: number; lines: string[] } {
   const studio = runningStudio(profile);
   if (p.kind === 'seats') {
     const people = `${p.seats} more ${p.seats === 1 ? 'person' : 'people'}`;
@@ -115,6 +116,7 @@ function describe(p: Purchase, profile: ProfileRow | null): { title: string; pri
   return {
     title: `Isla ${plan.name}, 1 ${p.billing === 'yearly' ? 'year' : 'month'}`,
     price: PRICE_USD[p.plan][p.billing] + seats * SEAT_USD[p.billing],
+    full: p.billing === 'yearly' ? (PRICE_USD[p.plan].monthly + seats * SEAT_USD.monthly) * 12 : undefined,
     lines: [
       plan.features[0]!,
       plan.features[2]!,
@@ -326,7 +328,9 @@ export default function PayPage() {
           <h1 className="page-title">Your order</h1>
           <div className="card pay-summary">
             <p className="pay-item">{item.title}</p>
-            <p className="pay-price">{money(item.price)}</p>
+            <p className="pay-price">
+              {item.full && item.full > item.price && <s className="pay-full">{money(item.full)}</s>} {money(item.price)}
+            </p>
             <ul className="pay-lines">
               {item.lines.map((l) => (
                 <li key={l}>{l}</li>
@@ -337,8 +341,15 @@ export default function PayPage() {
             <div className="card pay-team">
               <p className="pay-item">How many people in your team?</p>
               <p className="muted small">
-                {TEAM_INCLUDED} included (you and 2 others). Each extra person is ${SEAT_USD[purchase.kind === 'plan' ? purchase.billing : 'monthly']}{' '}
-                {purchase.kind === 'plan' && purchase.billing === 'yearly' ? 'a year' : 'a month'}.
+                {TEAM_INCLUDED} included (you and 2 others). Each extra person is{' '}
+                {purchase.kind === 'plan' && purchase.billing === 'yearly' ? (
+                  <>
+                    <s>${SEAT_USD.monthly * 12}</s> ${SEAT_USD.yearly} a year
+                  </>
+                ) : (
+                  `$${SEAT_USD.monthly} a month`
+                )}
+                .
               </p>
               <div className="pay-stepper">
                 <button type="button" className="btn btn-outline" aria-label="Fewer people" disabled={teamSeats <= 0} onClick={() => setTeam(teamSeats - 1)}>

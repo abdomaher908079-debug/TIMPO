@@ -6,7 +6,7 @@ import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { checkoutPath, openBillingPortal, paymentsOpen, paymentsReady, switchPlan } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
 import { joinWaitlist, waitlistPlan, type WaitlistPlan } from '../lib/waitlist';
-import { PACK } from '../../supabase/functions/_shared/plans';
+import { PACK, PRICE_USD, SEAT_USD } from '../../supabase/functions/_shared/plans';
 
 export default function Pricing() {
   // Yearly first: paid upfront, and people stay longer.
@@ -38,6 +38,12 @@ export default function Pricing() {
                 <strong>${price}</strong>
                 <span>{price ? (yearly ? '/mo, billed yearly' : '/month') : 'forever'}</span>
               </p>
+              {/* Yearly: the full price of 12 months next to what they pay. */}
+              {yearly && plan.id !== 'free' && (
+                <p className="price-year">
+                  <s>${PRICE_USD[plan.id].monthly * 12}</s> <b>${PRICE_USD[plan.id].yearly} a year</b>
+                </p>
+              )}
               <ul>
                 {plan.features.map((f) => (
                   <li key={f}>{f}</li>
@@ -57,8 +63,11 @@ export default function Pricing() {
           , one time, for Pro and Studio. Usable for {PACK.days} days, after your monthly hours or episodes run out.
         </p>
         <p>
-          <b>Bigger teams: $8 a month ($50 a year) per extra person</b> on Studio, up to 10 people. Choose your team size when
-          you buy, or add people later from Plan &amp; settings. Everyone shares the plan's hours.
+          <b>
+            Bigger teams: ${SEAT_USD.monthly} a month per extra person, or <s>${SEAT_USD.monthly * 12}</s> ${SEAT_USD.yearly} a year
+          </b>{' '}
+          on Studio, up to 10 people. Choose your team size when you buy, or add people later from Plan &amp; settings. Everyone
+          shares the plan's hours.
         </p>
       </div>
       <p className="muted small pricing-note">

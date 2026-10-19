@@ -763,3 +763,6 @@ h1, h2, h3 { text-wrap: balance; }
 .pay-stepper { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .pay-stepper .btn { width: 52px; margin: 0; padding: 10px 0; font-size: 1.3rem; }
 .pay-stepper span { font-size: 1.05rem; }
+.price-year { margin: -6px 0 12px; font-size: 0.9rem; color: var(--title); }
+.price-year s, .pricing-extras s, .pay-team s { color: var(--muted); }
+.pay-full { color: var(--muted); font-size: 1.3rem; font-weight: 700; margin-right: 4px; }

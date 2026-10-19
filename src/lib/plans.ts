@@ -67,7 +67,7 @@ export const PLANS: Plan[] = [
       'No watermark, up to 4K export',
       '5 brand kits, one for each show',
       'Cloud listening (10 h)',
-      'Team of 3 included; add people for $8 a month each',
+      'Team of 3 included; add people for $8 a month or $50 a year each',
     ],
   },
 ];
