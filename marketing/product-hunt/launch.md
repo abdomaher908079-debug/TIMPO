@@ -28,7 +28,7 @@ Free (paid plans available)
 
 Hi Product Hunt! I'm Abdullah, the maker of Isla.
 
-I'm a student, and I kept seeing podcasters spend hours scrubbing through 2-hour episodes to find 30 seconds worth posting. The tools that do it for you were either expensive or gave you only a couple of hours a month.
+I kept seeing podcasters spend hours scrubbing through 2-hour episodes to find 30 seconds worth posting. The tools that do it for you were either expensive or gave you only a couple of hours a month.
 
 So I built Isla:
 - It listens to the whole episode and picks the 10 moments most likely to be shared, with a score for each.
