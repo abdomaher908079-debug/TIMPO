@@ -54,7 +54,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
   after 8 days; usage records after 3 months; AI cost rows after 90 days, kept as monthly totals in
   `ai_costs_monthly`; expired hour packs after 90 days. At about 1,000 paid users the 30-day library is about
   1 GB: move to Supabase Pro (8 GB included, $25 a month) before that.
-- **Hour packs:** +10 h and +20 episodes for $8, one time, Pro and Studio owners, usable for 90 days after the
+- **Hour packs:** +17.5 h and +35 episodes for $14 (just above the crypto minimum, same rate as the old $8 for 10 h), one time, Pro and Studio owners, usable for 90 days after the
   month's own hours or episodes run out (`hour_packs`, drawn by `reserve_pick`, given back if the AI fails, emptied
   by a refund). About $0.80 an hour, a little above the plans, so heavy users are nudged to upgrade.
 - **Extra Studio seats:** $8 a month / $80 a year per person beyond 3, up to 10, as a second item on the Studio

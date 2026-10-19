@@ -98,7 +98,8 @@ export const GRACE_SECONDS = 30;
 
 // Hour packs: one-time, for Pro and Studio, used once the month's own hours or episodes run out. They add
 // episodes too (2 per hour, like Pro), since each AI pick costs about the same whatever the episode's length.
-export const PACK = { hours: 10, episodes: 20, days: 90, price: 8 };
+// $14: just above NOWPayments' crypto minimum (about $11–13), at the same rate as the old $8 for 10 hours and 20 episodes.
+export const PACK = { hours: 17.5, episodes: 35, days: 90, price: 14 };
 // Plan prices in US dollars, charged upfront for a month or a year (keep in sync with src/lib/plans.ts).
 export const PRICE_USD: Record<Exclude<PlanId, 'free'>, Record<Billing, number>> = {
   pro: { monthly: 15, yearly: 144 },
