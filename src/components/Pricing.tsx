@@ -57,7 +57,7 @@ export default function Pricing() {
           , one time, for Pro and Studio. Usable for {PACK.days} days, after your monthly hours or episodes run out.
         </p>
         <p>
-          <b>Bigger teams: $8 a month ($80 a year) per extra person</b> on Studio, up to 10 people. Choose your team size when
+          <b>Bigger teams: $8 a month ($50 a year) per extra person</b> on Studio, up to 10 people. Choose your team size when
           you buy, or add people later from Plan &amp; settings. Everyone shares the plan's hours.
         </p>
       </div>

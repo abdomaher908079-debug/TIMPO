@@ -109,7 +109,7 @@ export const PRICE_USD: Record<Exclude<PlanId, 'free'>, Record<Billing, number>>
 // Studio teams: the owner plus 2 people included; up to 7 more, each paid with the plan.
 export const TEAM_INCLUDED = 3;
 export const MAX_EXTRA_SEATS = 7;
-export const SEAT_USD: Record<Billing, number> = { monthly: 8, yearly: 80 };
+export const SEAT_USD: Record<Billing, number> = { monthly: 8, yearly: 50 };
 // NOWPayments won't take a crypto payment below about $11–13; anything we sell starts above this.
 export const CRYPTO_MIN_USD = 12;
 

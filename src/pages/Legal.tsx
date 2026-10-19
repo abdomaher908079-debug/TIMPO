@@ -222,7 +222,7 @@ export function Terms() {
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
         over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run
         out, and only while you're on a paid plan. Studio includes a team of 3; each extra person, up to 10, is $8 a month
-        or $80 a year, paid with the plan. People added in the middle of a plan are paid for the days left on it, and stay
+        or $50 a year, paid with the plan. People added in the middle of a plan are paid for the days left on it, and stay
         until the plan ends; adding time to a running Studio plan pays for the team it has.
       </p>
 

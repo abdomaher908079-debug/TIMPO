@@ -57,7 +57,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 - **Hour packs:** +17.5 h and +35 episodes for $14 (just above the crypto minimum, same rate as the old $8 for 10 h), one time, Pro and Studio owners, usable for 90 days after the
   month's own hours or episodes run out (`hour_packs`, drawn by `reserve_pick`, given back if the AI fails, emptied
   by a refund). About $0.80 an hour, a little above the plans, so heavy users are nudged to upgrade.
-- **Extra Studio seats:** $8 a month / $80 a year per person beyond 3, up to 10, as a second item on the Studio
+- **Extra Studio seats:** $8 a month / $50 a year per person beyond 3, up to 10, as a second item on the Studio
   subscription (`team-seats` function, prorated now). Seats share the plan's hours, so they cost us almost nothing.
 - **Yearly first:** the pricing page opens on yearly ("2 months free").
 - **Normal-month money** (1,000 Pro, 300 Studio, 13,000 Free, 25% use, 70% monthly): about $16,650 profit on
