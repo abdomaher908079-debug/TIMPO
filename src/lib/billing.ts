@@ -17,12 +17,31 @@ export const PRICE_IDS: Record<Exclude<PlanId, 'free'>, Record<Billing, string |
 export const paymentsOpen = import.meta.env.VITE_PAYMENTS_OPEN === 'true';
 export const paymentsReady = paymentsOpen && !!supabase;
 
+/** What's being bought on the checkout page (/pay). */
+export type Purchase = { kind: 'plan'; plan: Exclude<PlanId, 'free'>; billing: Billing } | { kind: 'pack' };
+
+/** A payment on our checkout page, as the server describes it (supabase/functions/create-invoice). */
+export interface PayOrder {
+  id: string;
+  kind: 'plan' | 'pack';
+  plan: Exclude<PlanId, 'free'> | null;
+  billing: Billing | null;
+  price: number;
+  coin: string | null;
+  amount: number | null;
+  address: string | null;
+  memo: string | null;
+  priceUntil: string | null;
+  received: number;
+  status: string;
+  applied: boolean;
+}
+
 /**
- * Starts a payment with NOWPayments (crypto, or card through its on-ramp) and goes to its payment page.
- * Plans are paid upfront for a month or a year and don't renew on their own. Through the site's
- * /api/create-invoice, which refuses countries where paid plans aren't sold.
+ * Calls our payment API through the site's /api/create-invoice, which refuses countries where paid plans
+ * aren't sold before passing it on (functions/api/create-invoice.ts).
  */
-async function startPayment(body: Record<string, unknown>): Promise<void> {
+async function payApi<T>(body: Record<string, unknown>): Promise<T> {
   const token = await getAccessToken();
   let res: Response;
   try {
@@ -34,22 +53,32 @@ async function startPayment(body: Record<string, unknown>): Promise<void> {
   } catch {
     throw new Error('We couldn’t reach our server. Check your internet connection and try again.');
   }
-  const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; reason?: string };
-  if (!res.ok || !data.url) throw new ApiError(data.error ?? 'Something went wrong. Please try again.', res.status, data.reason);
-  window.location.assign(data.url);
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string; reason?: string };
+  if (!res.ok) throw new ApiError(data.error ?? 'Something went wrong. Please try again.', res.status, data.reason);
+  return data;
 }
 
-/** Pays for a month or a year of a plan (or more time on the current one). */
-export function startCheckout(plan: Exclude<PlanId, 'free'>, billing: Billing): Promise<void> {
-  return startPayment({ kind: 'plan', plan, billing });
+/** Creates the order and its payment in `coin`: the exact amount and the address to send it to. */
+export async function startPayment(purchase: Purchase, coin: string): Promise<PayOrder> {
+  return (await payApi<{ order: PayOrder }>({ action: 'start', ...purchase, coin })).order;
 }
 
-/** Pays for an hour pack. */
-export function startPackCheckout(): Promise<void> {
-  return startPayment({ kind: 'pack' });
+/** An order's latest state (checked with NOWPayments, and applied if it's paid). */
+export async function paymentStatus(order: string): Promise<PayOrder> {
+  return (await payApi<{ order: PayOrder }>({ action: 'status', order })).order;
 }
 
-/** What changing to `extraSeats` would charge or credit right now (prorated, tax included). */
+/** Any other coin: NOWPayments' own payment page, which comes back to /pay?order=… afterwards. */
+export async function openOtherCoins(purchase: Purchase): Promise<void> {
+  const { url } = await payApi<{ url: string }>({ action: 'invoice', ...purchase });
+  window.location.assign(url);
+}
+
+/** Our checkout page for a plan (a month or a year, paid upfront) or an hour pack. */
+export function checkoutPath(purchase: Purchase): string {
+  return purchase.kind === 'pack' ? '/pay?pack=1' : `/pay?plan=${purchase.plan}&billing=${purchase.billing}`;
+}
+
 export async function previewExtraSeats(extraSeats: number): Promise<{ action: 'charge' | 'credit' | 'none'; amount: number; currency: string }> {
   return callFunction('team-seats', { extraSeats, preview: true });
 }

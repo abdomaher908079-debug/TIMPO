@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
-import { openBillingPortal, paymentsOpen, paymentsReady, startCheckout, switchPlan } from '../lib/billing';
+import { checkoutPath, openBillingPortal, paymentsOpen, paymentsReady, switchPlan } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
 import { joinWaitlist, waitlistPlan, type WaitlistPlan } from '../lib/waitlist';
 import { PACK } from '../../supabase/functions/_shared/plans';
@@ -76,6 +76,7 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canPay = useCanPay();
+  const navigate = useNavigate();
   const style = `btn ${plan.id === 'pro' ? 'btn-primary' : 'btn-outline'}`;
 
   if (!user) {
@@ -163,28 +164,12 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   if (canPay === false) return null;
   const period = yearly ? 'year' : 'month';
   const label = current === plan.id ? `Add 1 ${period}` : current === 'free' ? `Get ${plan.name}` : `Switch to ${plan.name}`;
-  const pay = () => {
-    if (current !== 'free' && current !== plan.id) {
-      const from = current === 'pro' ? 'Pro' : 'Studio';
-      const ok = window.confirm(
-        `Switch to ${plan.name} now?\n\n${plan.name} starts as soon as your payment arrives. The days left on ${from} are added to it, valued at their price.`,
-      );
-      if (!ok) return;
-    }
-    setBusy(true);
-    setError(null);
-    startCheckout(plan.id as 'pro' | 'studio', billing).catch((e: Error) => {
-      setError(e.message);
-      setBusy(false);
-    });
-  };
+  // The checkout page explains everything step by step, switching plans included.
+  const to = checkoutPath({ kind: 'plan', plan: plan.id as 'pro' | 'studio', billing });
   return (
-    <>
-      <button type="button" className={style} disabled={!paymentsReady || busy || canPay === null} onClick={pay}>
-        {busy ? 'Opening payment…' : paymentsReady ? label : 'Coming soon'}
-      </button>
-      {error && <p className="error small">{error}</p>}
-    </>
+    <button type="button" className={style} disabled={!paymentsReady || canPay === null} onClick={() => navigate(to)}>
+      {paymentsReady ? label : 'Coming soon'}
+    </button>
   );
 }
 

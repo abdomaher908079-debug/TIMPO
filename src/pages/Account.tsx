@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { keepPlan, openBillingPortal, paymentsReady, startPackCheckout } from '../lib/billing';
+import { checkoutPath, keepPlan, openBillingPortal, paymentsReady } from '../lib/billing';
 import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { PACK } from '../../supabase/functions/_shared/plans';
 import { cloudAvailable } from '../lib/cloud';
@@ -20,8 +20,7 @@ export default function Account() {
   const [keeping, setKeeping] = useState(false);
   const [keepError, setKeepError] = useState<string | null>(null);
   const canPay = useCanPay();
-  const [packBusy, setPackBusy] = useState(false);
-  const [packError, setPackError] = useState<string | null>(null);
+  const navigate = useNavigate();
   // Back from NOWPayments: crypto takes a few minutes to confirm; the plan or pack turns on by itself.
   const [paying, setPaying] = useState(params.get('paid') === '1');
   useEffect(() => {
@@ -34,14 +33,7 @@ export default function Account() {
     return () => clearInterval(timer);
   }, [paying, refresh]);
 
-  function buyPack() {
-    setPackBusy(true);
-    setPackError(null);
-    startPackCheckout().catch((e: Error) => {
-      setPackError(e.message);
-      setPackBusy(false);
-    });
-  }
+
 
   function billing(target?: 'payment') {
     setOpening(true);
@@ -241,12 +233,11 @@ export default function Account() {
               as episodes rather than hours. Cloud listening isn't included.
             </p>
             {!member && paymentsReady && canPay !== false && (
-              <button type="button" className="btn btn-outline btn-inline" disabled={packBusy || canPay === null} onClick={buyPack}>
-                {packBusy ? 'Opening payment…' : `Get +${PACK.hours} hours · $${PACK.price}`}
+              <button type="button" className="btn btn-outline btn-inline" disabled={canPay === null} onClick={() => navigate(checkoutPath({ kind: 'pack' }))}>
+                Get +{PACK.hours} hours · ${PACK.price}
               </button>
             )}
             {!member && paymentsReady && canPay === false && <p className="muted small">{NOT_SOLD_HERE}</p>}
-            {packError && <p className="error small">{packError}</p>}
           </div>
         )}
         {cloudAvailable && !demo && (

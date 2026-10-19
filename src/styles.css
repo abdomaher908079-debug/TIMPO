@@ -702,3 +702,60 @@ h1, h2, h3 { text-wrap: balance; }
 .status-busy { color: #a8740a; }
 .status-down { color: #c0392b; }
 .status-off { color: var(--muted); }
+
+/* Checkout (/pay): one small step per screen. */
+.pay-page { max-width: 520px; margin: 0 auto; }
+.pay-progress { margin: 0 0 18px; }
+.pay-bar { height: 6px; border-radius: 99px; background: var(--surface-2); margin-top: 6px; overflow: hidden; }
+.pay-bar i { display: block; height: 100%; background: var(--orange); border-radius: 99px; transition: width 0.3s; }
+.pay-summary { margin-top: 12px; }
+.pay-item { font-weight: 700; color: var(--title); margin: 0; }
+.pay-price { font-size: 2rem; font-weight: 900; color: var(--title); margin: 4px 0 6px; }
+.pay-lines { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.92rem; }
+.pay-lines li { margin: 3px 0; }
+.pay-next { margin-top: 22px; }
+.pay-aside { text-align: center; margin: 14px 0 0; }
+.pay-back { color: var(--muted); }
+.pay-coins { display: grid; gap: 10px; margin-top: 14px; }
+.pay-coin {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 14px;
+  border: 1.5px solid var(--border); background: var(--surface); font: inherit; color: var(--text); cursor: pointer;
+}
+.pay-coin.on { border-color: var(--orange); background: var(--white); box-shadow: 0 0 0 3px rgba(242, 96, 13, 0.12); }
+.pay-coin-name { font-weight: 800; color: var(--title); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pay-chip { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--text); }
+.pay-guide { padding-left: 22px; margin: 16px 0 0; }
+.pay-guide li { margin: 0 0 12px; line-height: 1.5; }
+.pay-check { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-weight: 600; }
+.pay-check input { width: 20px; height: 20px; accent-color: var(--orange); }
+.pay-send { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 12px; }
+.pay-send-row { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.pay-num {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--orange); color: var(--white);
+  display: grid; place-items: center; font-weight: 800; font-size: 0.85rem; margin-top: 18px;
+}
+.pay-copy { flex: 1; min-width: 0; }
+.pay-copy-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.pay-copy-row input {
+  flex: 1; min-width: 0; width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--white);
+  font: inherit; font-weight: 700; color: var(--title);
+}
+.pay-copy-row input.mono { font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; font-weight: 600; }
+.pay-copy-row .btn { margin-top: 0; width: auto; flex: none; padding: 10px 14px; }
+.pay-network { margin: 4px 0 0; font-weight: 800; color: var(--title); }
+.pay-qr { display: block; margin: 4px auto 0; width: 220px; max-width: 100%; image-rendering: pixelated; border-radius: 8px; background: #fff; }
+.pay-timeline { list-style: none; padding: 0; margin: 18px 0 0; }
+.pay-timeline li { position: relative; padding: 0 0 18px 34px; color: var(--muted); }
+.pay-timeline li::before {
+  content: ''; position: absolute; left: 0; top: 1px; width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--surface); box-sizing: border-box;
+}
+.pay-timeline li.done { color: var(--title); font-weight: 600; }
+.pay-timeline li.done::before { content: '✓'; background: var(--orange); border-color: var(--orange); color: #fff; font-size: 12px; display: grid; place-items: center; }
+.pay-timeline li.now { color: var(--title); }
+.pay-timeline li.now::before { border-color: var(--orange); animation: pay-pulse 1.4s ease-in-out infinite; }
+@keyframes pay-pulse { 50% { box-shadow: 0 0 0 6px rgba(242, 96, 13, 0.18); } }
+.pay-done-mark {
+  width: 64px; height: 64px; border-radius: 50%; background: var(--orange); color: #fff; font-size: 34px; font-weight: 900;
+  display: grid; place-items: center; margin: 8px 0 14px;
+}

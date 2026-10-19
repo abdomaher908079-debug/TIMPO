@@ -13,6 +13,7 @@ import { Privacy, Refunds, Terms } from './pages/Legal';
 import Diagnose from './pages/Diagnose';
 import Library from './pages/Library';
 import PricingPage from './pages/PricingPage';
+import PayPage from './pages/PayPage';
 import BrandKitsPage from './pages/BrandKitsPage';
 import ResetPassword from './pages/ResetPassword';
 import StatusPage from './pages/StatusPage';
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
           <Route path="/brand-kits" element={<RequireAuth><BrandKitsPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/pay" element={<RequireAuth><PayPage /></RequireAuth>} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/refunds" element={<Refunds />} />

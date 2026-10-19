@@ -54,6 +54,10 @@
 
 # One block per path: Cloudflare keeps only the last block for a repeated path. The speech worker
 # loads from here and won't start on a cross-origin isolated page without these headers.
+/pay
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
 /pricing
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp

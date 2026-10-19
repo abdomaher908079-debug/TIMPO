@@ -9,7 +9,8 @@ export default function BackButton() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  if (location.pathname === '/' || (user && IN_MENU.includes(location.pathname))) return null;
+  // The checkout has its own Back for each step.
+  if (location.pathname === '/' || location.pathname === '/pay' || (user && IN_MENU.includes(location.pathname))) return null;
   const canGoBack = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0;
   return (
     <button type="button" className="back-button" onClick={() => (canGoBack ? navigate(-1) : navigate('/'))}>
