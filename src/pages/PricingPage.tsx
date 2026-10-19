@@ -24,7 +24,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'How do I pay? Does it renew?',
-    a: 'You pay upfront for a month or a year, by card or with crypto (USDT and others), through our payment partner NOWPayments. Plans don’t renew on their own, so there’s nothing to cancel: we email you before yours ends, and you can add more time whenever you like.',
+    a: 'You pay upfront for a month or a year, with crypto (USDT, BTC, ETH and more), through our payment partner NOWPayments. Plans don’t renew on their own, so there’s nothing to cancel: we email you before yours ends, and you can add more time whenever you like.',
   },
   {
     q: 'Can I switch plans?',

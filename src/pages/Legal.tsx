@@ -169,7 +169,7 @@ export function Terms() {
       <h2>Plans and payments</h2>
       <p>
         The {free.name} plan is free. Paid plans are paid upfront, in US dollars, for one month or one year, through our payment
-        partner NOWPayments: in crypto (such as USDT), or by card through NOWPayments' card partners. They{' '}
+        partner NOWPayments: in crypto (such as USDT), or by card through NOWPayments' card partners where we offer it. They{' '}
         <b>don't renew automatically</b>: when the time you paid for ends, your account moves to the {free.name} plan unless
         you buy more time. We email you before that. Buying more of the same plan adds the time to the end of your current
         one. Buying a different plan starts it as soon as the payment arrives, and the days left on your old plan are added
