@@ -32,7 +32,7 @@ I kept seeing podcasters spend hours scrubbing through 2-hour episodes to find 3
 
 So I built Isla:
 - It listens to the whole episode and picks the 10 moments most likely to be shared, with a score for each.
-- It cuts them vertical, follows whoever is speaking, and adds captions in the episode's language (Arabic too).
+- It cuts them vertical, follows whoever is speaking, and adds captions in the episode's own language.
 - On a computer, your video never leaves your device: the clips are made right in your browser.
 - Free plan: 3 episodes every week, up to 2 hours each, all 10 clips.
 - Pro is $15 a month for 20 hours of episodes.
