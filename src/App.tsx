@@ -16,6 +16,7 @@ import PricingPage from './pages/PricingPage';
 import BrandKitsPage from './pages/BrandKitsPage';
 import ResetPassword from './pages/ResetPassword';
 import StatusPage from './pages/StatusPage';
+import { usePageMeta } from './lib/seo';
 
 export default function App() {
   const { demo, user } = useAuth();
@@ -55,6 +56,7 @@ export default function App() {
 // New pages start at the top; links like /#section scroll to that section.
 function ScrollOnNavigate() {
   const { pathname, hash } = useLocation();
+  usePageMeta();
   useEffect(() => {
     // Not `return window.scrollTo(...)`: some browsers (e.g. Brave) return a Promise from it, and React
     // would then try to call that as the effect's cleanup and crash.

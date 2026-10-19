@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /owner
+Disallow: /owner.html
+Disallow: /checkout.html
+Disallow: /api/
+
+Sitemap: https://islaclips.com/sitemap.xml
