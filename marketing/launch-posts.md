@@ -12,7 +12,7 @@ Check the rules first: many podcasting subs only allow self-promotion in a weekl
 
 **Title:** I built a free tool that finds the best moments in your episode and turns them into vertical clips. Looking for honest feedback
 
-Hi all, I'm a student and I've spent the last months building Isla, because making short clips from a long episode was
+Hi all, I've spent the last months building Isla, because making short clips from a long episode was
 taking me hours.
 
 How it works:
@@ -41,7 +41,7 @@ TikTok, Reels and Shorts. Edit the start and end, captions and style, then expor
 leaves your device, so there's no upload wait. Free during early launch.
 
 **First comment (from you, the maker):**
-Hi Product Hunt! I'm Abdullah, a student who builds things. Clipping my favorite podcasts by hand took hours: finding
+Hi Product Hunt! I'm Abdullah, the maker of Isla. Clipping my favorite podcasts by hand took hours: finding
 the moment, cutting it, adding captions, reframing for vertical. So I built Isla, an AI agent that does the boring
 part and leaves the creative choices to you.
 
