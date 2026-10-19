@@ -99,6 +99,11 @@ export const GRACE_SECONDS = 30;
 // Hour packs: one-time, for Pro and Studio, used once the month's own hours or episodes run out. They add
 // episodes too (2 per hour, like Pro), since each AI pick costs about the same whatever the episode's length.
 export const PACK = { hours: 10, episodes: 20, days: 90, price: 8 };
+// Plan prices in US dollars, charged upfront for a month or a year (keep in sync with src/lib/plans.ts).
+export const PRICE_USD: Record<Exclude<PlanId, 'free'>, Record<Billing, number>> = {
+  pro: { monthly: 15, yearly: 144 },
+  studio: { monthly: 29, yearly: 288 },
+};
 const PACK_HINT = `Need more? Get +${PACK.hours} hours and +${PACK.episodes} episodes for $${PACK.price} in Plan & settings.`;
 
 // Times the AI may pick the moments of one episode in a period: the first time plus 3 free re-picks.
@@ -222,6 +227,10 @@ export interface ProfileRow {
   current_period_start: string | null;
   current_period_end: string | null;
   cancel_at: string | null;
+  // Set while billed through Paddle (an auto-renewing subscription).
+  paddle_subscription_id?: string | null;
+  // 'nowpayments' while the running plan was paid upfront through NOWPayments.
+  paid_with?: string | null;
 }
 
 /**

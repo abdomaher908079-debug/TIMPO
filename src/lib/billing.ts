@@ -1,5 +1,5 @@
 import type { Billing, PlanId } from '../../supabase/functions/_shared/plans';
-import { callFunction, supabase } from './supabase';
+import { ApiError, callFunction, getAccessToken, supabase } from './supabase';
 
 // Paddle price IDs for each paid plan, from the Paddle dashboard (Catalog → Products).
 export const PRICE_IDS: Record<Exclude<PlanId, 'free'>, Record<Billing, string | undefined>> = {
@@ -13,21 +13,40 @@ export const PRICE_IDS: Record<Exclude<PlanId, 'free'>, Record<Billing, string |
   },
 };
 
-// The one-time hour pack (+10 hours and +20 episodes).
-export const PACK_PRICE_ID = import.meta.env.VITE_PADDLE_PRICE_HOURS_PACK as string | undefined;
-
 // New purchases open only when VITE_PAYMENTS_OPEN=true; until then paid plans show "Coming soon".
 export const paymentsOpen = import.meta.env.VITE_PAYMENTS_OPEN === 'true';
-export const paymentsReady = paymentsOpen && !!supabase && !!import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+export const paymentsReady = paymentsOpen && !!supabase;
 
-/** Opens Paddle's checkout for a plan, on its own page (see checkout.html). */
-export function startCheckout(plan: Exclude<PlanId, 'free'>, billing: Billing) {
-  window.location.assign(`/checkout.html?plan=${plan}&billing=${billing}`);
+/**
+ * Starts a payment with NOWPayments (crypto, or card through its on-ramp) and goes to its payment page.
+ * Plans are paid upfront for a month or a year and don't renew on their own. Through the site's
+ * /api/create-invoice, which refuses countries where paid plans aren't sold.
+ */
+async function startPayment(body: Record<string, unknown>): Promise<void> {
+  const token = await getAccessToken();
+  let res: Response;
+  try {
+    res = await fetch('/api/create-invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? '', Authorization: `Bearer ${token ?? ''}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('We couldn’t reach our server. Check your internet connection and try again.');
+  }
+  const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; reason?: string };
+  if (!res.ok || !data.url) throw new ApiError(data.error ?? 'Something went wrong. Please try again.', res.status, data.reason);
+  window.location.assign(data.url);
 }
 
-/** Opens Paddle's checkout for an hour pack. */
-export function startPackCheckout() {
-  window.location.assign('/checkout.html?pack=hours');
+/** Pays for a month or a year of a plan (or more time on the current one). */
+export function startCheckout(plan: Exclude<PlanId, 'free'>, billing: Billing): Promise<void> {
+  return startPayment({ kind: 'plan', plan, billing });
+}
+
+/** Pays for an hour pack. */
+export function startPackCheckout(): Promise<void> {
+  return startPayment({ kind: 'pack' });
 }
 
 /** What changing to `extraSeats` would charge or credit right now (prorated, tax included). */

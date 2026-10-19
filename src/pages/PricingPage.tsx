@@ -20,23 +20,27 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'When do my hours reset?',
-    a: 'Every month, on the day you subscribed. Yearly plans get their hours every month too. Unused hours don’t carry over.',
+    a: 'Every month, on the day your plan started. Yearly plans get their hours every month too. Unused hours don’t carry over.',
   },
   {
-    q: 'Can I change or cancel my plan?',
-    a: 'Yes, any time. Upgrades and switching to yearly happen right away (you pay only the difference); downgrades and switching to monthly happen when your paid period ends. To cancel, open Plan & settings → Invoices & billing; you keep your plan until the end of the period you paid for, and you can undo it until then.',
+    q: 'How do I pay? Does it renew?',
+    a: 'You pay upfront for a month or a year, by card or with crypto (USDT and others), through our payment partner NOWPayments. Plans don’t renew on their own, so there’s nothing to cancel: we email you before yours ends, and you can add more time whenever you like.',
+  },
+  {
+    q: 'Can I switch plans?',
+    a: 'Yes. Buying more of your plan adds the time to the end of it. Buying the other plan starts it as soon as your payment arrives, and the days left on your old plan are added to it, valued at the two plans’ prices.',
   },
   {
     q: 'Is there a refund?',
-    a: 'Yes: a full refund within 14 days of your first payment, no questions asked.',
+    a: 'Yes: a full refund within 14 days of your first payment, no questions asked, sent in USDT to a wallet you choose. See our refund policy for the details.',
   },
   {
     q: 'Is my video uploaded?',
     a: 'No. Your video stays on your computer; Isla listens and makes the clips right in your browser. Only the transcript text goes to our AI. On phones, only the audio is sent, a few minutes at a time, and deleted right after.',
   },
   {
-    q: 'What about tax?',
-    a: 'Paddle, our payment partner, handles it. Tax is included in the price in most countries; in the US and Canada, sales tax is added at checkout where it applies.',
+    q: 'Where are paid plans available?',
+    a: 'Everywhere we can take payments except the Russian Federation, where paid subscriptions are unavailable. The Free plan works everywhere.',
   },
 ];
 

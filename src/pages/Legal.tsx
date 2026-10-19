@@ -4,8 +4,9 @@ import { BRAND_NAME, LEGAL } from '../lib/brand';
 import { PLANS } from '../lib/plans';
 import { PACK, PICKS_PER_EPISODE } from '../../supabase/functions/_shared/plans';
 
-// Plain-language legal pages. Paddle (our payment provider) requires Terms, Privacy and Refunds
-// pages before it approves the site. Have them checked before taking real payments.
+// Plain-language legal pages: Terms, Privacy and Refunds. Payments go through NOWPayments (crypto, or card
+// through its on-ramp), and paid plans aren't sold in the Russian Federation. Have them checked by a
+// lawyer before taking real payments.
 
 const mail = <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>;
 
@@ -83,9 +84,15 @@ export function Privacy() {
 
       <h2>Payments</h2>
       <p>
-        Payments are handled by Paddle, our reseller and merchant of record. Paddle collects your payment details and billing
-        address under <a href="https://www.paddle.com/legal/privacy">its own privacy policy</a>. We never see your card number:
-        Paddle only tells us your plan, your subscription's status and dates, and what you bought (plans, seats, hour packs).
+        Payments are handled by NOWPayments, which takes crypto and, through its card partners, cards. NOWPayments and its card
+        partners collect what they need to take your payment (for cards, this can include an identity check) under{' '}
+        their own privacy policies (see <a href="https://nowpayments.io">nowpayments.io</a>). We never see your card number or
+        your wallet's private keys: we only receive what you bought, its price, the payment's status and its reference.
+      </p>
+      <p>
+        Paid plans aren't sold in the Russian Federation. To check this, when you open our pricing page or start a payment, we
+        use the country Cloudflare, our host, works out from your internet address. We store the country with your order (for
+        example "DE"), not your internet address.
       </p>
 
       <h2>Who helps us run {BRAND_NAME}</h2>
@@ -94,9 +101,10 @@ export function Privacy() {
       </p>
       <ul>
         <li><b>Supabase</b>: accounts, our database, our server and private storage.</li>
-        <li><b>Cloudflare</b>: hosts the website and forwards email sent to {mail}.</li>
+        <li><b>Cloudflare</b>: hosts the website, tells us your country (above) and forwards email sent to {mail}.</li>
         <li><b>Google</b>: Gemini, the AI described above, and "Sign in with Google" if you use it.</li>
-        <li><b>Paddle</b>: payments, invoices, taxes and refunds.</li>
+        <li><b>NOWPayments</b> and its card partners: payments.</li>
+        <li><b>Brevo</b>: sends our emails (receipts, reminders and account messages).</li>
       </ul>
       <p>We never sell your data.</p>
 
@@ -150,28 +158,41 @@ export function Terms() {
         engineer the service. We may suspend accounts that do.
       </p>
 
+      <h2>Where paid plans are available</h2>
+      <p>
+        <b>Paid subscriptions are intended for international users and unavailable within the Russian Federation.</b> We don't
+        accept payments from the Russian Federation and block payments started there. Don't buy a paid plan for use in the
+        Russian Federation or from there by any means, such as a VPN. If you do, we may cancel the plan and refund what
+        you paid.
+      </p>
+
       <h2>Plans and payments</h2>
       <p>
-        The {free.name} plan is free. Paid plans are subscriptions billed monthly or yearly through Paddle, our reseller and
-        merchant of record, and renew automatically until you cancel. Each plan's limits are shown on our{' '}
+        The {free.name} plan is free. Paid plans are paid upfront, in US dollars, for one month or one year, through our payment
+        partner NOWPayments: in crypto (such as USDT), or by card through NOWPayments' card partners. They{' '}
+        <b>don't renew automatically</b>: when the time you paid for ends, your account moves to the {free.name} plan unless
+        you buy more time. We email you before that. Buying more of the same plan adds the time to the end of your current
+        one. Buying a different plan starts it as soon as the payment arrives, and the days left on your old plan are added
+        to it, valued at the two plans' prices.
+      </p>
+      <p>
+        Crypto payments are final on the blockchain: send the exact amount shown, on the network shown, before the payment
+        page expires. Network fees and any card partner fees are yours. A plan starts once the payment is confirmed, usually
+        within minutes. If you send too little, or the payment arrives after the page expired, email us: we'll complete
+        your order once the rest arrives, or refund what arrived (minus network fees).
+      </p>
+      <p>
+        Each plan's limits are shown on our{' '}
         <Link to="/pricing">pricing</Link>: hours and episodes per month (counted from the day your subscription
         started, also on yearly plans), cloud listening time, and up to {PICKS_PER_EPISODE - 1} free re-picks of the same
         episode each month. An episode counts as the longer of its length and the speech in it. Unused hours don't carry
         over. Extra hour packs are one-time purchases for {PACK.days} days, used after your monthly hours or episodes run
-        out, and only while you're on a paid plan. Extra Studio seats are added to your subscription and billed with it; adding
-        or removing one is charged or credited for the rest of the billing period.
+        out, and only while you're on a paid plan. Studio includes a team of 3; larger teams are arranged by email.
       </p>
-      <h2>Changing or cancelling your plan</h2>
+      <h2>When a plan ends</h2>
       <p>
-        Upgrades (Pro to Studio) and switching from monthly to yearly happen right away: you pay the difference for the rest of
-        the period, with credit for what's left of your current plan. Downgrades (Studio to Pro) and switching from yearly to
-        monthly happen at the end of the period you paid for, and you keep your current plan until then. You can cancel any time
-        in Plan &amp; settings → Invoices &amp; billing; your plan stays active until the end of the period you paid for. A
-        scheduled change or cancellation can be undone until it happens.
-      </p>
-      <p>
-        If a payment fails, Paddle tries again and you keep your plan meanwhile; if it can't be collected, the subscription
-        ends. When a plan ends, extra seats are removed and team members return to their own plan. Hour packs stay until they
+        There's nothing to cancel: a plan simply ends when the time you paid for runs out. When it ends, extra seats are
+        removed and team members return to their own plan. Hour packs stay until they
         expire and work again if you subscribe again. Brand kits are kept (locked beyond your plan's number). Your saved work is
         kept for at least 30 days after a paid plan ends. Refunds follow our <Link to="/refunds">refund policy</Link>.
       </p>
@@ -185,15 +206,14 @@ export function Terms() {
 
       <h2>Ending your account</h2>
       <p>
-        You can stop using {BRAND_NAME} at any time, and ask us to delete your account by emailing {mail}. If you have a paid
-        plan, cancel it first. We may suspend or close accounts that break these terms; if we close yours without a good
+        You can stop using {BRAND_NAME} at any time, and ask us to delete your account by emailing {mail}. Deleting your
+        account ends any paid plan without a refund, except as our <Link to="/refunds">refund policy</Link> says. We may suspend or close accounts that break these terms; if we close yours without a good
         reason, we'll refund the unused part of your plan.
       </p>
 
       <h2>Changes and availability</h2>
       <p>
-        We may change features, limits or prices. If prices go up, your subscription keeps the price you signed up at for as
-        long as you stay subscribed. We work to keep {BRAND_NAME} running but can't promise it will always be available or error-free.
+        We may change features, limits or prices. A price change never affects time you've already paid for. We work to keep {BRAND_NAME} running but can't promise it will always be available or error-free.
       </p>
 
       <h2>Liability</h2>
@@ -218,24 +238,30 @@ export function Terms() {
 export function Refunds() {
   return (
     <Page title="Refund policy">
-      <p>We want you to be happy with {BRAND_NAME}.</p>
+      <p>We want you to be happy with {BRAND_NAME}. Plans are paid upfront and don't renew on their own, so you're never charged again without buying.</p>
       <h2>14-day refund</h2>
       <p>
-        If you're not happy with a paid plan, ask for a full refund within <b>14 days of your first payment</b> and you'll get
-        your money back, no questions asked. Renewals can be refunded within 14 days if you haven't processed any episodes since
-        the renewal. Extra hour packs can be refunded within 14 days if none of their hours or episodes have been used. A
-        refunded plan payment ends the plan straight away. Extra seats aren't refunded in cash: removing one gives credit
-        for the rest of the period, used on your next bills.
+        If you're not happy with your first paid plan, ask for a full refund within <b>14 days of paying</b>, no questions
+        asked. Later purchases (more time, or another plan) can be refunded within 14 days if you haven't processed any
+        episodes since buying them. Extra hour packs can be refunded within 14 days if none of their hours or episodes have
+        been used. A refunded plan ends straight away and your account moves to the Free plan.
+      </p>
+      <h2>How refunds are paid</h2>
+      <p>
+        Crypto payments can't be reversed to a card or bank account, so refunds are sent in USDT, or in the coin you paid
+        with, to a wallet address you give us, for the US dollar amount you paid, minus the network fee for sending it. This
+        also applies if you paid by card through NOWPayments' card partners, because your card payment was turned into crypto
+        when you paid. We send refunds within 10 business days of agreeing to them.
       </p>
       <h2>How to ask</h2>
       <p>
-        Email {mail} with the email address you signed up with, or reply to your Paddle receipt. Refunds are made by Paddle to
-        your original payment method, usually within 5–10 business days.
+        Email {mail} from the email address you signed up with. Tell us what you bought and when, and the wallet address and
+        network to refund to. Check the address carefully: crypto sent to a wrong address can't be recovered.
       </p>
-      <h2>Cancelling</h2>
+      <h2>Payments we can't accept</h2>
       <p>
-        You can cancel any time in Plan &amp; settings → Invoices &amp; billing. You keep your plan until the end of the period
-        you paid for and won't be charged again. Changed your mind? Choose Keep my plan before it ends.
+        Paid plans aren't available in the Russian Federation. If a payment is made from there anyway, we may cancel the plan
+        and refund the payment as above. Your rights under consumer law where you live aren't limited by this policy.
       </p>
     </Page>
   );

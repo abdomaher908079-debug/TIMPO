@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Team from '../components/Team';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { keepPlan, openBillingPortal, PACK_PRICE_ID, paymentsReady, startPackCheckout } from '../lib/billing';
+import { keepPlan, openBillingPortal, paymentsReady, startPackCheckout } from '../lib/billing';
+import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { PACK } from '../../supabase/functions/_shared/plans';
 import { cloudAvailable } from '../lib/cloud';
 import { formatDuration } from '../lib/format';
@@ -18,6 +19,29 @@ export default function Account() {
   const [opening, setOpening] = useState(false);
   const [keeping, setKeeping] = useState(false);
   const [keepError, setKeepError] = useState<string | null>(null);
+  const canPay = useCanPay();
+  const [packBusy, setPackBusy] = useState(false);
+  const [packError, setPackError] = useState<string | null>(null);
+  // Back from NOWPayments: crypto takes a few minutes to confirm; the plan or pack turns on by itself.
+  const [paying, setPaying] = useState(params.get('paid') === '1');
+  useEffect(() => {
+    if (!paying) return;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > 20 * 60_000) clearInterval(timer);
+      else void refresh();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [paying, refresh]);
+
+  function buyPack() {
+    setPackBusy(true);
+    setPackError(null);
+    startPackCheckout().catch((e: Error) => {
+      setPackError(e.message);
+      setPackBusy(false);
+    });
+  }
 
   function billing(target?: 'payment') {
     setOpening(true);
@@ -87,11 +111,32 @@ export default function Account() {
   // Team members use the owner's plan but have no billing of their own.
   const member = !!workspace?.is_team_member;
   const paid = plan.id !== 'free' && !member;
+  // Billed through Paddle (auto-renewing); otherwise paid upfront, or given by us.
+  const paddle = paid && !!profile?.paddle_subscription_id;
 
   return (
     <main className="account-page">
       <h1 className="page-title">Plan & settings</h1>
       <p className="muted">{user?.email}</p>
+
+      {paying && (
+        <div className="notice" role="status">
+          <p>
+            Thanks for your payment! Crypto payments take a few minutes to confirm (sometimes up to an hour). Your plan or extra
+            hours turn on by themselves, and we'll email you when they do.
+          </p>
+          <button
+            type="button"
+            className="btn btn-outline btn-inline"
+            onClick={() => {
+              setPaying(false);
+              setParams({}, { replace: true });
+            }}
+          >
+            OK
+          </button>
+        </div>
+      )}
 
       {activating && (
         <p className="notice" role="status">
@@ -105,7 +150,7 @@ export default function Account() {
             <p className="eyebrow">Plan</p>
             <h2 className="account-plan">{loading ? '…' : member ? `${plan.name} · team` : plan.name}</h2>
           </div>
-          {paid && !demo && (
+          {paddle && !demo && (
             <button
               type="button"
               className="btn btn-outline btn-inline"
@@ -146,10 +191,16 @@ export default function Account() {
           </div>
         )}
         {keepError && <p className="error">{keepError}</p>}
-        {paid && !profile?.cancel_at && profile?.current_period_end && (
+        {paddle && !profile?.cancel_at && profile?.current_period_end && (
           <p className="muted small">
             {plan.name} {profile.billing} · renews on {DATE.format(new Date(profile.current_period_end))}.{' '}
             <Link to="/pricing">Change plan</Link>
+          </p>
+        )}
+        {paid && !paddle && profile?.current_period_end && (
+          <p className="muted small">
+            {plan.name} until {DATE.format(new Date(profile.current_period_end))}. It doesn't renew on its own; we'll email you
+            before it ends. {paymentsReady && canPay !== false && <Link to="/pricing">Add more time</Link>}
           </p>
         )}
 
@@ -189,11 +240,13 @@ export default function Account() {
               the hours because each AI pick costs about the same whatever an episode's length, so lots of short files count
               as episodes rather than hours. Cloud listening isn't included.
             </p>
-            {!member && paymentsReady && PACK_PRICE_ID && (
-              <button type="button" className="btn btn-outline btn-inline" onClick={startPackCheckout}>
-                Get +{PACK.hours} hours · ${PACK.price}
+            {!member && paymentsReady && canPay !== false && (
+              <button type="button" className="btn btn-outline btn-inline" disabled={packBusy || canPay === null} onClick={buyPack}>
+                {packBusy ? 'Opening payment…' : `Get +${PACK.hours} hours · $${PACK.price}`}
               </button>
             )}
+            {!member && paymentsReady && canPay === false && <p className="muted small">{NOT_SOLD_HERE}</p>}
+            {packError && <p className="error small">{packError}</p>}
           </div>
         )}
         {cloudAvailable && !demo && (

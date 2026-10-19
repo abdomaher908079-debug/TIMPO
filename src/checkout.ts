@@ -1,7 +1,10 @@
-// Checkout page: opens Paddle's checkout for the plan in the URL, as the signed-in user.
+// Checkout page: opens Paddle's checkout for the plan in the URL, as the signed-in user. Not used while
+// payments go through NOWPayments (lib/billing.ts startCheckout); kept for switching back to Paddle.
 // Paddle charges the card and handles tax; its webhook then updates the plan (paddle-webhook).
 import { effectivePlan, type Billing, type ProfileRow } from '../supabase/functions/_shared/plans';
-import { PACK_PRICE_ID, paymentsReady, PRICE_IDS } from './lib/billing';
+import { paymentsReady, PRICE_IDS } from './lib/billing';
+
+const PACK_PRICE_ID = import.meta.env.VITE_PADDLE_PRICE_HOURS_PACK as string | undefined;
 import { supabase } from './lib/supabase';
 
 interface PaddleJs {

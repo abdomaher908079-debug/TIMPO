@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
         if (p.paddle_subscription_id) return json({ error: 'This account pays through Paddle. Cancel it there.' }, 400);
         await admin
           .from('profiles')
-          .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, updated_at: new Date().toISOString() })
+          .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, paid_with: null, updated_at: new Date().toISOString() })
           .eq('id', id);
         return await done({ plan });
       }

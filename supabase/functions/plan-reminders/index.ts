@@ -1,5 +1,5 @@
 // Supabase Edge Function, run every hour by the hookcut-plan-reminders cron (x-cron-secret).
-// For plans given from the owner page (no Paddle subscription): reminder emails 7, 3 and 1 day before the
+// For plans given from the owner page or paid upfront through NOWPayments (no Paddle subscription): reminder emails 7, 3 and 1 day before the
 // plan ends, then "your plan has ended" and back to Free when it ends without being renewed.
 // Emails go through Brevo's API (secret BREVO_API_KEY); without it, plans still end on time.
 // Deploy: supabase functions deploy plan-reminders --no-verify-jwt
@@ -18,11 +18,13 @@ interface Gift {
   id: string;
   plan: 'pro' | 'studio';
   current_period_end: string;
+  // 'nowpayments' when the plan was paid for (renewed by paying again), null when we gave it.
+  paid_with: string | null;
 }
 
 const PLAN_NAMES = { pro: 'Pro', studio: 'Studio' };
 
-function letter(kind: Kind, plan: Gift['plan'], end: Date): Letter {
+function letter(kind: Kind, plan: Gift['plan'], end: Date, paid: boolean): Letter {
   const name = PLAN_NAMES[plan];
   const when = DATE.format(end);
   if (kind === 'ended') {
@@ -31,8 +33,12 @@ function letter(kind: Kind, plan: Gift['plan'], end: Date): Letter {
       html:
         p('Hi,') +
         p(`Your Isla ${name} plan ended on ${when}, and your account is now on the Free plan.`) +
-        p('Your saved episodes and clips are kept for at least 30 days. To get every clip, no watermark and our best AI back, reply to this email and we’ll renew your plan.') +
-        button('Open Isla', `${SITE}/account`) +
+        p(
+          paid
+            ? 'Your saved episodes and clips are kept for at least 30 days. To get every clip, no watermark and our best AI back, buy another month or year from the pricing page.'
+            : 'Your saved episodes and clips are kept for at least 30 days. To get every clip, no watermark and our best AI back, reply to this email and we’ll renew your plan.',
+        ) +
+        button(paid ? 'Renew my plan' : 'Open Isla', `${SITE}/${paid ? 'pricing' : 'account'}`) +
         sign,
     };
   }
@@ -42,14 +48,18 @@ function letter(kind: Kind, plan: Gift['plan'], end: Date): Letter {
     html:
       p('Hi,') +
       p(`A reminder that your Isla ${name} plan ends ${left}, on ${when}.`) +
-      p(`To keep it without a break, reply to this email and we’ll renew it. If you don’t, your account moves to the Free plan on ${when}; your saved work stays.`) +
-      button('See my plan', `${SITE}/account`) +
+      p(
+        paid
+          ? `It doesn’t renew on its own. To keep it without a break, buy more time from the pricing page; it’s added to the end of your plan. If you don’t, your account moves to the Free plan on ${when}; your saved work stays.`
+          : `To keep it without a break, reply to this email and we’ll renew it. If you don’t, your account moves to the Free plan on ${when}; your saved work stays.`,
+      ) +
+      button(paid ? 'Renew my plan' : 'See my plan', `${SITE}/${paid ? 'pricing' : 'account'}`) +
       sign,
   };
 }
 
-function send(to: string, kind: Kind, plan: Gift['plan'], end: Date): Promise<boolean> {
-  return sendLetter(to, letter(kind, plan, end));
+function send(to: string, kind: Kind, g: Gift, end: Date): Promise<boolean> {
+  return sendLetter(to, letter(kind, g.plan, end, !!g.paid_with));
 }
 
 /** The reminder due now, if any: only the nearest one, so a short gift doesn't get a late "7 days" email. */
@@ -68,7 +78,7 @@ Deno.serve(async (req) => {
   const now = Date.now();
   const { data: gifts, error } = await admin
     .from('profiles')
-    .select('id, plan, current_period_end')
+    .select('id, plan, current_period_end, paid_with')
     .is('paddle_subscription_id', null)
     .neq('plan', 'free')
     .eq('subscription_status', 'active')
@@ -94,7 +104,7 @@ Deno.serve(async (req) => {
     if (!already) {
       const { data: user } = await admin.auth.admin.getUserById(g.id);
       const email = user.user?.email;
-      if (email && (await send(email, kind, g.plan, end))) {
+      if (email && (await send(email, kind, g, end))) {
         await admin.from('plan_emails').insert({ user_id: g.id, period_end: g.current_period_end, kind });
         sent++;
       }
@@ -103,7 +113,7 @@ Deno.serve(async (req) => {
       // Back to Free, unless the plan was renewed meanwhile (a new end date).
       await admin
         .from('profiles')
-        .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, updated_at: new Date().toISOString() })
+        .update({ plan: 'free', billing: null, subscription_status: null, current_period_start: null, current_period_end: null, cancel_at: null, extra_seats: 0, pending_plan: null, pending_billing: null, paid_with: null, updated_at: new Date().toISOString() })
         .eq('id', g.id)
         .eq('current_period_end', g.current_period_end)
         .is('paddle_subscription_id', null);

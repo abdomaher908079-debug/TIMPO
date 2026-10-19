@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
+import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { openBillingPortal, paymentsOpen, paymentsReady, startCheckout, switchPlan } from '../lib/billing';
 import { PLANS, type Plan } from '../lib/plans';
 import { SEAT_PRICE } from '../lib/team';
@@ -11,8 +12,14 @@ import { PACK } from '../../supabase/functions/_shared/plans';
 export default function Pricing() {
   // Yearly first: paid upfront, and people stay longer.
   const [yearly, setYearly] = useState(true);
+  const canPay = useCanPay();
   return (
     <section className="pricing" id="pricing" aria-label="Plans">
+      {paymentsOpen && canPay === false && (
+        <p className="notice" role="status">
+          {NOT_SOLD_HERE}
+        </p>
+      )}
       <div className="billing-toggle" role="group" aria-label="Billing period">
         <button type="button" className={!yearly ? 'on' : ''} aria-pressed={!yearly} onClick={() => setYearly(false)}>
           Monthly
@@ -58,8 +65,9 @@ export default function Pricing() {
         </p>
       </div>
       <p className="muted small pricing-note">
-        Prices in US dollars. Tax is included in most countries; in the US and Canada, sales tax is added at checkout where it
-        applies. Cancel any time.
+        Prices in US dollars. Pay by card or with crypto (USDT and others) through our payment partner NOWPayments. Plans are
+        paid upfront for a month or a year and don't renew on their own, so there's nothing to cancel. Paid plans aren't
+        available in the Russian Federation.
       </p>
     </section>
   );
@@ -70,6 +78,7 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   const account = useAccount();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const canPay = useCanPay();
   const style = `btn ${plan.id === 'pro' ? 'btn-primary' : 'btn-outline'}`;
 
   if (!user) {
@@ -91,7 +100,9 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
       </button>
     );
   }
-  if (current === plan.id && (plan.id === 'free' || currentBilling === billing || member)) {
+  // Paddle subscribers (auto-renewing) switch through Paddle below; everyone else pays upfront.
+  const paddle = current !== 'free' && !!account.profile?.paddle_subscription_id;
+  if (current === plan.id && (plan.id === 'free' || (paddle && currentBilling === billing))) {
     return (
       <button type="button" className="btn btn-outline" disabled>
         Your plan
@@ -107,7 +118,7 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
     );
   }
   // Subscribers switch here (shown the exact amount first); cancelling and invoices are in Paddle's billing page.
-  if (current !== 'free' && !member) {
+  if (paddle) {
     const pending = account.profile?.pending_plan === plan.id && account.profile?.pending_billing === billing;
     return (
       <>
@@ -141,11 +152,42 @@ function PlanButton({ plan, yearly }: { plan: Plan; yearly: boolean }) {
     );
   }
   if (plan.id === 'free') return null;
-  if (!paymentsOpen) return <NotifyButton plan={plan} style={style} />;
+  if (!paymentsOpen) {
+    if (current === plan.id) {
+      return (
+        <button type="button" className="btn btn-outline" disabled>
+          Your plan
+        </button>
+      );
+    }
+    return <NotifyButton plan={plan} style={style} />;
+  }
+  // Not sold here: the notice above the plans says why.
+  if (canPay === false) return null;
+  const period = yearly ? 'year' : 'month';
+  const label = current === plan.id ? `Add 1 ${period}` : current === 'free' ? `Get ${plan.name}` : `Switch to ${plan.name}`;
+  const pay = () => {
+    if (current !== 'free' && current !== plan.id) {
+      const from = current === 'pro' ? 'Pro' : 'Studio';
+      const ok = window.confirm(
+        `Switch to ${plan.name} now?\n\n${plan.name} starts as soon as your payment arrives. The days left on ${from} are added to it, valued at their price.`,
+      );
+      if (!ok) return;
+    }
+    setBusy(true);
+    setError(null);
+    startCheckout(plan.id as 'pro' | 'studio', billing).catch((e: Error) => {
+      setError(e.message);
+      setBusy(false);
+    });
+  };
   return (
-    <button type="button" className={style} disabled={!paymentsReady} onClick={() => startCheckout(plan.id as 'pro' | 'studio', yearly ? 'yearly' : 'monthly')}>
-      {paymentsReady ? `Upgrade to ${plan.name}` : 'Coming soon'}
-    </button>
+    <>
+      <button type="button" className={style} disabled={!paymentsReady || busy || canPay === null} onClick={pay}>
+        {busy ? 'Opening payment…' : paymentsReady ? label : 'Coming soon'}
+      </button>
+      {error && <p className="error small">{error}</p>}
+    </>
   );
 }
 
