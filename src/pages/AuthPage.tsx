@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import IslaOrb from '../components/IslaOrb';
+import LogoMark from '../components/LogoMark';
 import { useAuth } from '../lib/auth';
 import { LIMITS } from '../lib/plans';
 import { INVITE_REWARD, pendingInvite } from '../lib/invite';
@@ -124,7 +124,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   return (
     <main className="auth auth-card card">
       <div className="auth-isla" aria-hidden="true">
-        <IslaOrb size={64} still />
+        <LogoMark size={64} />
       </div>
       <h1 className="page-title">{isSignup ? 'Create your free account' : 'Welcome back'}</h1>
       <p className="muted">

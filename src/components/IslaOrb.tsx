@@ -45,13 +45,14 @@ export default function IslaOrb({
     >
       <defs>
         <linearGradient id={`b${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor={ORB.green} />
-          <stop offset=".5" stopColor={ORB.yellow} />
+          <stop offset="0" stopColor="#b4ff5a" />
+          <stop offset=".45" stopColor="#e6bd22" />
           <stop offset="1" stopColor={ORB.orange} />
         </linearGradient>
         <radialGradient id={`s${id}`} cx="35%" cy="28%" r="80%">
-          <stop offset=".55" stopColor="#000" stopOpacity="0" />
-          <stop offset="1" stopColor="#000" stopOpacity=".28" />
+          <stop offset=".5" stopColor="#000" stopOpacity="0" />
+          <stop offset=".85" stopColor="#5a1d00" stopOpacity=".18" />
+          <stop offset="1" stopColor="#3a1200" stopOpacity=".42" />
         </radialGradient>
         <linearGradient id={`v${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#1c232b" />
@@ -85,11 +86,12 @@ export default function IslaOrb({
             )}
           </path>
         ))}
-        <ellipse cx="60" cy="46" rx="14" ry="6" fill="#fff" opacity=".25" transform="rotate(-25 60 46)" />
+        <ellipse cx="59" cy="45" rx="15" ry="6.5" fill="#fff" opacity=".4" transform="rotate(-28 59 45)" />
+        <circle cx="47" cy="58" r="2.6" fill="#fff" opacity=".55" />
       </g>
       <rect x="42" y="62" width="76" height="30" rx="15" fill={`url(#v${id})`} opacity=".92" />
       <rect x="42" y="62" width="76" height="30" rx="15" fill="none" stroke="#fff" strokeOpacity=".12" />
-      <path d="M52 67 L74 67" stroke="#fff" strokeOpacity=".18" strokeWidth="2" strokeLinecap="round" />
+      <path d="M50 66.5 Q60 64.5 76 65" stroke="#fff" strokeOpacity=".28" strokeWidth="2.2" strokeLinecap="round" fill="none" />
       <g className="isla-eyes" style={{ transform: `translate(${dx}px, ${dy}px)` }}>
         <g className="isla-blink" filter={`url(#e${id})`}>
           {mood === 'done' ? (

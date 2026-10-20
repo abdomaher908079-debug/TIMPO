@@ -167,27 +167,49 @@ export function drawWatermark(ctx: Ctx, W: number, H: number) {
   ctx.restore();
 }
 
-/** Isla's orb (as in components/IslaOrb.tsx, without the glow), `size` across, top-left at x, y. */
+/** Isla as in the logo (design/logo/isla-agent.svg): looking to the right, `size` across, top-left at x, y. */
 function drawOrb(ctx: Ctx, x: number, y: number, size: number) {
   ctx.save();
   const r = size / 2;
   const cx = x + r;
   const cy = y + r;
-  const body = ctx.createLinearGradient(x, y, x + size, y + size);
-  body.addColorStop(0, ORB.green);
-  body.addColorStop(0.5, ORB.yellow);
+  // The logo's body is 112 units across; k turns its units into pixels here.
+  const k = size / 112;
+  const body = ctx.createLinearGradient(x + size * 0.1, y + size * 0.05, x + size * 0.9, y + size * 0.95);
+  body.addColorStop(0, '#b4ff5a');
+  body.addColorStop(0.45, '#e6bd22');
   body.addColorStop(1, ORB.orange);
   ctx.fillStyle = body;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-  const k = size / 116;
   ctx.shadowBlur = 0;
+  // Shade towards the lower right.
+  const shade = ctx.createRadialGradient(cx - r * 0.24, cy - r * 0.4, 0, cx - r * 0.24, cy - r * 0.4, r * 1.56);
+  shade.addColorStop(0.5, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(58,18,0,0.42)');
+  ctx.fillStyle = shade;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  // Shine.
+  ctx.save();
+  ctx.translate(cx - 21 * k, cy - 35 * k);
+  ctx.rotate((-28 * Math.PI) / 180);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 15 * k, 6.5 * k, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // Visor and eyes, turned to the right and wrapped by the body.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.97, 0, Math.PI * 2);
+  ctx.clip();
   ctx.fillStyle = ORB.visor;
-  roundRect(ctx, cx - 38 * k, cy - 18 * k, 76 * k, 30 * k, 15 * k);
-  ctx.fillStyle = ORB.green;
-  roundRect(ctx, cx - 19 * k, cy - 10 * k, 12 * k, 14 * k, 6 * k);
-  roundRect(ctx, cx + 7 * k, cy - 10 * k, 12 * k, 14 * k, 6 * k);
+  roundRect(ctx, cx - 14 * k, cy - 20 * k, 66 * k, 32 * k, 16 * k);
+  ctx.fillStyle = '#a8ff4a';
+  roundRect(ctx, cx + 15 * k, cy - 15 * k, 11 * k, 20 * k, 5.5 * k);
+  roundRect(ctx, cx + 35 * k, cy - 15 * k, 12 * k, 20 * k, 6 * k);
   ctx.restore();
 }
 
