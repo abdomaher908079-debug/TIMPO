@@ -4,11 +4,13 @@ import Caption from './Caption';
 import { download, type ExportStatus } from './ClipsScreen';
 import Watermark from './Watermark';
 import { useAccount } from '../lib/account';
+import { recordFeedback } from '../lib/feedback';
 import type { BrandKit } from '../lib/brandKits';
 import {
   CAPTION_STYLES,
   captionFromGroups,
   captionLook,
+  clipSeconds,
   clock,
   cropAt,
   editedLook,
@@ -23,11 +25,15 @@ import {
   groupWords,
   MAX_CLIP_SECONDS,
   MIN_CLIP_SECONDS,
+  splitCrops,
+  withoutFillers,
   zoomAt,
   zoomsFor,
   type CaptionGroup,
   type Clip,
+  type SplitFraming,
 } from '../lib/clips';
+import { keptRanges, outputTime, playedSeconds, rangeAtOrAfter, type TimeRange } from '../lib/cuts';
 import type { Segment } from '../lib/speech';
 
 interface Props {
@@ -78,6 +84,15 @@ export default function ClipEditor(props: Props) {
   const [wide, setWide] = useState(false);
   const clipRef = useRef(clip);
   clipRef.current = clip;
+  const tighten = !clip.edit?.keepPauses;
+  // What the clip plays: the skipped parts always left out; pauses and "um"s too once words are exactly timed
+  // (as in the export; before that they'd be guesses).
+  const ranges = useMemo(
+    () => keptRanges(clip.start, clip.end, clip.skips, exactCaptions?.flatMap((g) => g.words) ?? [], tighten && !!exactCaptions),
+    [clip.start, clip.end, clip.skips, exactCaptions, tighten],
+  );
+  const rangesRef = useRef(ranges);
+  rangesRef.current = ranges;
 
   // Fixed while the editor is open so the timeline doesn't move under a dragged handle.
   const [win] = useState(() => ({
@@ -92,12 +107,15 @@ export default function ClipEditor(props: Props) {
     const tick = () => {
       const v = videoRef.current;
       if (!v) return;
-      if (v.currentTime >= clipRef.current.end) {
+      // Into a part the clip leaves out: jump to where it goes on (or stop at the end).
+      const next = rangeAtOrAfter(rangesRef.current, v.currentTime);
+      if (v.currentTime >= clipRef.current.end || !next) {
         v.pause();
         v.currentTime = clipRef.current.start;
         setT(clipRef.current.start);
         return;
       }
+      if (v.currentTime < next.start - 0.02) v.currentTime = next.start;
       setT(v.currentTime);
       raf = requestAnimationFrame(tick);
     };
@@ -136,23 +154,32 @@ export default function ClipEditor(props: Props) {
 
   const span = win.to - win.from;
   const pct = (time: number) => `${((time - win.from) / span) * 100}%`;
-  const inClip = t >= clip.start && t < clip.end;
+  // Where the playhead is in the clip as it plays (null in a part it leaves out).
+  const at = t >= clip.start && t < clip.end ? outputTime(ranges, t) : null;
+  const inClip = at !== null;
+  const played = playedSeconds(ranges);
   const estimated = useMemo(() => groupWords(estimateWords(segments, win.from, win.to)), [segments, win]);
   // The Pro edit: on paid plans, and shown on Pro-only clips so Free users can see it.
   const parts = proParts(clip, props.paid || props.locked);
-  const groups = useMemo(() => fixWords(exactCaptions ?? estimated, clip.edit?.fixes), [exactCaptions, estimated, clip.edit?.fixes]);
+  const groups = useMemo(() => {
+    const base = exactCaptions ?? estimated;
+    return fixWords(tighten ? withoutFillers(base) : base, clip.edit?.fixes);
+  }, [exactCaptions, estimated, clip.edit?.fixes, tighten]);
   const caption = inClip ? captionFromGroups(groups, t, parts.highlight ? clip.emphasis : undefined) : null;
   const zooms = useMemo(() => (parts.zoom ? zoomsFor(groups.flatMap((g) => g.words), clip.punchIns) : []), [parts.zoom, groups, clip.punchIns]);
   const zoom = (inClip ? zoomAt(zooms, t) : 1) * (clip.edit?.zoom ?? 1);
-  const dark = inClip ? fadeAt(clip, t) : 0;
-  const headlineAlpha = !parts.headline || !clip.headline || !inClip ? 0 : clip.layout === 'fit' ? 1 : Math.max(0, Math.min(1, (4 - (t - clip.start)) / 0.4));
+  const dark = at !== null ? fadeAt({ start: 0, end: played, edit: clip.edit }, at) : 0;
+  const headlineAlpha = !parts.headline || !clip.headline || at === null ? 0 : clip.layout === 'fit' ? 1 : Math.max(0, Math.min(1, (4 - at) / 0.4));
   const { look: baseLook, kit } = captionLook(clip, kits);
-  const look = editedLook(baseLook, clip.edit);
+  const look = editedLook(baseLook, clip.edit, clip.layout);
   const { plan } = useAccount();
   const sample = { words: ['Best', 'moment'], active: 1 };
   const lines = useMemo(() => segments.filter((s) => s.end > win.from && s.start < win.to), [segments, win]);
-  const changed = clip.start !== clip.original.start || clip.end !== clip.original.end;
+  const changed =
+    clip.start !== clip.original.start || clip.end !== clip.original.end || JSON.stringify(clip.skips ?? []) !== JSON.stringify(clip.original.skips ?? []);
   const fit = wide && clip.layout === 'fit';
+  const split = wide && clip.layout === 'split' && clip.split ? clip.split : null;
+  const skipped = (from: number, to: number) => (clip.skips ?? []).some((k) => from >= k.start - 0.01 && to <= k.end + 0.01);
 
   return (
     <section className="editor" aria-label={`Edit clip ${number}`}>
@@ -189,7 +216,9 @@ export default function ClipEditor(props: Props) {
                 preload="auto"
                 style={{
                   ...(fit ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${cropAt(clip, t, parts.follow)}% 50%` }),
-                  transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                  transform: zoom !== 1 && !split ? `scale(${zoom})` : undefined,
+                  // The split screen is drawn from this video onto a canvas above it.
+                  opacity: split ? 0 : undefined,
                 }}
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget;
@@ -201,6 +230,7 @@ export default function ClipEditor(props: Props) {
                 onError={() => setUnplayable(true)}
               />
             )}
+            {split && <SplitPreview video={videoRef} split={split} zoom={zoom} />}
             {watermark && <Watermark />}
             {kit?.logo && <img className={`phone-logo logo-${kit.logo_corner}`} src={kit.logo} alt="" />}
             {headlineAlpha > 0 && (
@@ -222,7 +252,7 @@ export default function ClipEditor(props: Props) {
               {playing ? 'Pause' : 'Play clip'}
             </button>
             <span className="player-time">
-              {clock(Math.max(0, Math.min(t, clip.end) - clip.start))} / {clock(clip.end - clip.start)}
+              {clock(at ?? 0)} / {clock(played)}
             </span>
           </div>
           <ExportPanel {...props} />
@@ -233,11 +263,35 @@ export default function ClipEditor(props: Props) {
             Title
           </label>
           <input id="clip-title" type="text" value={clip.title} maxLength={80} onChange={(e) => onChange({ ...clip, title: e.target.value })} />
+          <div className="vote" role="group" aria-label="Is this a good moment?">
+            <span className="muted small">Is this a good moment?</span>
+            {(
+              [
+                ['up', '👍', 'liked', 'Yes, good moment'],
+                ['down', '👎', 'disliked', 'No, not a good moment'],
+              ] as const
+            ).map(([v, icon, kind, label]) => (
+              <button
+                key={v}
+                type="button"
+                className={`chip ${clip.vote === v ? 'chip-on' : ''}`}
+                aria-pressed={clip.vote === v}
+                aria-label={label}
+                onClick={() => {
+                  if (clip.vote === v) return;
+                  onChange({ ...clip, vote: v });
+                  recordFeedback(kind, clip, number - 1);
+                }}
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
 
           <div className="field-row">
             <span className="field-label">Length</span>
             <span className="trim-times">
-              {clock(clip.start, true)} – {clock(clip.end, true)} · {(clip.end - clip.start).toFixed(1)}s
+              {clock(clip.start, true)} – {clock(clip.end, true)} · {clipSeconds(clip).toFixed(1)}s
             </span>
           </div>
           <div className="trim">
@@ -288,6 +342,16 @@ export default function ClipEditor(props: Props) {
               </button>
             </span>
           </div>
+          {!!clip.skips?.length && (
+            <SkippedParts
+              skips={clip.skips}
+              onPutBack={(k) => {
+                const rest = clip.skips!.filter((s) => s !== k);
+                onChange({ ...clip, skips: rest.length ? rest : undefined });
+              }}
+              onPlay={(k) => seek(Math.max(clip.start, k.start - 2))}
+            />
+          )}
           <ProEditControl clip={clip} paid={props.paid} locked={props.locked} onChange={onChange} onApplyAll={props.onApplyProToAll} />
 
           {changed && (
@@ -295,7 +359,7 @@ export default function ClipEditor(props: Props) {
               type="button"
               className="link-button"
               onClick={() => {
-                onChange({ ...clip, ...clip.original });
+                onChange({ ...clip, start: clip.original.start, end: clip.original.end, skips: clip.original.skips });
                 seek(clip.original.start);
               }}
             >
@@ -311,6 +375,7 @@ export default function ClipEditor(props: Props) {
                   [
                     ['fill', 'Fill the screen'],
                     ['fit', 'Whole picture'],
+                    ...(clip.split ? ([['split', 'Split screen']] as const) : []),
                   ] as const
                 ).map(([id, name]) => (
                   <button
@@ -419,9 +484,10 @@ export default function ClipEditor(props: Props) {
           <ol className="transcript">
             {lines.map((l) => {
               const inside = l.end > clip.start && l.start < clip.end;
+              const out = inside && skipped(l.start, l.end);
               const current = t >= l.start && t < l.end;
               return (
-                <li key={l.start} className={`${inside ? 'line-in' : ''} ${current ? 'line-now' : ''}`}>
+                <li key={l.start} className={`${inside && !out ? 'line-in' : ''} ${out ? 'line-out' : ''} ${current ? 'line-now' : ''}`}>
                   <button type="button" onClick={() => seek(l.start)}>
                     <span className="line-time">{clock(l.start)}</span>
                     {l.text}
@@ -680,6 +746,10 @@ function StyleAndEffects({ clip, showHeadline, onChange }: { clip: Clip; showHea
         </div>
         <div className="edit-row edit-checks">
           <label className="pro-part">
+            <input type="checkbox" checked={!edit.keepPauses} onChange={(e) => set({ keepPauses: e.target.checked ? undefined : true })} />
+            <span>Remove long pauses and “um”s</span>
+          </label>
+          <label className="pro-part">
             <input type="checkbox" checked={!!edit.fadeIn} onChange={(e) => set({ fadeIn: e.target.checked || undefined })} />
             <span>Fade in at the start</span>
           </label>
@@ -696,4 +766,46 @@ function StyleAndEffects({ clip, showHeadline, onChange }: { clip: Clip; showHea
       </div>
     </>
   );
+}
+
+/** The parts of the episode the AI left out of this clip (a tangent), each with a way to put it back. */
+function SkippedParts({ skips, onPutBack, onPlay }: { skips: TimeRange[]; onPutBack: (k: TimeRange) => void; onPlay: (k: TimeRange) => void }) {
+  return (
+    <div className="skipped-parts">
+      <b>Leaves out {skips.length === 1 ? 'a part' : `${skips.length} parts`} to stay tight</b>
+      {skips.map((k) => (
+        <span key={k.start} className="skipped-part">
+          <button type="button" className="link-button" onClick={() => onPlay(k)}>
+            {clock(k.start)}–{clock(k.end)} ({Math.round(k.end - k.start)}s)
+          </button>
+          <button type="button" className="chip" onClick={() => onPutBack(k)}>
+            Put it back
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** The split screen in the preview: the playing video drawn twice, one person above the other (as in the export). */
+function SplitPreview({ video, split, zoom }: { video: React.RefObject<HTMLVideoElement>; split: SplitFraming; zoom: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const draw = () => {
+      const canvas = ref.current;
+      const v = video.current;
+      const ctx = canvas?.getContext('2d');
+      if (canvas && ctx && v && v.videoWidth) {
+        const { top, bottom } = splitCrops(v.videoWidth, v.videoHeight, split, zoom);
+        const half = canvas.height / 2;
+        ctx.drawImage(v, top[0]!, top[1]!, top[2]!, top[3]!, 0, 0, canvas.width, half);
+        ctx.drawImage(v, bottom[0]!, bottom[1]!, bottom[2]!, bottom[3]!, 0, half, canvas.width, half);
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [video, split, zoom]);
+  return <canvas ref={ref} className="phone-split" width={540} height={960} aria-hidden="true" />;
 }

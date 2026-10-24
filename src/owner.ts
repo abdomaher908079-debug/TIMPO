@@ -182,13 +182,17 @@ function showPage(email: string, tab: Tab = 'numbers') {
 }
 
 async function showStats(content: HTMLElement) {
-  const [{ data, error }, sources] = await Promise.all([supabase!.rpc('owner_stats'), supabase!.rpc('owner_sources')]);
+  const [{ data, error }, sources, feedback] = await Promise.all([
+    supabase!.rpc('owner_stats'),
+    supabase!.rpc('owner_sources'),
+    supabase!.rpc('owner_feedback'),
+  ]);
   if (error) {
     content.innerHTML = `<p class="error">Couldn’t load the numbers: ${esc(error.message)}</p>`;
     return;
   }
-  // Where people heard about Isla comes after the other numbers.
-  const sections = [...(data as Section[]), ...((sources.data as Section[] | null) ?? [])];
+  // Where people heard about Isla, then what they keep of the AI's picks, come after the other numbers.
+  const sections = [...(data as Section[]), ...((sources.data as Section[] | null) ?? []), ...((feedback.data as Section[] | null) ?? [])];
   content.innerHTML = `
     <p class="muted">Updated ${esc(WHEN.format(new Date()))} <button id="refresh" class="small-btn">Refresh</button></p>
     ${sections

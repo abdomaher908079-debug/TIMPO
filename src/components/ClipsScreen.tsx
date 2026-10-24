@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import ClipEditor from './ClipEditor';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
+import { recordFeedback } from '../lib/feedback';
 import { useWakeLock } from '../lib/wakeLock';
 import { ensureFont, KIT_LIMITS, listKits, type BrandKit } from '../lib/brandKits';
-import { alignWords, captionLook, cropAt, FINISH_SECONDS, proParts, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { alignWords, captionLook, clipSeconds, cropAt, FINISH_SECONDS, proParts, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -34,7 +35,7 @@ export type ExportStatus =
 // brand kit was edited since) is out of date.
 export const exportKey = (c: Clip, size: string, kits: BrandKit[]) => {
   const { look, kit } = captionLook(c, kits);
-  return `${rangeKey(c)}|${c.proEdit !== false}|${(c.proOff ?? []).join(',')}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
+  return `${rangeKey(c)}|${JSON.stringify(c.skips ?? [])}|${JSON.stringify(c.edit ?? {})}|${c.headline ?? ''}|${c.proEdit !== false}|${(c.proOff ?? []).join(',')}|${c.layout}|${c.cropX}|${JSON.stringify(c.track ?? [])}|${JSON.stringify(c.split ?? null)}|${JSON.stringify(look)}|${kit?.logo?.length ?? 0}|${kit?.logo_corner ?? ''}|${size}`;
 };
 export const SIZE_LABELS = { '720p': '720×1280', '1080p': '1080×1920', '4k': '4K (2160×3840)' } as const;
 type Size = keyof typeof SIZE_LABELS;
@@ -295,11 +296,12 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     const name = fileName(clip, i + 1, extension);
     logo?.image.close();
     setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize, kitsRef.current) });
+    recordFeedback('exported', clip, i);
     download(url, name);
     // Also kept in "My clips" on this device for a while.
     void import('../lib/library').then(({ addClip, KEEP_DAYS }) =>
       addClip(
-        { user: user?.id ?? 'demo', title: clip.title, episode: file.name, fileName: name, blob, quality: clipSize, seconds: clip.end - clip.start },
+        { user: user?.id ?? 'demo', title: clip.title, episode: file.name, fileName: name, blob, quality: clipSize, seconds: clipSeconds(clip) },
         planName === 'Free' ? KEEP_DAYS.free : KEEP_DAYS.paid,
       ),
     );
@@ -447,7 +449,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
                 type="button"
                 className={`clip-card clip-button ${isLocked ? 'clip-locked' : ''}`}
                 onClick={() => setEditing(i)}
-                aria-label={`${isLocked ? 'Pro clip, preview only: ' : ''}${c.title}, score ${c.score}, ${Math.round(c.end - c.start)} seconds`}
+                aria-label={`${isLocked ? 'Pro clip, preview only: ' : ''}${c.title}, score ${c.score}, ${Math.round(clipSeconds(c))} seconds`}
               >
                 <span className="clip-thumb clip-thumb-tall">
                   {thumb && c.layout === 'fit' && <img className="thumb-backdrop" src={thumb} alt="" />}
@@ -460,7 +462,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
                     />
                   )}
                   <span className="clip-score">{c.score}</span>
-                  <span className="clip-len">{Math.round(c.end - c.start)}s</span>
+                  <span className="clip-len">{Math.round(clipSeconds(c))}s</span>
                   {proParts(c, paid || isLocked).headline && c.headline && <span className="clip-headline">{c.headline}</span>}
                   {isLocked ? <span className="clip-lock">🔒 Pro</span> : <span className="clip-caption">{c.hook}</span>}
                   {isLocked && c.headline && <span className="clip-pro-badge">✨ Pro edit</span>}

@@ -1,4 +1,6 @@
 import { fontWeight, type BrandKit } from './brandKits';
+import { keptSeconds, type TimeRange } from '../../supabase/functions/_shared/moments';
+import { isEnglish, isFiller } from './cuts';
 import type { Moment } from './moments';
 import type { Segment, Word } from './speech';
 
@@ -21,10 +23,22 @@ export const FINISH_SECONDS = 4;
 /**
  * How a clip fills the vertical frame:
  * - fill: a 9:16 crop of the video, following `track` (the speaker's face) or `cropX`.
- * - fit: the whole picture across the middle, over a blurred copy of itself. For people sitting
- *   too far apart for one crop, or videos without faces (screens, slides).
+ * - fit: the whole picture across the middle, over a blurred copy of itself. For videos without faces
+ *   (screens, slides).
+ * - split: two people sitting too far apart for one crop, one above the other (see SplitFraming).
  */
-export type Layout = 'fill' | 'fit';
+export type Layout = 'fill' | 'fit' | 'split';
+
+/**
+ * Two people stacked, each in their own half of the frame (layout 'split'): the centers of the two crops as shares
+ * (0..1) of the picture's width and height, the left person on top, and how much of the picture's height each crop
+ * shows (0..1).
+ */
+export interface SplitFraming {
+  top: { x: number; y: number };
+  bottom: { x: number; y: number };
+  size: number;
+}
 
 // Where the crop sits over time: `x` is the crop's position (0 = left edge, 100 = right edge) from
 // episode time `t` on.
@@ -53,13 +67,18 @@ export interface Clip {
   reason: string;
   score: number;
   // The times the AI picked, for "Reset".
-  original: { start: number; end: number };
+  original: { start: number; end: number; skips?: TimeRange[] };
+  // Stretches between start and end left out of the clip (the AI's cut of a tangent; see Moment). The user can
+  // put them back.
+  skips?: TimeRange[];
   // Horizontal framing of the 9:16 crop: 0 = left edge, 50 = center, 100 = right edge.
   cropX: number;
   // Crop of the video, or the whole picture over a blurred copy (see framing.ts).
   layout: Layout;
   // Where the crop follows the speaker over time (auto framing). None = cropX all along.
   track?: FramingTrack;
+  // Two people side by side who don't fit one crop (auto framing): offered as a split screen.
+  split?: SplitFraming;
   // Auto framing has looked at this clip (or the user framed it).
   framed?: boolean;
   // The Pro edit, written by the AI with the moment (see Moment): a headline on screen, words
@@ -75,6 +94,8 @@ export interface Clip {
   brandKitId?: string | null;
   // The person's own touches (editor → Style & effects).
   edit?: ClipEdit;
+  // Their verdict on the moment (editor), noted to learn which picks work (feedback.ts).
+  vote?: 'up' | 'down';
 }
 
 /** The person's own touches on a clip. Everything optional: absent means the default. */
@@ -92,6 +113,42 @@ export interface ClipEdit {
   // The picture fades in from black at the start and out to black at the end.
   fadeIn?: boolean;
   fadeOut?: boolean;
+  // Keep the pauses and "um"s: by default the export cuts them (see cuts.ts).
+  keepPauses?: boolean;
+}
+
+/**
+ * The two source rectangles [x, y, width, height] (in pixels of a `srcW`×`srcH` picture) shown in the top and
+ * bottom halves of a split screen. Each half is 9:8; `zoom` (1 = none) tightens both around their centers.
+ */
+export function splitCrops(srcW: number, srcH: number, split: SplitFraming, zoom = 1): { top: number[]; bottom: number[] } {
+  let h = Math.min(1, split.size) * srcH;
+  let w = (h * 9) / 8;
+  if (w > srcW) {
+    w = srcW;
+    h = (w * 8) / 9;
+  }
+  w /= zoom;
+  h /= zoom;
+  const box = (c: { x: number; y: number }) => [
+    Math.max(0, Math.min(srcW - w, c.x * srcW - w / 2)),
+    Math.max(0, Math.min(srcH - h, c.y * srcH - h / 2)),
+    w,
+    h,
+  ];
+  return { top: box(split.top), bottom: box(split.bottom) };
+}
+
+// Captions sit on the seam between the two people of a split screen, unless placed elsewhere.
+const SPLIT_CAPTION_PLACE = 0.45;
+
+/** How long a clip plays: from start to end, minus the parts it skips (pauses aside). */
+export const clipSeconds = (c: Pick<Clip, 'start' | 'end' | 'skips'>) => keptSeconds(c);
+
+/** Caption groups without hesitation sounds ("uh", and "um" in English), which the export cuts. */
+export function withoutFillers(groups: CaptionGroup[]): CaptionGroup[] {
+  const english = isEnglish(groups.flatMap((g) => g.words));
+  return groups.map((g) => ({ ...g, words: g.words.filter((w) => !isFiller(w.text, english)) })).filter((g) => g.words.length);
 }
 
 export const CAPTION_SIZES = { small: 0.82, large: 1.22 } as const;
@@ -99,7 +156,8 @@ export const CAPTION_PLACES = { top: 0.2, middle: 0.44, bottom: 0.66 } as const;
 export const FADE_SECONDS = 0.5;
 
 /** The caption look with the clip's own touches (size, place, color, motion) applied. */
-export function editedLook(look: CaptionLook, edit: ClipEdit | undefined): CaptionLook {
+export function editedLook(look: CaptionLook, edit: ClipEdit | undefined, layout?: Layout): CaptionLook {
+  if (layout === 'split' && !edit?.captionPlace) look = { ...look, position: SPLIT_CAPTION_PLACE };
   if (!edit) return look;
   return {
     ...look,
@@ -198,7 +256,7 @@ export function captionLook(clip: Pick<Clip, 'captionStyle' | 'brandKitId'>, kit
 export function clipsFromMoments(moments: Moment[]): Clip[] {
   return moments.map((m) => ({
     ...m,
-    original: { start: m.start, end: m.end },
+    original: { start: m.start, end: m.end, ...(m.skips ? { skips: m.skips } : {}) },
     cropX: 50,
     // The whole picture until auto framing finds a face to follow: a crop of slides or a screen
     // would cut off the text.

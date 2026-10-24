@@ -1,5 +1,6 @@
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import { speechChunks, SPEECH_SAMPLE_RATE, type SpeechChunk } from './audio';
+import { LoudnessTrack, markEnergy } from './energy';
 
 export type { Segment };
 
@@ -46,7 +47,8 @@ export interface TranscribeOptions {
 
 /**
  * Transcribes the episode's speech in the browser with Whisper. Audio is decoded one piece ahead
- * of recognition, so only a couple of minutes of audio are ever in memory.
+ * of recognition, so only a couple of minutes of audio are ever in memory. The liveliest lines are marked
+ * with `energy`, from the audio's loudness (energy.ts).
  */
 export async function transcribeEpisode(file: File, { signal, quality, onLoading, onReady, onProgress }: TranscribeOptions): Promise<Segment[]> {
   let fail: (err: Error) => void = () => {};
@@ -111,11 +113,14 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     onReady?.(info.device, info.model);
 
     const segments: Segment[] = [];
+    // Loudness as the audio goes by, to mark the liveliest lines at the end (energy.ts).
+    const loudness = new LoudnessTrack(SPEECH_SAMPLE_RATE);
     let current = first;
     let end = 0;
     while (!current.done) {
       const chunk = current.value;
       end = chunk.start + chunk.samples.length / SPEECH_SAMPLE_RATE;
+      loudness.add(chunk.start, chunk.samples);
       const next = chunks.next();
       next.catch(() => {});
       // Recognize this piece while the next one is being decoded.
@@ -128,7 +133,7 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     const last = await recognize({ start: end, samples: new Float32Array(0) }, true);
     segments.push(...last.segments);
     onProgress?.(end);
-    return segments;
+    return markEnergy(segments, loudness);
   } finally {
     signal.removeEventListener('abort', abort);
     worker.terminate();

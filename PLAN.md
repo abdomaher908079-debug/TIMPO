@@ -62,6 +62,15 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 - **Yearly first:** the pricing page opens on yearly ("2 months free").
 - **Normal-month money** (1,000 Pro, 300 Studio, 13,000 Free, 25% use, 70% monthly): about $16,650 profit on
   $22,350 of prices (75%) after tax, Paddle, refunds, AI and hosting.
+- **Picking moments:** a first AI pass suggests twice as many clips as wanted; a stricter "head editor" pass judges
+  each as it plays and keeps the best (one extra AI request per episode; if it fails or time runs short, the first
+  pass's picks are used). Lines said with energy are marked (!) for the AI: by cloud listening, or on computers from
+  the audio's loudness and speaking speed (`src/lib/energy.ts`). A clip can leave out a tangent between its setup and
+  payoff (up to 2 stretches; it plays 15-90 s and covers at most 150 s of the episode).
+- **Tight edits:** export cuts pauses over 0.5 s and hesitation sounds ("uh", and "um" in English only), unless the
+  clip keeps them (`src/lib/cuts.ts`). Two people too far apart for one crop for most of a clip get a split screen.
+- **Feedback:** exports and 👍/👎 are recorded with the clip's AI score and place (`clip_feedback`), shown on the
+  owner page, to check that high scores are the clips people keep.
 - **AI quality:** Free gets Quick AI (Whisper base + Gemini Flash-Lite, all free). Pro and Studio get the same
   Best AI (Whisper small, ~3× slower so only with a graphics card, + Gemini's top model on a paid key). The site
   tells Free users plainly that Pro's AI is better. Gemini steps down Pro → Flash → Flash-Lite when a model is
