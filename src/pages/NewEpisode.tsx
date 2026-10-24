@@ -780,8 +780,9 @@ function UpgradeNotice({ message, planName }: { message: string; planName: strin
 export function QuickAiNote() {
   return (
     <p className="quality-note">
-      <b>Free uses our Quick AI.</b> It finds good clips fast. Pro and Studio use our Best AI: a larger speech model that hears
-      every word more accurately (sharper captions) and our strongest AI for picking the moments that will perform.{' '}
+      <b>Free uses our Quick AI, so these aren't our best picks.</b> It finds good clips fast, in one quick read. Pro and Studio
+      use our Best AI: our strongest AI picks the moments, then checks every clip a second time like an editor, and a larger
+      speech model hears every word more accurately (sharper captions).{' '}
       <Link to="/pricing">See Pro</Link>
     </p>
   );

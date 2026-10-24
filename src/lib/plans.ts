@@ -21,7 +21,7 @@ export const PLANS: Plan[] = [
       ? [
           '3 episodes every week',
           'Episodes up to 2 hours long',
-          'Quick AI: good clips, fast',
+          'Quick AI: good clips fast, not our best picks',
           'See all 10 best clips, export the top 3',
           'Full editor, 1080p export, auto framing',
           'Cloud listening for phones and slow devices: 3 a week',
@@ -30,7 +30,7 @@ export const PLANS: Plan[] = [
       : [
           '1 episode every week (4 a month)',
           'Episodes up to 30 minutes long',
-          'Quick AI: good clips, fast',
+          'Quick AI: good clips fast, not our best picks',
           'See all 10 best clips, export 3',
           'Full editor, 1080p export, auto framing',
           'Cloud listening for phones and slow devices: 1 a week',
@@ -45,7 +45,7 @@ export const PLANS: Plan[] = [
     features: [
       '20 hours of episodes per month (up to 40 episodes)',
       'Episodes of any length',
-      'Best AI: sharpest transcripts and smartest picks',
+      'Best AI: better moment picks, every clip checked twice, sharpest captions',
       'Pro edit: AI headline, zoom-ins, highlighted words, follows the speaker',
       'Export all 10 best clips',
       'No watermark, up to 4K export',
@@ -61,7 +61,7 @@ export const PLANS: Plan[] = [
     features: [
       '40 hours of episodes per month (up to 100 episodes)',
       'Episodes of any length',
-      'Best AI: sharpest transcripts and smartest picks',
+      'Best AI: better moment picks, every clip checked twice, sharpest captions',
       'Pro edit: AI headline, zoom-ins, highlighted words, follows the speaker',
       'Export all 10 best clips',
       'No watermark, up to 4K export',

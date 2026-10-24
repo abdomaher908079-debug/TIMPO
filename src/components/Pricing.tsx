@@ -31,7 +31,7 @@ function cardFor(plan: Plan): { forWho: string; stats: [string, string][]; plus?
       forWho: 'To try Isla',
       stats: [[`${l.episodesPerPeriod}`, l.episodesPerPeriod === 1 ? 'episode / week' : 'episodes / week'], [lengthLabel(l.maxEpisodeSeconds), 'per episode'], clips],
       items: [
-        ['Quick AI', true],
+        ['Quick AI picks: good, not our best', true],
         ['1080p export', true],
         ['Small "Made with Isla" mark', false],
       ],
@@ -43,7 +43,7 @@ function cardFor(plan: Plan): { forWho: string; stats: [string, string][]; plus?
       stats: [[`${l.hours} h`, 'a month'], [lengthLabel(l.maxEpisodeSeconds), 'length'], clips],
       plus: 'Everything in Free, plus',
       items: [
-        ['Best AI: sharpest picks', true],
+        ['Best AI: better moment picks, every clip checked twice', true],
         ['No watermark, up to 4K', true],
         ['Pro edit: headline, zoom-ins, follows the speaker', true],
         ['Your brand kit', true],
@@ -55,6 +55,7 @@ function cardFor(plan: Plan): { forWho: string; stats: [string, string][]; plus?
     stats: [[`${l.hours} h`, 'a month'], [`${TEAM_INCLUDED}`, 'people'], clips],
     plus: 'Everything in Pro, plus',
     items: [
+      ['Best AI: better moment picks for every show', true],
       [`${KIT_LIMITS.studio} brand kits, one per show`, true],
       [`Team of ${TEAM_INCLUDED}, add more anytime`, true],
       [`More cloud listening (${cloud})`, true],
@@ -219,7 +220,7 @@ function CompareTable({ yearly }: { yearly: boolean }) {
     ['Price', 'Free', price('pro'), price('studio')],
     ['Episodes', `${f.episodesPerPeriod} a ${f.period}`, hours(p), hours(s)],
     ['Longest episode', lengthLabel(f.maxEpisodeSeconds), lengthLabel(p.maxEpisodeSeconds), lengthLabel(s.maxEpisodeSeconds)],
-    ['AI', 'Quick AI', 'Best AI', 'Best AI'],
+    ['Moment picks', 'Quick AI (one quick read)', 'Best AI (checked twice)', 'Best AI (checked twice)'],
     ['Clips per episode', f.clipsExportable < f.clipsFound ? `${f.clipsFound} found, ${f.clipsExportable} exported` : `${f.clipsExportable}`, `${p.clipsExportable}`, `${s.clipsExportable}`],
     ['Export', f.maxExport === '4k' ? 'Up to 4K' : '1080p', 'Up to 4K', 'Up to 4K'],
     ['Watermark', f.watermark ? 'Small mark' : 'None', 'None', 'None'],
