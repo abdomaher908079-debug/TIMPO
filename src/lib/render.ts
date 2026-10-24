@@ -15,6 +15,7 @@ import type { BrandKit } from './brandKits';
 import { captionFromGroups, cropAt, editedLook, FADE_SECONDS, fadeAt, fixWords, proParts, zoomAt, zoomsFor, type CaptionGroup, type CaptionLook, type Clip } from './clips';
 import { breathe } from './device';
 import { drawCaption, drawHeadline, drawLogo, drawWatermark } from './draw';
+import { createSharpener, sharpenAmount, type Sharpener } from './sharpen';
 import { cleanEdges, loudnessGain, processSound } from './sound';
 
 // Vertical 1080p is what TikTok, Reels and Shorts all expect; paid plans can also export 4K.
@@ -45,6 +46,7 @@ export async function renderClip(
     watermark,
     pro = false,
     size = '1080p',
+    sharpen = true,
     onProgress,
     signal,
   }: {
@@ -55,6 +57,8 @@ export async function renderClip(
     // The Pro edit: follow the speaker, zoom in on punch-ins, highlighted words, the headline.
     pro?: boolean;
     size?: ExportSize;
+    // Restore crispness when the picture is enlarged (see sharpen.ts).
+    sharpen?: boolean;
     onProgress?: (p: number) => void;
     signal?: AbortSignal;
   },
@@ -70,6 +74,8 @@ export async function renderClip(
   await document.fonts.load(`${look.weight} 80px "${look.font}"`).catch(() => {});
 
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+  // Made on the first frame that needs it; null once it turns out it can't be (no WebGL2).
+  const sharpening: { tool: Sharpener | null | undefined } = { tool: sharpen ? undefined : null };
   try {
     const track = await input.getPrimaryVideoTrack();
     if (!track) throw new Error('This video has no picture.');
@@ -152,6 +158,13 @@ export async function renderClip(
             const y = Math.min(srcH - h, Math.max(0, top + (cropH - h) / 2));
             sample.draw(ctx, x, y, w, h, 0, 0, OUT_W, OUT_H);
           }
+          // The picture only (captions, logo and watermark are drawn sharp below).
+          const amount = sharpenAmount(fit ? (OUT_W * zoom) / srcW : (OUT_W * zoom) / cropW);
+          if (amount > 0 && sharpening.tool !== null) {
+            sharpening.tool ??= createSharpener(OUT_W, OUT_H);
+            const sharp = sharpening.tool?.apply(canvas, amount);
+            if (sharp) ctx.drawImage(sharp, 0, 0);
+          }
           if (headline) {
             const since = sample.timestamp;
             const alpha = fit ? 1 : since < 3.6 ? 1 : 1 - (since - 3.6) / 0.4;
@@ -196,6 +209,7 @@ export async function renderClip(
     if (signal?.aborted) throw new DOMException('Canceled', 'AbortError');
     return { blob: new Blob([output.target.buffer!], { type: format.mimeType }), extension: format.fileExtension };
   } finally {
+    sharpening.tool?.dispose();
     input.dispose();
   }
 }
