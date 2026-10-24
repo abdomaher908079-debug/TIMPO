@@ -61,6 +61,8 @@ interface Props {
   // Another export is running.
   busy: boolean;
   onExport: () => void;
+  // Makes and downloads the clip's cover image (Post tab).
+  onCover: () => Promise<void>;
   // Turns the same Pro edit parts off (and the rest on) for every clip of the episode.
   onApplyProToAll?: (off: ProPart[]) => void;
   onCancelExport: () => void;
@@ -68,6 +70,24 @@ interface Props {
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
+}
+
+// The editor's tabs, so only a few options show at a time. The last one used opens next time.
+type Tab = 'trim' | 'look' | 'captions' | 'post';
+const TABS: [Tab, string, string][] = [
+  ['trim', '✂️', 'Trim'],
+  ['look', '🎬', 'Look'],
+  ['captions', '💬', 'Captions'],
+  ['post', '🚀', 'Post'],
+];
+const TAB_KEY = 'isla_editor_tab';
+function rememberedTab(): Tab {
+  try {
+    const saved = localStorage.getItem(TAB_KEY);
+    return TABS.some(([id]) => id === saved) ? (saved as Tab) : 'trim';
+  } catch {
+    return 'trim';
+  }
 }
 
 // How far around the AI's pick the trim handles can reach.
@@ -82,6 +102,15 @@ export default function ClipEditor(props: Props) {
   const [unplayable, setUnplayable] = useState(false);
   // Only videos wider than 9:16 have anything to frame.
   const [wide, setWide] = useState(false);
+  const [tab, setTab] = useState<Tab>(rememberedTab);
+  const pickTab = (next: Tab) => {
+    setTab(next);
+    try {
+      localStorage.setItem(TAB_KEY, next);
+    } catch {
+      // Private mode: it opens on Trim next time.
+    }
+  };
   const clipRef = useRef(clip);
   clipRef.current = clip;
   const tighten = !clip.edit?.keepPauses;
@@ -259,243 +288,275 @@ export default function ClipEditor(props: Props) {
         </div>
 
         <div className="editor-controls">
-          <label className="field-label" htmlFor="clip-title">
-            Title
-          </label>
-          <input id="clip-title" type="text" value={clip.title} maxLength={80} onChange={(e) => onChange({ ...clip, title: e.target.value })} />
-          <div className="vote" role="group" aria-label="Is this a good moment?">
-            <span className="muted small">Is this a good moment?</span>
-            {(
-              [
-                ['up', '👍', 'liked', 'Yes, good moment'],
-                ['down', '👎', 'disliked', 'No, not a good moment'],
-              ] as const
-            ).map(([v, icon, kind, label]) => (
+          <div className="editor-tabs" role="tablist" aria-label="Edit">
+            {TABS.map(([id, icon, name]) => (
               <button
-                key={v}
+                key={id}
                 type="button"
-                className={`chip ${clip.vote === v ? 'chip-on' : ''}`}
-                aria-pressed={clip.vote === v}
-                aria-label={label}
-                onClick={() => {
-                  if (clip.vote === v) return;
-                  onChange({ ...clip, vote: v });
-                  recordFeedback(kind, clip, number - 1);
-                }}
+                role="tab"
+                aria-selected={tab === id}
+                className={`editor-tab ${tab === id ? 'on' : ''}`}
+                onClick={() => pickTab(id)}
               >
-                {icon}
+                <span aria-hidden="true">{icon}</span> {name}
               </button>
             ))}
           </div>
 
-          <div className="field-row">
-            <span className="field-label">Length</span>
-            <span className="trim-times">
-              {clock(clip.start, true)} – {clock(clip.end, true)} · {clipSeconds(clip).toFixed(1)}s
-            </span>
-          </div>
-          <div className="trim">
-            <div className="trim-track">
-              <div className="trim-range" style={{ left: pct(clip.start), width: `${((clip.end - clip.start) / span) * 100}%` }} />
-              <div className="trim-playhead" style={{ left: pct(Math.min(Math.max(t, win.from), win.to)) }} />
-            </div>
-            <input
-              type="range"
-              className="trim-input"
-              min={win.from}
-              max={win.to}
-              step={0.1}
-              value={clip.start}
-              onChange={(e) => setStart(Number(e.target.value))}
-              aria-label="Clip start"
-              aria-valuetext={clock(clip.start, true)}
-            />
-            <input
-              type="range"
-              className="trim-input"
-              min={win.from}
-              max={win.to}
-              step={0.1}
-              value={clip.end}
-              onChange={(e) => setEnd(Number(e.target.value))}
-              aria-label="Clip end"
-              aria-valuetext={clock(clip.end, true)}
-            />
-          </div>
-          <div className="nudges">
-            <span>
-              Start
-              <button type="button" className="chip" onClick={() => setStart(clip.start - NUDGE)} aria-label="Start half a second earlier">
-                −0.5s
-              </button>
-              <button type="button" className="chip" onClick={() => setStart(clip.start + NUDGE)} aria-label="Start half a second later">
-                +0.5s
-              </button>
-            </span>
-            <span>
-              End
-              <button type="button" className="chip" onClick={() => setEnd(clip.end - NUDGE)} aria-label="End half a second earlier">
-                −0.5s
-              </button>
-              <button type="button" className="chip" onClick={() => setEnd(clip.end + NUDGE)} aria-label="End half a second later">
-                +0.5s
-              </button>
-            </span>
-          </div>
-          {!!clip.skips?.length && (
-            <SkippedParts
-              skips={clip.skips}
-              onPutBack={(k) => {
-                const rest = clip.skips!.filter((s) => s !== k);
-                onChange({ ...clip, skips: rest.length ? rest : undefined });
-              }}
-              onPlay={(k) => seek(Math.max(clip.start, k.start - 2))}
-            />
-          )}
-          <ProEditControl clip={clip} paid={props.paid} locked={props.locked} onChange={onChange} onApplyAll={props.onApplyProToAll} />
-
-          {changed && (
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                onChange({ ...clip, start: clip.original.start, end: clip.original.end, skips: clip.original.skips });
-                seek(clip.original.start);
-              }}
-            >
-              Reset to the AI's pick
-            </button>
-          )}
-
-          {wide && (
-            <>
-              <span className="field-label">Framing</span>
-              <div className="style-picker layout-picker" role="radiogroup" aria-label="Framing">
+          {tab === 'trim' && (
+            <div role="tabpanel" aria-label="Trim">
+              <label className="field-label" htmlFor="clip-title">
+                Title
+              </label>
+              <input id="clip-title" type="text" value={clip.title} maxLength={80} onChange={(e) => onChange({ ...clip, title: e.target.value })} />
+              <div className="vote" role="group" aria-label="Is this a good moment?">
+                <span className="muted small">Is this a good moment?</span>
                 {(
                   [
-                    ['fill', 'Fill the screen'],
-                    ['fit', 'Whole picture'],
-                    ...(clip.split ? ([['split', 'Split screen']] as const) : []),
+                    ['up', '👍', 'liked', 'Yes, good moment'],
+                    ['down', '👎', 'disliked', 'No, not a good moment'],
                   ] as const
-                ).map(([id, name]) => (
+                ).map(([v, icon, kind, label]) => (
                   <button
-                    key={id}
+                    key={v}
                     type="button"
-                    role="radio"
-                    aria-checked={clip.layout === id}
-                    className={`style-option ${clip.layout === id ? 'on' : ''}`}
-                    onClick={() => onChange({ ...clip, layout: id, framed: true })}
+                    className={`chip ${clip.vote === v ? 'chip-on' : ''}`}
+                    aria-pressed={clip.vote === v}
+                    aria-label={label}
+                    onClick={() => {
+                      if (clip.vote === v) return;
+                      onChange({ ...clip, vote: v });
+                      recordFeedback(kind, clip, number - 1);
+                    }}
                   >
-                    {name}
+                    {icon}
                   </button>
                 ))}
               </div>
-              {clip.layout === 'fill' && (
-                <>
-                  <input
-                    id="clip-framing"
-                    type="range"
-                    className="slider"
-                    min={0}
-                    max={100}
-                    aria-label="Framing position"
-                    value={Math.round(cropAt(clip, t))}
-                    // Moving it fixes the framing in place instead of following the speaker.
-                    onChange={(e) => onChange({ ...clip, cropX: Number(e.target.value), track: undefined, framed: true })}
-                    aria-valuetext={clip.cropX < 40 ? 'Left' : clip.cropX > 60 ? 'Right' : 'Center'}
-                  />
-                  <div className="slider-labels">
-                    <span>Left</span>
-                    <span>Center</span>
-                    <span>Right</span>
-                  </div>
-                  {clip.track && <p className="muted small">Following the speaker. Move the slider to keep it in one place.</p>}
-                </>
-              )}
-              {!clip.framed && <p className="muted small">Finding the faces in this clip…</p>}
-            </>
-          )}
 
-          <span className="field-label">Captions</span>
-          <div className="style-picker" role="radiogroup" aria-label="Caption style">
-            {kits.map((k) => {
-              const on = kit?.id === k.id;
-              return (
-                <button
-                  key={k.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  className={`style-option style-brand ${on ? 'on' : ''}`}
-                  onClick={() => onChange({ ...clip, brandKitId: k.id })}
-                >
-                  <span className="style-sample">
-                    <Caption caption={sample} look={captionLook({ captionStyle: 'bold', brandKitId: k.id }, kits).look} inline />
-                  </span>
-                  {k.name}
-                </button>
-              );
-            })}
-            {CAPTION_STYLES.map((s) => {
-              const on = !kit && clip.captionStyle === s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  className={`style-option ${on ? 'on' : ''}`}
-                  onClick={() => onChange({ ...clip, captionStyle: s.id, brandKitId: null })}
-                >
-                  <span className="style-sample">
-                    <Caption caption={sample} look={captionLook({ captionStyle: s.id }, []).look} inline />
-                  </span>
-                  {s.name}
-                </button>
-              );
-            })}
-          </div>
-          {!kits.length && (
-            <p className="muted small">
-              {plan.id === 'free' ? (
-                <>
-                  Want captions in your show's font and colors, with your logo? <Link to="/pricing">Brand kits come with Pro</Link>.
-                </>
-              ) : (
-                <>
-                  <Link to="/brand-kits">Create your brand kit</Link>: your font, colors and logo on every clip.
-                </>
-              )}
-            </p>
-          )}
-
-          <StyleAndEffects clip={clip} showHeadline={parts.headline && !!clip.headline} onChange={onChange} />
-
-          <span className="field-label">Transcript</span>
-          <p className="muted small">Tap a line to jump to it, then set the clip's start or end there.</p>
-          <div className="nudges">
-            <button type="button" className="chip" onClick={() => setStart(t)} disabled={t >= clip.end - MIN_CLIP_SECONDS}>
-              Start here ({clock(t, true)})
-            </button>
-            <button type="button" className="chip" onClick={() => setEnd(t)} disabled={t <= clip.start + MIN_CLIP_SECONDS}>
-              End here
-            </button>
-          </div>
-          <ol className="transcript">
-            {lines.map((l) => {
-              const inside = l.end > clip.start && l.start < clip.end;
-              const out = inside && skipped(l.start, l.end);
-              const current = t >= l.start && t < l.end;
-              return (
-                <li key={l.start} className={`${inside && !out ? 'line-in' : ''} ${out ? 'line-out' : ''} ${current ? 'line-now' : ''}`}>
-                  <button type="button" onClick={() => seek(l.start)}>
-                    <span className="line-time">{clock(l.start)}</span>
-                    {l.text}
+              <div className="field-row">
+                <span className="field-label">Length</span>
+                <span className="trim-times">
+                  {clock(clip.start, true)} – {clock(clip.end, true)} · {clipSeconds(clip).toFixed(1)}s
+                </span>
+              </div>
+              <div className="trim">
+                <div className="trim-track">
+                  <div className="trim-range" style={{ left: pct(clip.start), width: `${((clip.end - clip.start) / span) * 100}%` }} />
+                  <div className="trim-playhead" style={{ left: pct(Math.min(Math.max(t, win.from), win.to)) }} />
+                </div>
+                <input
+                  type="range"
+                  className="trim-input"
+                  min={win.from}
+                  max={win.to}
+                  step={0.1}
+                  value={clip.start}
+                  onChange={(e) => setStart(Number(e.target.value))}
+                  aria-label="Clip start"
+                  aria-valuetext={clock(clip.start, true)}
+                />
+                <input
+                  type="range"
+                  className="trim-input"
+                  min={win.from}
+                  max={win.to}
+                  step={0.1}
+                  value={clip.end}
+                  onChange={(e) => setEnd(Number(e.target.value))}
+                  aria-label="Clip end"
+                  aria-valuetext={clock(clip.end, true)}
+                />
+              </div>
+              <div className="nudges">
+                <span>
+                  Start
+                  <button type="button" className="chip" onClick={() => setStart(clip.start - NUDGE)} aria-label="Start half a second earlier">
+                    −0.5s
                   </button>
-                </li>
-              );
-            })}
-          </ol>
+                  <button type="button" className="chip" onClick={() => setStart(clip.start + NUDGE)} aria-label="Start half a second later">
+                    +0.5s
+                  </button>
+                </span>
+                <span>
+                  End
+                  <button type="button" className="chip" onClick={() => setEnd(clip.end - NUDGE)} aria-label="End half a second earlier">
+                    −0.5s
+                  </button>
+                  <button type="button" className="chip" onClick={() => setEnd(clip.end + NUDGE)} aria-label="End half a second later">
+                    +0.5s
+                  </button>
+                </span>
+              </div>
+              {!!clip.skips?.length && (
+                <SkippedParts
+                  skips={clip.skips}
+                  onPutBack={(k) => {
+                    const rest = clip.skips!.filter((s) => s !== k);
+                    onChange({ ...clip, skips: rest.length ? rest : undefined });
+                  }}
+                  onPlay={(k) => seek(Math.max(clip.start, k.start - 2))}
+                />
+              )}
+              {changed && (
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    onChange({ ...clip, start: clip.original.start, end: clip.original.end, skips: clip.original.skips });
+                    seek(clip.original.start);
+                  }}
+                >
+                  Reset to the AI's pick
+                </button>
+              )}
+
+              <span className="field-label">Transcript</span>
+              <p className="muted small">Tap a line to jump to it, then set the clip's start or end there.</p>
+              <div className="nudges">
+                <button type="button" className="chip" onClick={() => setStart(t)} disabled={t >= clip.end - MIN_CLIP_SECONDS}>
+                  Start here ({clock(t, true)})
+                </button>
+                <button type="button" className="chip" onClick={() => setEnd(t)} disabled={t <= clip.start + MIN_CLIP_SECONDS}>
+                  End here
+                </button>
+              </div>
+              <ol className="transcript">
+                {lines.map((l) => {
+                  const inside = l.end > clip.start && l.start < clip.end;
+                  const out = inside && skipped(l.start, l.end);
+                  const current = t >= l.start && t < l.end;
+                  return (
+                    <li key={l.start} className={`${inside && !out ? 'line-in' : ''} ${out ? 'line-out' : ''} ${current ? 'line-now' : ''}`}>
+                      <button type="button" onClick={() => seek(l.start)}>
+                        <span className="line-time">{clock(l.start)}</span>
+                        {l.text}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
+
+          {tab === 'look' && (
+            <div role="tabpanel" aria-label="Look">
+              {wide && (
+                <>
+                  <span className="field-label">Framing</span>
+                  <div className="style-picker layout-picker" role="radiogroup" aria-label="Framing">
+                    {(
+                      [
+                        ['fill', 'Fill the screen'],
+                        ['fit', 'Whole picture'],
+                        ...(clip.split ? ([['split', 'Split screen']] as const) : []),
+                      ] as const
+                    ).map(([id, name]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={clip.layout === id}
+                        className={`style-option ${clip.layout === id ? 'on' : ''}`}
+                        onClick={() => onChange({ ...clip, layout: id, framed: true })}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                  {clip.layout === 'fill' && (
+                    <>
+                      <input
+                        id="clip-framing"
+                        type="range"
+                        className="slider"
+                        min={0}
+                        max={100}
+                        aria-label="Framing position"
+                        value={Math.round(cropAt(clip, t))}
+                        // Moving it fixes the framing in place instead of following the speaker.
+                        onChange={(e) => onChange({ ...clip, cropX: Number(e.target.value), track: undefined, framed: true })}
+                        aria-valuetext={clip.cropX < 40 ? 'Left' : clip.cropX > 60 ? 'Right' : 'Center'}
+                      />
+                      <div className="slider-labels">
+                        <span>Left</span>
+                        <span>Center</span>
+                        <span>Right</span>
+                      </div>
+                      {clip.track && <p className="muted small">Following the speaker. Move the slider to keep it in one place.</p>}
+                    </>
+                  )}
+                  {!clip.framed && <p className="muted small">Finding the faces in this clip…</p>}
+                </>
+              )}
+              <ProEditControl clip={clip} paid={props.paid} locked={props.locked} onChange={onChange} onApplyAll={props.onApplyProToAll} />
+              <StyleAndEffects part="effects" clip={clip} showHeadline={false} onChange={onChange} />
+            </div>
+          )}
+
+          {tab === 'captions' && (
+            <div role="tabpanel" aria-label="Captions">
+              <span className="field-label">Caption style</span>
+              <div className="style-picker" role="radiogroup" aria-label="Caption style">
+                {kits.map((k) => {
+                  const on = kit?.id === k.id;
+                  return (
+                    <button
+                      key={k.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      className={`style-option style-brand ${on ? 'on' : ''}`}
+                      onClick={() => onChange({ ...clip, brandKitId: k.id })}
+                    >
+                      <span className="style-sample">
+                        <Caption caption={sample} look={captionLook({ captionStyle: 'bold', brandKitId: k.id }, kits).look} inline />
+                      </span>
+                      {k.name}
+                    </button>
+                  );
+                })}
+                {CAPTION_STYLES.map((s) => {
+                  const on = !kit && clip.captionStyle === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      className={`style-option ${on ? 'on' : ''}`}
+                      onClick={() => onChange({ ...clip, captionStyle: s.id, brandKitId: null })}
+                    >
+                      <span className="style-sample">
+                        <Caption caption={sample} look={captionLook({ captionStyle: s.id }, []).look} inline />
+                      </span>
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {!kits.length && (
+                <p className="muted small">
+                  {plan.id === 'free' ? (
+                    <>
+                      Want captions in your show's font and colors, with your logo? <Link to="/pricing">Brand kits come with Pro</Link>.
+                    </>
+                  ) : (
+                    <>
+                      <Link to="/brand-kits">Create your brand kit</Link>: your font, colors and logo on every clip.
+                    </>
+                  )}
+                </p>
+              )}
+              <StyleAndEffects part="captions" clip={clip} showHeadline={parts.headline && !!clip.headline} onChange={onChange} />
+            </div>
+          )}
+
+          {tab === 'post' && (
+            <div role="tabpanel" aria-label="Post">
+              <PostPanel clip={clip} segments={segments} showHeadlines={parts.headline} onChange={onChange} onCover={props.onCover} onPlay={seek} />
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -646,8 +707,17 @@ const COLORS: [string | undefined, string][] = [
   ['#ff5fa2', 'Pink'],
 ];
 
-/** The person's own touches: headline text, caption size, place, color, motion, word fixes, zoom and fades. */
-function StyleAndEffects({ clip, showHeadline, onChange }: { clip: Clip; showHeadline: boolean; onChange: (c: Clip) => void }) {
+// Which of the person's own touches each tab shows (and its "Undo" resets).
+const PART_KEYS: Record<'captions' | 'effects', (keyof ClipEdit)[]> = {
+  captions: ['captionSize', 'captionPlace', 'captionMotion', 'captionColor', 'fixes'],
+  effects: ['zoom', 'fadeIn', 'fadeOut', 'keepPauses'],
+};
+
+/**
+ * The person's own touches, one tab's worth: for captions their size, place, animation, color, word fixes and the
+ * headline text; for effects the zoom, fades and pause removal.
+ */
+function StyleAndEffects({ part, clip, showHeadline, onChange }: { part: 'captions' | 'effects'; clip: Clip; showHeadline: boolean; onChange: (c: Clip) => void }) {
   const edit = clip.edit ?? {};
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -669,9 +739,58 @@ function StyleAndEffects({ clip, showHeadline, onChange }: { clip: Clip; showHea
       </div>
     </div>
   );
+  const touched = PART_KEYS[part].some((k) => edit[k] !== undefined);
+  const undo = () => {
+    const next: ClipEdit = { ...edit };
+    PART_KEYS[part].forEach((k) => delete next[k]);
+    onChange({ ...clip, edit: Object.keys(next).length ? next : undefined });
+  };
+  if (part === 'effects') {
+    return (
+      <>
+        <span className="field-label">Effects</span>
+        <div className="edit-panel">
+          <div className="edit-row edit-checks">
+            <label className="pro-part">
+              <input type="checkbox" checked={!edit.keepPauses} onChange={(e) => set({ keepPauses: e.target.checked ? undefined : true })} />
+              <span>Remove long pauses and “um”s</span>
+            </label>
+            <label className="pro-part">
+              <input type="checkbox" checked={!!edit.fadeIn} onChange={(e) => set({ fadeIn: e.target.checked || undefined })} />
+              <span>Fade in at the start</span>
+            </label>
+            <label className="pro-part">
+              <input type="checkbox" checked={!!edit.fadeOut} onChange={(e) => set({ fadeOut: e.target.checked || undefined })} />
+              <span>Fade out at the end</span>
+            </label>
+          </div>
+          <div className="edit-row">
+            <label className="edit-label" htmlFor="clip-zoom">
+              Zoom in · {Math.round((edit.zoom ?? 1) * 100)}%
+            </label>
+            <input
+              id="clip-zoom"
+              type="range"
+              className="slider"
+              min={100}
+              max={150}
+              step={5}
+              value={Math.round((edit.zoom ?? 1) * 100)}
+              onChange={(e) => set({ zoom: Number(e.target.value) === 100 ? undefined : Number(e.target.value) / 100 })}
+            />
+          </div>
+          {touched && (
+            <button type="button" className="link-button" onClick={undo}>
+              Undo effects
+            </button>
+          )}
+        </div>
+      </>
+    );
+  }
   return (
     <>
-      <span className="field-label">Style &amp; effects</span>
+      <span className="field-label">Caption options</span>
       <div className="edit-panel">
         {showHeadline && (
           <div className="edit-row">
@@ -729,38 +848,9 @@ function StyleAndEffects({ clip, showHeadline, onChange }: { clip: Clip; showHea
             </button>
           </form>
         </div>
-        <div className="edit-row">
-          <label className="edit-label" htmlFor="clip-zoom">
-            Zoom in · {Math.round((edit.zoom ?? 1) * 100)}%
-          </label>
-          <input
-            id="clip-zoom"
-            type="range"
-            className="slider"
-            min={100}
-            max={150}
-            step={5}
-            value={Math.round((edit.zoom ?? 1) * 100)}
-            onChange={(e) => set({ zoom: Number(e.target.value) === 100 ? undefined : Number(e.target.value) / 100 })}
-          />
-        </div>
-        <div className="edit-row edit-checks">
-          <label className="pro-part">
-            <input type="checkbox" checked={!edit.keepPauses} onChange={(e) => set({ keepPauses: e.target.checked ? undefined : true })} />
-            <span>Remove long pauses and “um”s</span>
-          </label>
-          <label className="pro-part">
-            <input type="checkbox" checked={!!edit.fadeIn} onChange={(e) => set({ fadeIn: e.target.checked || undefined })} />
-            <span>Fade in at the start</span>
-          </label>
-          <label className="pro-part">
-            <input type="checkbox" checked={!!edit.fadeOut} onChange={(e) => set({ fadeOut: e.target.checked || undefined })} />
-            <span>Fade out at the end</span>
-          </label>
-        </div>
-        {clip.edit && (
-          <button type="button" className="link-button" onClick={() => onChange({ ...clip, edit: undefined })}>
-            Undo all style &amp; effects
+        {touched && (
+          <button type="button" className="link-button" onClick={undo}>
+            Undo caption changes
           </button>
         )}
       </div>
@@ -808,4 +898,166 @@ function SplitPreview({ video, split, zoom }: { video: React.RefObject<HTMLVideo
     return () => cancelAnimationFrame(raf);
   }, [video, split, zoom]);
   return <canvas ref={ref} className="phone-split" width={540} height={960} aria-hidden="true" />;
+}
+
+/** Copies text, with a fallback for browsers that don't allow the clipboard API. */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+}
+
+/** A Copy button that says "Copied" for a moment. */
+function CopyButton({ text, label = 'Copy', primary = false }: { text: string; label?: string; primary?: boolean }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className={primary ? 'btn btn-primary' : 'chip'}
+      onClick={() => {
+        void copyText(text).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        });
+      }}
+    >
+      {done ? 'Copied ✓' : label}
+    </button>
+  );
+}
+
+/**
+ * Posting the clip: what to write (title, description, hashtags) with one tap to copy, a cover image, and other
+ * openings to post the same moment again if it doesn't take off.
+ */
+function PostPanel({
+  clip,
+  segments,
+  showHeadlines,
+  onChange,
+  onCover,
+  onPlay,
+}: {
+  clip: Clip;
+  segments: Segment[];
+  showHeadlines: boolean;
+  onChange: (c: Clip) => void;
+  onCover: () => Promise<void>;
+  onPlay: (time: number) => void;
+}) {
+  const [cover, setCover] = useState<'idle' | 'making' | 'error'>('idle');
+  const tags = (clip.hashtags ?? []).map((h) => `#${h}`).join(' ');
+  const all = [clip.title, clip.description, tags].filter(Boolean).join('\n\n');
+  const headlines = showHeadlines ? (clip.headlineOptions ?? []) : [];
+  // The stronger first line, if the AI found one: its text, for the choice below.
+  const altLine = clip.altStart !== undefined ? segments.find((s) => Math.abs(s.start - clip.altStart!) < 0.01) : undefined;
+  const firstLine = segments.find((s) => s.end > clip.original.start + 0.01);
+  return (
+    <>
+      <span className="field-label">Ready to post</span>
+      <div className="post-kit">
+        <div className="post-row">
+          <span className="post-label">Title</span>
+          <p className="post-text">{clip.title}</p>
+          <CopyButton text={clip.title} />
+        </div>
+        {clip.description && (
+          <div className="post-row">
+            <span className="post-label">Description</span>
+            <p className="post-text">{clip.description}</p>
+            <CopyButton text={clip.description} />
+          </div>
+        )}
+        {tags && (
+          <div className="post-row">
+            <span className="post-label">Hashtags</span>
+            <p className="post-text post-tags">{tags}</p>
+            <CopyButton text={tags} />
+          </div>
+        )}
+        <CopyButton text={all} label="Copy all" primary />
+      </div>
+
+      <span className="field-label">Cover image</span>
+      <p className="muted small">The clip's strongest moment, framed like the clip{showHeadlines && clip.headline ? ', with its headline' : ''}.</p>
+      <button
+        type="button"
+        className="btn btn-outline"
+        disabled={cover === 'making'}
+        onClick={() => {
+          setCover('making');
+          onCover().then(
+            () => setCover('idle'),
+            (err) => {
+              console.warn('Cover not made', err);
+              setCover('error');
+            },
+          );
+        }}
+      >
+        {cover === 'making' ? 'Making your cover…' : 'Download cover image'}
+      </button>
+      {cover === 'error' && <p className="error small">Couldn't make the cover. Try again.</p>}
+
+      {(headlines.length > 1 || altLine) && (
+        <>
+          <span className="field-label">Try another opening</span>
+          <p className="muted small">
+            If this clip doesn't take off, post the same moment again a few days later with a different opening. The first second decides whether people
+            keep watching.
+          </p>
+          {headlines.length > 1 && (
+            <div className="choice-list" role="radiogroup" aria-label="Headline">
+              <span className="post-label">Headline</span>
+              {headlines.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  role="radio"
+                  aria-checked={clip.headline === h}
+                  className={`choice ${clip.headline === h ? 'on' : ''}`}
+                  onClick={() => onChange({ ...clip, headline: h })}
+                >
+                  {h}
+                </button>
+              ))}
+            </div>
+          )}
+          {altLine && firstLine && (
+            <div className="choice-list" role="radiogroup" aria-label="First line">
+              <span className="post-label">First line</span>
+              {(
+                [
+                  [clip.original.start, firstLine.text, 'Start as picked'],
+                  [altLine.start, altLine.text, 'Start on a sharper line'],
+                ] as const
+              ).map(([start, text, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={Math.abs(clip.start - start) < 0.05}
+                  className={`choice ${Math.abs(clip.start - start) < 0.05 ? 'on' : ''}`}
+                  onClick={() => {
+                    onChange({ ...clip, start });
+                    onPlay(start);
+                  }}
+                >
+                  <b>{label}</b>
+                  <span className="muted small">“{text.length > 90 ? `${text.slice(0, 90)}…` : text}”</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
 }

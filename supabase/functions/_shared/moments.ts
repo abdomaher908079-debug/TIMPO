@@ -30,6 +30,13 @@ export interface Moment {
   // Stretches between start and end that are left out (a tangent between the setup and the payoff), in
   // episode seconds, in order. The clip plays what's left.
   skips?: TimeRange[];
+  // The upload kit: a description and hashtags for posting the clip (with `title`).
+  description?: string;
+  hashtags?: string[];
+  // Other openings to try if the clip doesn't take off: other headlines, and a later, stronger first line
+  // (its start, in episode seconds).
+  altHeadlines?: string[];
+  altStart?: number;
 }
 
 export interface TimeRange {
@@ -139,11 +146,20 @@ For each clip give:
   the meaning (numbers, names, strong verbs, surprising or emotional words). Never filler words.
 - punchIns: 1 to 3 short phrases (2 to 5 words) copied exactly from the clip where a quick zoom-in adds impact:
   the punchline, a reveal, the strongest emotion. Not the first sentence.
+- altHeadlines: 2 other headlines for the same clip, each a different angle (a question, a bold claim, a number,
+  a confession), same rules as headline. Used to post the moment again with another opening.
+- altStartLine: a later line inside the clip that would make an even stronger first line (a sharper hook), so the
+  clip can be posted again starting there; it must still leave a complete clip of at least ${MIN_CLIP_SECONDS} seconds.
+  -1 when the first line is already the strongest.
+- description: 1 to 2 sentences to post with the clip: what happens and why it's worth watching. No hashtags or
+  emojis, no links, never "in this clip".
+- hashtags: 3 to 5 hashtags people search for, about the clip's topic, most specific first, each one word or
+  words joined without spaces, without the # sign.
 - reason: one short sentence on why it will perform.
 - score: 0 to 100 for how well it will perform: hook 40 points, stands alone 20, payoff 25, energy 15. Be strict and
   spread the scores out; most clips are not 90+.
 
-Language: write the title, headline and reason in the language the episode is spoken in (for an Arabic episode,
+Language: write the title, headline, altHeadlines, description, hashtags and reason in the language the episode is spoken in (for an Arabic episode,
 Arabic, in the same dialect and tone the speakers use). Never translate them into English unless the episode is in
 English. hook, emphasis and punchIns are copied from the transcript as they are.
 
@@ -165,11 +181,15 @@ const RESPONSE_SCHEMA = {
           headline: { type: 'STRING' },
           emphasis: { type: 'ARRAY', items: { type: 'STRING' } },
           punchIns: { type: 'ARRAY', items: { type: 'STRING' } },
+          altHeadlines: { type: 'ARRAY', items: { type: 'STRING' } },
+          altStartLine: { type: 'INTEGER' },
+          description: { type: 'STRING' },
+          hashtags: { type: 'ARRAY', items: { type: 'STRING' } },
           reason: { type: 'STRING' },
           score: { type: 'INTEGER' },
         },
-        required: ['startLine', 'endLine', 'cutLines', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
-        propertyOrdering: ['startLine', 'endLine', 'cutLines', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
+        required: ['startLine', 'endLine', 'cutLines', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'altHeadlines', 'altStartLine', 'description', 'hashtags', 'reason', 'score'],
+        propertyOrdering: ['startLine', 'endLine', 'cutLines', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'altHeadlines', 'altStartLine', 'description', 'hashtags', 'reason', 'score'],
       },
     },
   },
@@ -463,11 +483,18 @@ interface RawMoment {
   headline: string;
   emphasis: unknown;
   punchIns: unknown;
+  altHeadlines: unknown;
+  altStartLine: unknown;
+  description: string;
+  hashtags: unknown;
   reason: string;
   score: number;
 }
 
 const normWord = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
+
+/** A headline as shown on screen: no quotes or hashtags, at most 9 words. */
+const cleanHeadline = (h: unknown) => String(h ?? '').replace(/["“”#]/g, '').trim().split(/\s+/).slice(0, 9).join(' ');
 
 /** Keeps only words and phrases that really are in the clip's text (the model sometimes paraphrases). */
 function fromClip(items: unknown, text: string, maxWords: number, max: number): string[] {
@@ -540,9 +567,28 @@ export function toMoments(raw: unknown[], segments: Segment[], count: number): M
     const end = left.length ? segments[b]!.end : Math.min(segments[b]!.end, start + MAX_CLIP_SECONDS);
     const out = new Set(runs().flatMap(([f, t]) => Array.from({ length: t - f + 1 }, (_, k) => f + k)));
     const text = segments.slice(a, b + 1).filter((_, k) => !out.has(a + k)).map((s) => s.text).join(' ');
-    const headline = String(item.headline ?? '').replace(/["“”#]/g, '').trim().split(/\s+/).slice(0, 9).join(' ');
+    const headline = cleanHeadline(item.headline);
+    const altHeadlines = [...new Set((Array.isArray(item.altHeadlines) ? item.altHeadlines : []).map(cleanHeadline))]
+      .filter((h) => h && h.toLowerCase() !== headline.toLowerCase())
+      .slice(0, 2);
+    // A later first line: inside the clip, not in a part it leaves out, leaving a full clip after it.
+    const alt = Math.round(Number(item.altStartLine));
+    const altStart =
+      Number.isInteger(alt) && alt > a && alt <= b && !out.has(alt) &&
+      keptSeconds({ start: segments[alt]!.start, end, skips: left.filter((k) => k.start >= segments[alt]!.start) }) >= MIN_CLIP_SECONDS
+        ? segments[alt]!.start
+        : undefined;
+    const hashtags = (Array.isArray(item.hashtags) ? item.hashtags : [])
+      .map((h) => String(h ?? '').replace(/[#\s]/g, '').replace(/[^\p{L}\p{N}_]/gu, ''))
+      .filter((h, i, all) => h.length >= 2 && h.length <= 40 && all.findIndex((o) => o.toLowerCase() === h.toLowerCase()) === i)
+      .slice(0, 5);
+    const description = String(item.description ?? '').replace(/#\S+/g, '').trim().slice(0, 300);
     candidates.push({
       headline: headline || undefined,
+      ...(altHeadlines.length ? { altHeadlines } : {}),
+      ...(altStart !== undefined ? { altStart } : {}),
+      ...(description ? { description } : {}),
+      ...(hashtags.length ? { hashtags } : {}),
       emphasis: fromClip(item.emphasis, text, 1, 8),
       punchIns: fromClip(item.punchIns, text, 6, 3),
       start,
