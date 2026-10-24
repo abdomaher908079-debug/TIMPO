@@ -68,7 +68,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Share+Tech+Mono&family=Fredoka:wght@700&display=swap" rel="stylesheet" crossorigin />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Plain text for visitors and crawlers that don't run JavaScript (many AI search tools); the app replaces it. -->
+    <div id="root">
+      <main style="max-width: 640px; margin: 40px auto; padding: 0 16px; font-family: Inter, system-ui, sans-serif; line-height: 1.5">
+        <h1>Isla: AI podcast clips for YouTube Shorts, TikTok and Reels</h1>
+        <p>
+          Isla (islaclips.com) finds the best moments in a podcast episode and turns them into vertical clips with captions,
+          ready to post. It runs in the browser, works with episodes in any language, and is free to start.
+        </p>
+        <p>Isla was founded and is run by Abdullah Elewa. Contact: <a href="mailto:support@islaclips.com">support@islaclips.com</a>.</p>
+        <p><a href="/about">About Isla</a> · <a href="/pricing">Pricing</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

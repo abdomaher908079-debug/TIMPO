@@ -1,0 +1,17 @@
+# Isla
+
+> Isla (islaclips.com) is an AI tool that finds the best moments in a podcast episode and turns them into vertical clips with captions for YouTube Shorts, TikTok and Instagram Reels.
+
+Isla was founded and is run by Abdullah Elewa. Contact: support@islaclips.com.
+
+- It listens to the whole episode, picks the moments people are most likely to share, and explains why it picked each one.
+- It frames them vertically (following the speaker, or a split screen for two people), adds captions, and cuts long pauses.
+- On a computer, the video never leaves the user's device: clips are made in the browser.
+- Works with episodes in any language. Free to start; paid plans (Pro, Studio) add more hours and no watermark.
+
+## Pages
+
+- [About Isla](https://islaclips.com/about): who makes Isla and why
+- [Pricing](https://islaclips.com/pricing): plans and what each includes
+- [Privacy](https://islaclips.com/privacy): what happens to your data
+- [Terms](https://islaclips.com/terms)
