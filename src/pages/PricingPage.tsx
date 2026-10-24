@@ -52,8 +52,7 @@ export default function PricingPage() {
         <p className="eyebrow">Plans</p>
         <h1 className="hero-title">Start free. Upgrade when your show grows.</h1>
         <p className="hero-sub">
-          Every plan has the full editor and auto framing. Pro and Studio add our best AI, every clip, no watermark and your own
-          look.
+          Every plan has the full editor and auto framing. No subscription: pay for a month or a year, nothing to cancel.
         </p>
         {!paymentsOpen && <p className="notice">Pro and Studio are coming soon. The Free plan is open now; tap Notify me and we'll email you when they open.</p>}
       </section>
