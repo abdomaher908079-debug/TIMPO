@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { BRAND_NAME, LEGAL } from '../lib/brand';
 
 const LINKS: [string, string][] = [
+  ['/about', 'About'],
   ['/pricing', 'Pricing'],
   ['/privacy', 'Privacy'],
   ['/terms', 'Terms'],
@@ -24,7 +25,7 @@ export default function Footer() {
         {here !== '/diagnose' && <Link to="/diagnose">Check my browser</Link>}
       </nav>
       <p>
-        © {new Date().getFullYear()} {BRAND_NAME}
+        © {new Date().getFullYear()} {BRAND_NAME} · Made by {LEGAL.owner}
       </p>
     </footer>
   );
