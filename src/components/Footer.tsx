@@ -25,7 +25,7 @@ export default function Footer() {
         {here !== '/diagnose' && <Link to="/diagnose">Check my browser</Link>}
       </nav>
       <p>
-        © {new Date().getFullYear()} {BRAND_NAME} · Made by {LEGAL.owner}
+        © {new Date().getFullYear()} {BRAND_NAME} · Made by {LEGAL.founder}
       </p>
     </footer>
   );

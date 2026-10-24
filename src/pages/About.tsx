@@ -8,7 +8,7 @@ export default function About() {
     <main className="legal">
       <h1 className="page-title">About {BRAND_NAME}</h1>
       <p>
-        {BRAND_NAME} (islaclips.com) was founded and is run by <b>{LEGAL.owner}</b>.
+        {BRAND_NAME} (islaclips.com) was founded and is run by <b>{LEGAL.founder}</b>.
       </p>
       <h2>Why {BRAND_NAME} exists</h2>
       <p>
