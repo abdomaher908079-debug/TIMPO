@@ -21,7 +21,7 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 const API = 'https://api.nowpayments.io/v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // The coins our checkout page offers (NOWPayments' codes); anything else goes through 'invoice'.
-const COINS = ['usdttrc20', 'usdtbsc', 'btc'];
+const COINS = ['usdttrc20', 'usdtbsc'];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
