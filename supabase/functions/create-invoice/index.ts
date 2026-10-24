@@ -20,6 +20,10 @@ const API = 'https://api.nowpayments.io/v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // The coins our checkout page offers (NOWPayments' codes): USDT only, whose sending fees fit SHORT_OK_USD.
 const COINS = ['usdttrc20', 'usdtbsc'];
+// How long the checkout page shows an order's amount and address before asking for a new one. NOWPayments'
+// own rate estimate can be shorter, but these are USDT (a dollar coin), so the amount barely moves meanwhile and
+// SHORT_OK_USD covers any difference; a payment that arrives later is still credited.
+const PAY_WINDOW_MS = 30 * 60_000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -199,7 +203,7 @@ Deno.serve(async (req) => {
         pay_amount: Number(payment.pay_amount),
         pay_address: String(payment.pay_address),
         payin_extra_id: payment.payin_extra_id ? String(payment.payin_extra_id) : null,
-        price_expires_at: payment.expiration_estimate_date ? String(payment.expiration_estimate_date) : null,
+        price_expires_at: new Date(Date.now() + PAY_WINDOW_MS).toISOString(),
       })
       .eq('id', row.id)
       .select('*')
