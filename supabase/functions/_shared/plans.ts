@@ -112,6 +112,20 @@ export const MAX_EXTRA_SEATS = 7;
 export const SEAT_USD: Record<Billing, number> = { monthly: 8, yearly: 50 };
 // NOWPayments won't take a crypto payment below about $11–13; anything we sell starts above this.
 export const CRYPTO_MIN_USD = 12;
+// A crypto payment this many dollars short still counts as paid: exchanges often take their sending fee from
+// the amount, so a little less arrives than the customer typed. Not shown anywhere; anything shorter waits.
+// $1 plus a few cents: Binance's usual fee is 1 USDT, which is worth a little over $1 ($1.0014 when written).
+export const SHORT_OK_USD = 1.05;
+
+/** What has arrived, in dollars at the payment's own rate: `received` of the `asked` coins cost `priceUsd`. */
+export function receivedUsd(received: number, asked: number, priceUsd: number): number {
+  return received > 0 && asked > 0 && priceUsd > 0 ? (received * priceUsd) / asked : 0;
+}
+
+/** Whether `gotUsd` is enough for an order of `priceUsd` (up to SHORT_OK_USD short). */
+export function paidEnough(gotUsd: number, priceUsd: number): boolean {
+  return gotUsd + SHORT_OK_USD + 0.001 >= priceUsd;
+}
 
 /**
  * What adding `count` people costs for the rest of a Studio plan ending at `end`: the seat price per day

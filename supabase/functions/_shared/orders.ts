@@ -3,7 +3,7 @@
 // create-invoice's 'status' (asking NOWPayments directly, in case a notice is late or lost).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { button, DATE, p, send, sign, SITE } from './email.ts';
-import { addMonths, type Billing, MAX_EXTRA_SEATS, PACK, PRICE_USD } from './plans.ts';
+import { addMonths, type Billing, MAX_EXTRA_SEATS, PACK, paidEnough, PRICE_USD, receivedUsd } from './plans.ts';
 
 const DAY = 86_400_000;
 // 'confirmed': seen on the blockchain; 'finished': passed on to our wallet. Either means paid.
@@ -39,6 +39,8 @@ export interface PaymentInfo {
   payment_status?: unknown;
   price_amount?: unknown;
   price_currency?: unknown;
+  // What the customer was asked to send, in the coin.
+  pay_amount?: unknown;
   actually_paid?: unknown;
 }
 
@@ -243,7 +245,11 @@ export async function settle(order: Order, payment: PaymentInfo): Promise<string
       })
       .eq('id', order.id);
   }
-  if (!PAID.includes(status)) return status;
+  // Paid in full, or only a little short (see SHORT_OK_USD).
+  const nearlyAll =
+    status === 'partially_paid' &&
+    paidEnough(receivedUsd(Number(payment.actually_paid), Number(payment.pay_amount), Number(payment.price_amount)), Number(order.price_usd));
+  if (!PAID.includes(status) && !nearlyAll) return status;
   // The payment must be for this order's price, in dollars.
   if (String(payment.price_currency ?? '').toLowerCase() !== 'usd' || Number(payment.price_amount) + 0.001 < Number(order.price_usd)) {
     console.error('Price mismatch', order.id, payment.price_amount, payment.price_currency);
