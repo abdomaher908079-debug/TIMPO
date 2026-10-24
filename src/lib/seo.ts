@@ -19,8 +19,8 @@ const PAGES: Record<string, { title: string; description: string }> = {
   '/signup': { title: 'Sign up · Isla', description: 'Create your free Isla account and turn your next podcast episode into clips.' },
   '/login': { title: 'Log in · Isla', description: 'Log in to Isla.' },
   '/about': {
-    title: 'About Isla · Founded by Abdullah Mohamed Maher Hassan Elewa',
-    description: 'Isla (islaclips.com) was founded and is run by Abdullah Mohamed Maher Hassan Elewa. Why Isla exists and how to reach us.',
+    title: 'About Isla · Founded by Abdullah Elewa',
+    description: 'Isla (islaclips.com) was founded and is run by Abdullah Elewa. Why Isla exists and how to reach us.',
   },
   '/privacy': { title: 'Privacy · Isla', description: 'What happens to your data on Isla, in plain words.' },
   '/terms': { title: 'Terms of service · Isla', description: 'The terms for using Isla.' },
