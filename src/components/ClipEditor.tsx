@@ -576,7 +576,9 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
     );
   }
   if (status?.state === 'queued' || status?.state === 'timing' || status?.state === 'rendering') {
-    const progress = status.state === 'rendering' ? status.progress : 0;
+    const progress = status.state === 'queued' ? 0 : (status.progress ?? 0);
+    // The caption timing model's first download, before the words are timed.
+    const downloading = status.state === 'timing' && status.progress !== undefined && status.progress < 1;
     return (
       <div className="export-panel" role="status">
         <div className="export-progress">
@@ -585,7 +587,9 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
         <p className="muted small">
           {status.state === 'queued'
             ? 'Waiting for the other clips…'
-            : status.state === 'timing'
+            : downloading
+              ? `Getting captions ready (only the first time)… ${Math.round(progress * 100)}%`
+              : status.state === 'timing'
               ? 'Timing every word for the captions…'
               : `Making your clip… ${Math.round(progress * 100)}%`}
         </p>
@@ -601,6 +605,7 @@ function ExportPanel({ locked, exportStatus: status, exportCurrent, busy, onExpo
       {done && exportCurrent ? (
         <>
           <p className="export-done">✓ Exported as {done.fileName}</p>
+          {done.note && <p className="muted small">{done.note}</p>}
           <button type="button" className="btn btn-outline" onClick={() => download(done.url, done.fileName)}>
             Download again
           </button>

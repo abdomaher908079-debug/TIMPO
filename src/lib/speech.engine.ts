@@ -4,6 +4,8 @@ import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from '@hugging
 import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import type { Word, WorkerRequest, WorkerResponse } from './speech';
+import { speechGpu } from './device';
+import { steadyFetch } from './steadyFetch';
 
 // English-only Whisper: more accurate on English than the multilingual models of the same size.
 // The "timestamped" builds have the extra outputs needed for exact word times (clip captions), so
@@ -25,6 +27,8 @@ const MAX_CARRY_SECONDS = 45;
 // Cloudflare Pages (25 MB limit), so the live site carries it gzipped and unpacks it here (see
 // runtimeBinary), or loads it from VITE_SPEECH_RUNTIME_URL (your R2 copy); see vite.config.ts.
 // In development it comes from the local package.
+// The models are big; a dropped connection continues where it stopped instead of failing.
+env.fetch = steadyFetch;
 env.backends.onnx.wasm!.wasmPaths = {
   mjs: ortMjs,
   wasm: import.meta.env.DEV ? '/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm' : __SPEECH_RUNTIME_URL__,
@@ -36,7 +40,7 @@ let runtime: Promise<Uint8Array> | null = null;
 // Downloads and unpacks our own gzipped copy of the runtime's WebAssembly file (cached by the browser).
 function runtimeBinary(): Promise<Uint8Array> {
   runtime ??= (async () => {
-    const res = await fetch(__SPEECH_RUNTIME_GZ__);
+    const res = await steadyFetch(__SPEECH_RUNTIME_GZ__);
     if (!res.ok) throw new Error(`Couldn't download the speech runtime (HTTP ${res.status}).`);
     let bytes = new Uint8Array(await res.arrayBuffer());
     // Still gzipped, unless the host already unpacked it (Content-Encoding: gzip).
@@ -59,19 +63,6 @@ type Line = { text: string; timestamp: [number, number | null] };
 let carry = new Float32Array(0);
 let carryStart = 0;
 
-interface GpuAdapter {
-  features: { has(name: string): boolean };
-}
-
-async function gpuAdapter(): Promise<GpuAdapter | null> {
-  try {
-    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<GpuAdapter | null> } }).gpu;
-    return (await gpu?.requestAdapter()) ?? null;
-  } catch {
-    return null;
-  }
-}
-
 async function load(quality: 'quick' | 'best', safe = false, timingOnly = false, isPhone = false) {
   let downloaded = false;
   const progress_callback = (p: { status: string; loaded?: number; total?: number }) => {
@@ -89,9 +80,11 @@ async function load(quality: 'quick' | 'best', safe = false, timingOnly = false,
     post({ type: 'stage', stage: 'downloading the speech runtime' });
     env.backends.onnx.wasm!.wasmBinary = await runtimeBinary();
   }
-  if (!safe && !isPhone) post({ type: 'stage', stage: 'checking the graphics chip' });
-  // Never the graphics chip on phones: heavy WebGPU work can hang a phone's GPU and restart the phone.
-  const adapter = safe || isPhone ? null : await gpuAdapter();
+  // Never the graphics chip on phones: heavy WebGPU work can hang a phone's GPU and restart the phone. Nor for
+  // caption timing: the processor's small model times a clip in seconds, and its download is the smallest.
+  const useGpu = !safe && !isPhone && !timingOnly;
+  if (useGpu) post({ type: 'stage', stage: 'checking the graphics chip' });
+  const adapter = useGpu ? await speechGpu() : null;
   if (adapter) {
     const best = quality === 'best';
     try {

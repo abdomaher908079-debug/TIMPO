@@ -26,9 +26,11 @@ interface Props {
 
 export type ExportStatus =
   | { state: 'queued' }
-  | { state: 'timing' }
+  // `progress`: the caption timing model's first download (0..1), while it downloads.
+  | { state: 'timing'; progress?: number }
   | { state: 'rendering'; progress: number }
-  | { state: 'done'; url: string; fileName: string; key: string }
+  // `note`: made smaller than chosen, because this device couldn't make the chosen size.
+  | { state: 'done'; url: string; fileName: string; key: string; note?: string }
   | { state: 'error'; message: string };
 
 // Everything that changes the exported video. A finished export of a clip edited since (or whose
@@ -209,7 +211,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     const id = setTimeout(() => {
       if (timerRef.current) return;
       void import('../lib/speech').then(({ createWordTimer }) => {
-        timerRef.current ??= createWordTimer(quality);
+        timerRef.current ??= createWordTimer();
         timerRef.current.warm();
       });
     }, 3000);
@@ -260,10 +262,13 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     if (!groups) {
       setStatus(i, { state: 'timing' });
       try {
-        if (!timerRef.current) timerRef.current = (await import('../lib/speech')).createWordTimer(quality);
+        if (!timerRef.current) timerRef.current = (await import('../lib/speech')).createWordTimer();
         // A few seconds past the end too, so a sentence still going there can be finished (see cleanEdges).
         const until = clip.end + FINISH_SECONDS;
-        const timedWords = await timerRef.current.words(file, clip.start, until);
+        const timedWords = await timerRef.current.words(file, clip.start, until, {
+          signal,
+          onLoading: (progress) => setStatus(i, { state: 'timing', progress }),
+        });
         const exact = groupWords(alignWords(estimateWords(segments, clip.start, until), timedWords));
         groups = exact;
         setTimed((t) => ({ ...t, [key]: exact }));
@@ -282,30 +287,44 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     const logo = await loadLogo(kit);
     // Progress redraws this whole screen, so at most about 5 times a second rather than every frame.
     let shown = 0;
-    const { blob, extension } = await renderClip(file, clip, groups, {
-      look,
-      logo,
-      watermark,
-      pro: paid,
-      size: clipSize,
-      signal,
-      onProgress: (p) => {
-        const now = performance.now();
-        if (now - shown < 200) return;
-        shown = now;
-        setStatus(i, { state: 'rendering', progress: p });
-      },
-    });
+    const render = (size: Size) =>
+      renderClip(file, clip, groups, {
+        look,
+        logo,
+        watermark,
+        pro: paid,
+        size,
+        signal,
+        onProgress: (p) => {
+          const now = performance.now();
+          if (now - shown < 200) return;
+          shown = now;
+          setStatus(i, { state: 'rendering', progress: p });
+        },
+      });
+    let note: string | undefined;
+    let rendered;
+    try {
+      rendered = await render(clipSize);
+    } catch (err) {
+      // A device that can't make the bigger video (memory, its video encoder) still gets the clip, in 720p.
+      if (signal.aborted || clipSize === '720p') throw err;
+      console.warn(`Export at ${clipSize} failed; trying 720p.`, err);
+      setStatus(i, { state: 'rendering', progress: 0 });
+      rendered = await render('720p');
+      note = `Made in 720p: this device couldn't make ${clipSize === '4k' ? '4K' : clipSize}.`;
+    }
+    const { blob, extension } = rendered;
     const url = URL.createObjectURL(blob);
     const name = fileName(clip, i + 1, extension);
     logo?.image.close();
-    setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize, kitsRef.current) });
+    setStatus(i, { state: 'done', url, fileName: name, key: exportKey(clip, clipSize, kitsRef.current), note });
     recordFeedback('exported', clip, i);
     download(url, name);
     // Also kept in "My clips" on this device for a while.
     void import('../lib/library').then(({ addClip, KEEP_DAYS }) =>
       addClip(
-        { user: user?.id ?? 'demo', title: clip.title, episode: file.name, fileName: name, blob, quality: clipSize, seconds: clipSeconds(clip) },
+        { user: user?.id ?? 'demo', title: clip.title, episode: file.name, fileName: name, blob, quality: note ? '720p' : clipSize, seconds: clipSeconds(clip) },
         planName === 'Free' ? KEEP_DAYS.free : KEEP_DAYS.paid,
       ),
     );

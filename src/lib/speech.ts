@@ -176,22 +176,34 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
 }
 
 export interface WordTimer {
-  /** Exact word times for `start`..`end` of the episode, in episode seconds. */
-  words(file: File, start: number, end: number): Promise<Word[]>;
+  /**
+   * Exact word times for `start`..`end` of the episode, in episode seconds. `signal` stops it at once;
+   * `onLoading` gets the model's first download (0..1). Fails if the recognizer stops responding.
+   */
+  words(file: File, start: number, end: number, options?: { signal?: AbortSignal; onLoading?: (fraction: number) => void }): Promise<Word[]>;
   /** Starts downloading and loading the model now, so the first export doesn't wait for it. */
   warm(): void;
   dispose(): void;
 }
 
+// Caption timing gives up (and the clip uses estimated timing) when the recognizer shows no sign of life
+// for this long: no download progress while loading, or no answer for one clip. A clip's words take a few
+// seconds on a computer and well under a minute on a phone.
+const TIMING_STALL_MS = 75_000;
+
 /**
  * Times the words of single clips for their captions. Keeps one recognizer loaded so exporting
  * several clips loads the model once (it's already in the browser's cache from transcribing).
+ * Only word times are needed (the words come from the transcript), so it always uses the quick model.
  */
-export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
+export function createWordTimer(): WordTimer {
   let worker: Worker | null = null;
   let loaded: Promise<void> | null = null;
   const waiting = new Map<number, { resolve: (w: Word[]) => void; reject: (e: Error) => void }>();
   let nextId = 0;
+  // When the recognizer last did something, for the stall check.
+  let alive = 0;
+  let onLoading: ((fraction: number) => void) | undefined;
 
   const failAll = (err: Error) => {
     for (const w of waiting.values()) w.reject(err);
@@ -203,10 +215,13 @@ export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
 
   const start = () => {
     const w = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
+    alive = performance.now();
     loaded = new Promise<void>((resolve, reject) => {
       w.onmessage = (e: MessageEvent<WorkerResponse>) => {
         const msg = e.data;
-        if (msg.type === 'ready') resolve();
+        alive = performance.now();
+        if (msg.type === 'loading') onLoading?.(msg.total ? msg.loaded / msg.total : 0);
+        else if (msg.type === 'ready') resolve();
         else if (msg.type === 'words') {
           waiting.get(msg.id)?.resolve(msg.words);
           waiting.delete(msg.id);
@@ -223,20 +238,44 @@ export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
       };
     });
     loaded.catch(() => {});
-    w.postMessage({ type: 'load', quality, safe: safeMode, timingOnly: true, phone: isPhone } satisfies WorkerRequest);
+    w.postMessage({ type: 'load', quality: 'quick', safe: safeMode, timingOnly: true, phone: isPhone } satisfies WorkerRequest);
     worker = w;
   };
 
+  async function timeWords(file: File, from: number, to: number): Promise<Word[]> {
+    const { speechRange } = await import('./audio');
+    const [samples] = await Promise.all([speechRange(file, from, to), (worker ? loaded : (start(), loaded))!]);
+    const id = nextId++;
+    const result = new Promise<Word[]>((resolve, reject) => waiting.set(id, { resolve, reject }));
+    const copy = new Float32Array(samples);
+    alive = performance.now();
+    worker!.postMessage({ type: 'words', id, samples: copy } satisfies WorkerRequest, [copy.buffer]);
+    const words = await result;
+    return words.map((w) => ({ ...w, start: w.start + from, end: w.end + from }));
+  }
+
   return {
-    async words(file, from, to) {
-      const { speechRange } = await import('./audio');
-      const [samples] = await Promise.all([speechRange(file, from, to), (worker ? loaded : (start(), loaded))!]);
-      const id = nextId++;
-      const result = new Promise<Word[]>((resolve, reject) => waiting.set(id, { resolve, reject }));
-      const copy = new Float32Array(samples);
-      worker!.postMessage({ type: 'words', id, samples: copy } satisfies WorkerRequest, [copy.buffer]);
-      const words = await result;
-      return words.map((w) => ({ ...w, start: w.start + from, end: w.end + from }));
+    async words(file, from, to, { signal, onLoading: progress } = {}) {
+      if (signal?.aborted) throw new DOMException('Canceled', 'AbortError');
+      onLoading = progress;
+      let stop: (err: Error) => void = () => {};
+      const stopped = new Promise<never>((_, reject) => (stop = reject));
+      const abort = () => stop(new DOMException('Canceled', 'AbortError'));
+      signal?.addEventListener('abort', abort);
+      const check = setInterval(() => {
+        if (performance.now() - alive > TIMING_STALL_MS) stop(new Error('Word timing stopped responding.'));
+      }, 2000);
+      try {
+        return await Promise.race([timeWords(file, from, to), stopped]);
+      } catch (err) {
+        // Canceled or stuck: the recognizer may still be busy, so it's replaced next time.
+        if (err instanceof Error && (err.name === 'AbortError' || err.message === 'Word timing stopped responding.')) failAll(err);
+        throw err;
+      } finally {
+        clearInterval(check);
+        signal?.removeEventListener('abort', abort);
+        onLoading = undefined;
+      }
     },
     warm() {
       if (!worker) start();
