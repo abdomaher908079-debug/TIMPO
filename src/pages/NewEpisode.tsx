@@ -211,6 +211,31 @@ export default function NewEpisode() {
   };
   // Cloud listening by default: slow devices, and every language but English.
   const cloudFirst = cloudAvailable && (slowDevice || !english);
+  // The speech model's first download is the longest wait of a first episode, so on devices that will listen
+  // themselves it starts as soon as people are choosing their episode (the same model, from the browser's cache
+  // afterwards). Not on phones or slow computers, which listen in the cloud.
+  const choosing = state.kind === 'empty' || state.kind === 'reading' || state.kind === 'ready';
+  useEffect(() => {
+    if (!choosing || accountLoading || !english) return;
+    let on = true;
+    void (cloudAvailable ? deviceLooksSlow() : Promise.resolve(false)).then(async (slow) => {
+      if (!on || slow) return;
+      const { warmSpeech } = await import('../lib/speech');
+      if (on) warmSpeech(plan.quality);
+    });
+    return () => {
+      on = false;
+    };
+  }, [choosing, accountLoading, english, plan.quality]);
+  // Freed when people leave this page, unless it's back by then (React mounts it twice in development).
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      void import('../lib/speech').then(({ releaseSpeech }) => !mounted.current && releaseSpeech());
+    };
+  }, []);
   const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -338,6 +363,8 @@ export default function NewEpisode() {
   // time; our server listens and picks the moments on its own, so people can leave the page once
   // the audio is sent. Captions' word timing still happens on the device when exporting.
   async function findClipsInCloud(file: File, info: EpisodeInfo) {
+    // Not listening on this device after all.
+    void import('../lib/speech').then(({ releaseSpeech }) => releaseSpeech());
     const abort = new AbortController();
     abortRef.current = abort;
     const fp = fingerprints.current.get(file)!;
