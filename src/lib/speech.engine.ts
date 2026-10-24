@@ -5,6 +5,7 @@ import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import type { Word, WorkerRequest, WorkerResponse } from './speech';
 import { speechGpu } from './device';
+import { aiFetch } from './aiFiles';
 import { steadyFetch } from './steadyFetch';
 
 // English-only Whisper: more accurate on English than the multilingual models of the same size.
@@ -27,8 +28,8 @@ const MAX_CARRY_SECONDS = 45;
 // Cloudflare Pages (25 MB limit), so the live site carries it gzipped and unpacks it here (see
 // runtimeBinary), or loads it from VITE_SPEECH_RUNTIME_URL (your R2 copy); see vite.config.ts.
 // In development it comes from the local package.
-// The models are big; a dropped connection continues where it stopped instead of failing.
-env.fetch = steadyFetch;
+// The models come from our own site when it has them (aiFiles.ts); a dropped connection continues where it stopped.
+env.fetch = aiFetch;
 env.backends.onnx.wasm!.wasmPaths = {
   mjs: ortMjs,
   wasm: import.meta.env.DEV ? '/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm' : __SPEECH_RUNTIME_URL__,

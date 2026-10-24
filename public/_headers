@@ -79,6 +79,13 @@
 /speech-runtime/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Speech models (scripts/ai-models.mjs). The list of files is checked again after a few minutes.
+/ai/*
+  Cache-Control: public, max-age=604800
+
+/ai.json
+  Cache-Control: public, max-age=300
+
 # Face detection model for auto framing.
 /models/*
   Cache-Control: public, max-age=604800
