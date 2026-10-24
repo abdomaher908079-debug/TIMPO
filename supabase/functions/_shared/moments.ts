@@ -7,7 +7,8 @@ export interface Segment {
   start: number;
   end: number;
   text: string;
-  // Said with strong emotion or energy (heard by cloud listening): excitement, laughter, a raised voice.
+  // Said with strong emotion or energy: excitement, laughter, a raised voice (heard by cloud listening, or
+  // from the audio's loudness when transcribed on the device).
   energy?: boolean;
 }
 
@@ -26,7 +27,19 @@ export interface Moment {
   headline?: string;
   emphasis?: string[];
   punchIns?: string[];
+  // Stretches between start and end that are left out (a tangent between the setup and the payoff), in
+  // episode seconds, in order. The clip plays what's left.
+  skips?: TimeRange[];
 }
+
+export interface TimeRange {
+  start: number;
+  end: number;
+}
+
+/** How long a moment plays: its span minus what it skips (only the parts of skips inside the span count). */
+export const keptSeconds = (m: { start: number; end: number; skips?: TimeRange[] }) =>
+  m.end - m.start - (m.skips ?? []).reduce((n, s) => n + Math.max(0, Math.min(m.end, s.end) - Math.max(m.start, s.start)), 0);
 
 export interface PickMomentsRequest {
   segments: Segment[];
@@ -34,7 +47,15 @@ export interface PickMomentsRequest {
 }
 
 export const MIN_CLIP_SECONDS = 15;
+// The longest a clip plays...
 export const MAX_CLIP_SECONDS = 90;
+// ...and the longest stretch of the episode it may cover, with the parts it skips.
+const MAX_SPAN_SECONDS = 150;
+// At most this many stretches left out of one clip (so at most 3 parts joined).
+const MAX_SKIPS = 2;
+// The first pass suggests this many clips for each one wanted (up to MAX_CANDIDATES); the review keeps the best.
+const CANDIDATES_PER_CLIP = 2;
+const MAX_CANDIDATES = 40;
 // A line that ends a sentence (also Arabic, Chinese and Japanese marks), with an optional closing quote or bracket.
 const SENTENCE_END = /[.?!…؟。！？]["'”’)\]]*$/;
 export const MAX_COUNT = 30;
@@ -97,13 +118,18 @@ Pick the moments that work best as stand-alone clips. Judge each candidate like 
 3. Payoff: it ends on a complete sentence that lands: a punchline, an insight, the end of the story, a clear
    takeaway, or a line that makes people comment. End right after it, not on the next topic.
 4. Energy: real emotion, laughter, conflict and vivid stories beat calm explanations. Favor (!) lines.
-5. Length: ${MIN_CLIP_SECONDS} to ${MAX_CLIP_SECONDS} seconds, 25 to 60 is ideal. Shorter is better when the idea is complete.
+5. Length: ${MIN_CLIP_SECONDS} to ${MAX_CLIP_SECONDS} seconds of what plays (after cutLines), 25 to 60 is ideal. Shorter is
+   better when the idea is complete.
 
 Avoid intros, outros, ads, sponsor reads, housekeeping, small talk, inside jokes, and moments that only work with
 visuals. Clips must not overlap. Prefer variety: different ideas from across the episode.
 
 For each clip give:
 - startLine and endLine: the first and last transcript line numbers of the clip (inclusive).
+- cutLines: line numbers between startLine and endLine to leave out, when the speaker goes off on a tangent,
+  repeats themselves or gets interrupted, and the clip is stronger without it: keep the setup and the payoff,
+  drop the detour between them. At most ${MAX_SKIPS} separate stretches, never the first or last line, and only when
+  what remains still flows naturally. Usually empty.
 - title: a punchy title of at most 8 words for the post, no hashtags or emojis.
 - hook: the exact opening words of the clip, copied from the transcript (at most 15 words).
 - headline: on-screen text shown at the top of the video, at most 7 words. It makes people need to keep
@@ -133,6 +159,7 @@ const RESPONSE_SCHEMA = {
         properties: {
           startLine: { type: 'INTEGER' },
           endLine: { type: 'INTEGER' },
+          cutLines: { type: 'ARRAY', items: { type: 'INTEGER' } },
           title: { type: 'STRING' },
           hook: { type: 'STRING' },
           headline: { type: 'STRING' },
@@ -141,8 +168,8 @@ const RESPONSE_SCHEMA = {
           reason: { type: 'STRING' },
           score: { type: 'INTEGER' },
         },
-        required: ['startLine', 'endLine', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
-        propertyOrdering: ['startLine', 'endLine', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
+        required: ['startLine', 'endLine', 'cutLines', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
+        propertyOrdering: ['startLine', 'endLine', 'cutLines', 'title', 'hook', 'headline', 'emphasis', 'punchIns', 'reason', 'score'],
       },
     },
   },
@@ -192,10 +219,34 @@ export interface AiUsage {
   output: number;
 }
 
-export async function pickMoments(
+/**
+ * The episode's best moments: a first pass suggests twice as many as wanted, then a stricter review keeps
+ * and re-scores the best (see reviewMoments). If the review can't run in time, the first pass's best are used.
+ */
+export async function pickMoments(request: PickMomentsRequest, choice: GeminiChoice): Promise<{ moments: Moment[]; usage: AiUsage }> {
+  const started = Date.now();
+  const candidates = Math.min(MAX_CANDIDATES, Math.max(request.count, request.count * CANDIDATES_PER_CLIP));
+  const first = await firstPass({ ...request, count: candidates }, choice);
+  // The whole request must answer within the server's limit (about 150 s): review only with time to spare.
+  const left = REVIEW_DEADLINE_MS - (Date.now() - started);
+  if (left >= MIN_REVIEW_MS && first.moments.length > 1) {
+    try {
+      const review = await reviewMoments(first.moments, request.segments, request.count, first.used, Math.min(left, GEMINI_TIMEOUT_MS));
+      const usage = { ...first.usage, input: first.usage.input + review.input, output: first.usage.output + review.output };
+      return { moments: review.moments, usage };
+    } catch (err) {
+      // The first pass's picks are good clips too; better those now than none.
+      console.error('Review skipped', err instanceof Error ? err.message : err);
+    }
+  }
+  return { moments: first.moments.slice(0, request.count), usage: first.usage };
+}
+
+/** The first pass: tries each model in turn (and the backup key) until one answers. */
+async function firstPass(
   request: PickMomentsRequest,
   { apiKey, model, backup, paid = false }: GeminiChoice,
-): Promise<{ moments: Moment[]; usage: AiUsage }> {
+): Promise<{ moments: Moment[]; usage: AiUsage; used: { apiKey: string; model: string } }> {
   const after = FALLBACK_CHAIN.indexOf(model);
   const models = [model, ...(after >= 0 ? FALLBACK_CHAIN.slice(after + 1) : FALLBACK_CHAIN.slice(1))];
   let lastError: unknown;
@@ -206,7 +257,7 @@ export async function pickMoments(
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const { moments, input, output } = await askGemini(request, apiKey, m);
-        return { moments, usage: { model: m, paid, input, output } };
+        return { moments, usage: { model: m, paid, input, output }, used: { apiKey, model: m } };
       } catch (err) {
         lastError = err;
         if (!(err instanceof ModelProblem)) throw err;
@@ -217,7 +268,7 @@ export async function pickMoments(
       }
     }
   }
-  if (backup) return pickMoments(request, backup);
+  if (backup) return firstPass(request, backup);
   if (!(lastError instanceof ModelProblem)) throw lastError;
   throw allQuota ? new DailyLimit() : new RateLimited();
 }
@@ -260,18 +311,32 @@ async function askGemini(
   const transcript = segments.map((s, i) => `${i} [${clock(s.start)}]${s.energy ? ' (!)' : ''} ${s.text}`).join('\n');
   const length = clock(segments[segments.length - 1]!.end);
   const prompt = `Episode length: ${length}. Pick the ${count} best clips.\n\nTranscript:\n${transcript}`;
+  const { json, input, output } = await callGemini(SYSTEM_PROMPT, prompt, RESPONSE_SCHEMA, apiKey, model, GEMINI_TIMEOUT_MS, 0.4);
+  const raw = (json as { moments?: unknown }).moments;
+  return { moments: toMoments(Array.isArray(raw) ? raw : [], segments, count), input, output };
+}
 
+/** One request to Gemini for a JSON answer in `schema`. Throws ModelProblem when another model might do. */
+async function callGemini(
+  system: string,
+  prompt: string,
+  schema: object,
+  apiKey: string,
+  model: string,
+  timeoutMs: number,
+  temperature: number,
+): Promise<{ json: unknown; input: number; output: number }> {
   let res: Response;
   try {
     res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       // A model that hangs moves on to the next one (no second try), so the step stays within its time.
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.4 },
+        generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature },
       }),
     });
   } catch (err) {
@@ -295,19 +360,104 @@ async function askGemini(
   const input = usage.promptTokenCount ?? 0;
   // Thinking is billed as output.
   const output = (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0);
-  let raw: unknown;
   try {
-    raw = (JSON.parse(text) as { moments?: unknown }).moments;
+    return { json: JSON.parse(text), input, output };
   } catch {
     console.error('Gemini returned non-JSON', model, input, output, text.slice(0, 500));
     throw new MomentsError('Our AI gave an answer we couldn’t read. Please try again.', 502);
   }
-  return { moments: toMoments(Array.isArray(raw) ? raw : [], segments, count), input, output };
+}
+
+// The review must finish inside this much time from the start of the request, and is only tried with at
+// least MIN_REVIEW_MS left (the server stops a request after about 150 s).
+const REVIEW_DEADLINE_MS = 110_000;
+const MIN_REVIEW_MS = 25_000;
+
+const REVIEW_PROMPT = `You are the head editor of a team that turns podcast episodes into short vertical clips for
+TikTok, Instagram Reels and YouTube Shorts. A junior editor suggested the clips below from one episode. You decide
+which ones get published. Be strict: only clips a stranger scrolling past would stop for and watch to the end.
+
+Judge each clip exactly as it plays (the text below is everything the viewer hears):
+1. Hook (most important): do the first words stop the scroll on their own, with no context?
+2. Stands alone: does a stranger understand it without the rest of the episode?
+3. Payoff: does it end on a line that lands, not trail off or start a new topic?
+4. Energy: real emotion, laughter, conflict or a vivid story. Lines marked (!) were said with energy.
+
+For each clip give:
+- id: the clip's number as given.
+- keep: true only if you would publish it.
+- score: 0 to 100: hook 40, stands alone 20, payoff 25, energy 15. Be strict and spread the scores out; a clip
+  with a weak first sentence never scores above 60.
+- reason: one short sentence on why it will perform (or why not), in the language the episode is spoken in.`;
+
+const REVIEW_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    reviews: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { id: { type: 'INTEGER' }, keep: { type: 'BOOLEAN' }, score: { type: 'INTEGER' }, reason: { type: 'STRING' } },
+        required: ['id', 'keep', 'score', 'reason'],
+        propertyOrdering: ['id', 'keep', 'score', 'reason'],
+      },
+    },
+  },
+  required: ['reviews'],
+};
+
+/** What a viewer hears in a moment: its lines, without the stretches it skips, (!) on lively ones. */
+function heard(m: Moment, segments: Segment[]): string {
+  const skipped = (s: Segment) => (m.skips ?? []).some((k) => s.start >= k.start - 0.01 && s.end <= k.end + 0.01);
+  return segments
+    .filter((s) => s.end > m.start + 0.01 && s.start < m.end - 0.01 && !skipped(s))
+    .map((s) => `${s.energy ? '(!) ' : ''}${s.text}`)
+    .join(' ');
+}
+
+/**
+ * The second pass: a stricter editor judges every suggested moment as it plays, then the best `count` are
+ * kept, published ones first, each with the review's score and reason. One try on the model that answered
+ * the first pass; any problem throws, and the caller falls back to the first pass.
+ */
+export async function reviewMoments(
+  moments: Moment[],
+  segments: Segment[],
+  count: number,
+  { apiKey, model }: { apiKey: string; model: string },
+  timeoutMs: number,
+): Promise<{ moments: Moment[]; input: number; output: number }> {
+  const list = moments
+    .map((m, i) => `Clip ${i} (${Math.round(keptSeconds(m))} s). Title: ${m.title}. Headline: ${m.headline ?? ''}\n${heard(m, segments)}`)
+    .join('\n\n');
+  const { json, input, output } = await callGemini(REVIEW_PROMPT, `Clips:\n\n${list}`, REVIEW_SCHEMA, apiKey, model, timeoutMs, 0.2);
+  const reviews = (json as { reviews?: unknown }).reviews;
+  if (!Array.isArray(reviews)) throw new Error('no reviews');
+  const byId = new Map<number, { keep: boolean; score: number; reason: string }>();
+  for (const r of reviews as { id?: unknown; keep?: unknown; score?: unknown; reason?: unknown }[]) {
+    const id = Number(r?.id);
+    if (!Number.isInteger(id) || id < 0 || id >= moments.length || byId.has(id)) continue;
+    byId.set(id, {
+      keep: r.keep === true,
+      score: Math.max(0, Math.min(100, Math.round(Number(r.score) || 0))),
+      reason: String(r.reason ?? '').trim(),
+    });
+  }
+  // Too few verdicts to trust: use the first pass instead.
+  if (byId.size < moments.length / 2) throw new Error(`only ${byId.size} of ${moments.length} reviewed`);
+  const judged = moments.map((m, i) => {
+    const r = byId.get(i);
+    // Not reviewed: kept below every reviewed one.
+    return { m: r ? { ...m, score: r.score, reason: r.reason || m.reason } : { ...m, score: Math.min(m.score, 40) }, keep: r?.keep ?? false };
+  });
+  judged.sort((x, y) => Number(y.keep) - Number(x.keep) || y.m.score - x.m.score);
+  return { moments: judged.slice(0, count).map((j) => j.m), input, output };
 }
 
 interface RawMoment {
   startLine: number;
   endLine: number;
+  cutLines: unknown;
   title: string;
   hook: string;
   headline: string;
@@ -336,7 +486,8 @@ function fromClip(items: unknown, text: string, maxWords: number, max: number): 
 
 /**
  * Turns the model's line numbers into clip times, and enforces what the prompt only asks for:
- * valid lines, 15–90 seconds, no overlaps, at most `count`, best first.
+ * valid lines, 15–90 seconds of what plays, at most MAX_SKIPS stretches left out, no overlaps, at most
+ * `count`, best first.
  */
 export function toMoments(raw: unknown[], segments: Segment[], count: number): Moment[] {
   const last = segments.length - 1;
@@ -347,22 +498,48 @@ export function toMoments(raw: unknown[], segments: Segment[], count: number): M
     let a = lineOf(item.startLine);
     let b = lineOf(item.endLine);
     if (b < a) [a, b] = [b, a];
+    const cuts = new Set(
+      (Array.isArray(item.cutLines) ? item.cutLines : []).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= last),
+    );
+    // The stretches left out between a and b (never a or b themselves), as runs of whole lines.
+    const runs = () => {
+      const out: [number, number][] = [];
+      for (let i = a + 1; i < b; i++) {
+        if (!cuts.has(i)) continue;
+        const prev = out[out.length - 1];
+        if (prev && prev[1] === i - 1) prev[1] = i;
+        else out.push([i, i]);
+      }
+      return out.slice(0, MAX_SKIPS);
+    };
+    // A run is left out from the end of the line before it to the start of the line after it.
+    const skips = (): TimeRange[] => runs().map(([f, t]) => ({ start: segments[f - 1]!.end, end: segments[t + 1]!.start }));
     const span = () => segments[b]!.end - segments[a]!.start;
+    const plays = () => keptSeconds({ start: segments[a]!.start, end: segments[b]!.end, skips: skips() });
+    const fits = (from: number, to: number) => {
+      const [oa, ob] = [a, b];
+      [a, b] = [from, to];
+      const ok = plays() <= MAX_CLIP_SECONDS && span() <= MAX_SPAN_SECONDS;
+      [a, b] = [oa, ob];
+      return ok;
+    };
     // Too long: drop lines from the end. Too short: add lines after, then before.
-    while (span() > MAX_CLIP_SECONDS && b > a) b--;
-    while (span() < MIN_CLIP_SECONDS && b < last && segments[b + 1]!.end - segments[a]!.start <= MAX_CLIP_SECONDS) b++;
-    while (span() < MIN_CLIP_SECONDS && a > 0 && segments[b]!.end - segments[a - 1]!.start <= MAX_CLIP_SECONDS) a--;
+    while ((plays() > MAX_CLIP_SECONDS || span() > MAX_SPAN_SECONDS) && b > a) b--;
+    while (plays() < MIN_CLIP_SECONDS && b < last && fits(a, b + 1)) b++;
+    while (plays() < MIN_CLIP_SECONDS && a > 0 && fits(a - 1, b)) a--;
     // Whisper's lines can break in the middle of a sentence: take the next line (or two) so the speaker finishes.
     for (let more = 0; more < 2 && b < last && !SENTENCE_END.test(segments[b]!.text.trim()); more++) {
       const next = segments[b + 1]!;
-      if (next.start - segments[b]!.end > 1.2 || next.end - segments[b]!.end > 12 || next.end - segments[a]!.start > MAX_CLIP_SECONDS) break;
+      if (next.start - segments[b]!.end > 1.2 || next.end - segments[b]!.end > 12 || !fits(a, b + 1)) break;
       b++;
     }
     // A single Whisper line can be up to 30 s, so trimming by lines can't always reach the range.
-    if (span() < MIN_CLIP_SECONDS) continue;
+    if (plays() < MIN_CLIP_SECONDS) continue;
+    const left = skips();
     const start = segments[a]!.start;
-    const end = Math.min(segments[b]!.end, start + MAX_CLIP_SECONDS);
-    const text = segments.slice(a, b + 1).map((s) => s.text).join(' ');
+    const end = left.length ? segments[b]!.end : Math.min(segments[b]!.end, start + MAX_CLIP_SECONDS);
+    const out = new Set(runs().flatMap(([f, t]) => Array.from({ length: t - f + 1 }, (_, k) => f + k)));
+    const text = segments.slice(a, b + 1).filter((_, k) => !out.has(a + k)).map((s) => s.text).join(' ');
     const headline = String(item.headline ?? '').replace(/["“”#]/g, '').trim().split(/\s+/).slice(0, 9).join(' ');
     candidates.push({
       headline: headline || undefined,
@@ -370,6 +547,7 @@ export function toMoments(raw: unknown[], segments: Segment[], count: number): M
       punchIns: fromClip(item.punchIns, text, 6, 3),
       start,
       end,
+      ...(left.length ? { skips: left } : {}),
       title: String(item.title ?? '').trim() || 'Untitled moment',
       hook: String(item.hook ?? '').trim() || segments[a]!.text,
       reason: String(item.reason ?? '').trim(),

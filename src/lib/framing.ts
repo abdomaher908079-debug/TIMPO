@@ -77,7 +77,7 @@ export async function autoFrame(
     const aspect = track.displayWidth / track.displayHeight;
     // Already vertical: nothing to frame.
     if (aspect <= 9 / 16 + 0.01) {
-      clips.forEach((_, i) => onClip(i, { layout: 'fill', cropX: 50 }));
+      clips.forEach((_, i) => onClip(i, { layout: 'fill', cropX: 50, split: undefined }));
       return;
     }
     const crop = 9 / 16 / aspect;
@@ -139,6 +139,8 @@ async function look(t: number, frame: HTMLCanvasElement | OffscreenCanvas, faces
   const found: Face[] = boxes.map((b) => ({
     left: b.left,
     right: b.right,
+    top: b.top,
+    bottom: b.bottom,
     mouth: reader ? readMouth(reader, frame, b, tools) : null,
   }));
   return { t, faces: found, sig: signature(frame, tools) };

@@ -2,18 +2,24 @@
 // no browser APIs. Framed the way an editor would: one person at a time, a still camera that only
 // reframes when someone really moves away, and clean cuts on camera cuts and when the speaker changes.
 // The whole clip is known before deciding, so cuts land when things happen, never after.
-import type { FramingTrack, Layout } from './clips';
+import type { FramingTrack, Layout, SplitFraming } from './clips';
 
 export interface Framing {
   layout: Layout;
   cropX: number;
   track?: FramingTrack;
+  // Set when two people sit too far apart for one crop for most of the clip (always present, so a clip
+  // framed again loses an old one).
+  split: SplitFraming | undefined;
 }
 
 export interface Face {
   // Horizontal position and width, as shares (0..1) of the picture's width.
   left: number;
   right: number;
+  // Vertical position, as shares (0..1) of the picture's height (absent in older looks).
+  top?: number;
+  bottom?: number;
   // How open the mouth is (0..1), when the face was close enough to read; null otherwise.
   mouth: number | null;
 }
@@ -46,6 +52,15 @@ const DRIFT = 0.28;
 const DRIFT_SECONDS = 0.6;
 // Faces within this share of the crop's width can be framed together.
 const GROUP_FITS = 0.85;
+// A split screen is offered when two people who don't fit one crop are on screen this share of the clip.
+const SPLIT_SHARE = 0.7;
+// Each half of a split screen shows about this many face heights of the picture (head and shoulders), within
+// these bounds (shares of the picture's height).
+const SPLIT_FACES = 3.4;
+const SPLIT_MIN = 0.4;
+const SPLIT_MAX = 1;
+// The face sits this far above the middle of its half (a share of the half's height), leaving room below.
+const SPLIT_FACE_RAISE = 0.15;
 
 /** The crop position (0..100) that centers `center` (0..1 of the width) in a crop `crop` wide. */
 export const cropFor = (center: number, crop: number) =>
@@ -229,7 +244,8 @@ function holdSteady(shot: Look[], subject: (number | null)[], from: number, to: 
 export function plan(looks: Look[], crop: number, start: number, end: number): Framing {
   const withFaces = looks.filter((l) => l.faces.length).length;
   // Mostly no faces (slides, screens, B-roll): a crop would likely cut off what matters.
-  if (!looks.length || withFaces < looks.length * 0.5) return { layout: 'fit', cropX: 50 };
+  if (!looks.length || withFaces < looks.length * 0.5) return { layout: 'fit', cropX: 50, split: undefined };
+  const split = splitFor(looks, crop);
 
   const keys: FramingTrack = [];
   let previous: Look | null = null;
@@ -283,5 +299,39 @@ export function plan(looks: Look[], crop: number, start: number, end: number): F
   });
   const main = [...time.entries()].sort((a, b) => b[1] - a[1])[0]![0];
   const steady = track.reduce((best, k) => (Math.abs(k.x - main) < Math.abs(best.x - main) ? k : best), track[0]!).x;
-  return { layout: 'fill', cropX: steady, track: track.length > 1 ? track : undefined };
+  return { layout: split ? 'split' : 'fill', cropX: steady, track: track.length > 1 ? track : undefined, split };
+}
+
+/**
+ * A split screen for the clip, when for most of it exactly two people sit too far apart to be framed together
+ * (an interview filmed wide): the left person on top, the right one below, each framed head and shoulders.
+ */
+export function splitFor(looks: Look[], crop: number): SplitFraming | undefined {
+  let apart = 0;
+  let best: { shot: Look[]; pair: Person[] } | null = null;
+  for (const shot of shots(looks)) {
+    const crowd = people(shot);
+    if (crowd.length !== 2) continue;
+    const box = (p: Person, side: 'left' | 'right') => median(p.faces.filter((f): f is Face => !!f).map((f) => f[side]));
+    const together = Math.max(box(crowd[0]!, 'right'), box(crowd[1]!, 'right')) - Math.min(box(crowd[0]!, 'left'), box(crowd[1]!, 'left')) <= crop * GROUP_FITS;
+    if (together) continue;
+    apart += shot.length;
+    if (!best || shot.length > best.shot.length) best = { shot, pair: crowd };
+  }
+  if (!best || apart < looks.length * SPLIT_SHARE) return undefined;
+  const where = (p: Person) => {
+    const faces = p.faces.filter((f): f is Face => !!f && f.top != null && f.bottom != null);
+    if (!faces.length) return null;
+    return {
+      x: median(faces.map(centerOf)),
+      y: median(faces.map((f) => (f.top! + f.bottom!) / 2)),
+      h: median(faces.map((f) => f.bottom! - f.top!)),
+    };
+  };
+  const [a, b] = best.pair.map(where);
+  if (!a || !b) return undefined;
+  const size = Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, SPLIT_FACES * Math.max(a.h, b.h)));
+  const [left, right] = a.x <= b.x ? [a, b] : [b, a];
+  const at = (p: typeof a) => ({ x: p.x, y: Math.min(1, p.y + SPLIT_FACE_RAISE * size) });
+  return { top: at(left), bottom: at(right), size };
 }
