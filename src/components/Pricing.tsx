@@ -71,7 +71,7 @@ export default function Pricing() {
         </p>
       </div>
       <p className="muted small pricing-note">
-        Prices in US dollars. Pay with crypto (USDT and more) through our payment partner NOWPayments. Plans are
+        Prices in US dollars. Pay with USDT through our payment partner NOWPayments. Plans are
         paid upfront for a month or a year and don't renew on their own, so there's nothing to cancel. Paid plans aren't
         available in the Russian Federation.
       </p>

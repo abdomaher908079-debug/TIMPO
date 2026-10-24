@@ -3,14 +3,12 @@
 //     → a new order and its payment: the exact amount to send, the address, until when the price holds.
 //   { action: 'status', order } → that order (the signed-in user's own), its payment checked with
 //     NOWPayments, and applied if it's paid (in case NOWPayments' notice is late or lost).
-//   { action: 'invoice', kind, plan, billing } → NOWPayments' own payment page, for any other coin.
 // Called only through the site's /api/create-invoice (functions/api/create-invoice.ts), which adds the
 // buyer's country from Cloudflare and the shared GEO_SECRET. Paid plans aren't sold in Russia, so a
 // missing or Russian country is refused here too.
 // Secrets: NOWPAYMENTS_API_KEY, GEO_SECRET. Deploy: supabase functions deploy create-invoice
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { canBuyFrom, NOT_SOLD_HERE } from '../_shared/countries.ts';
-import { SITE } from '../_shared/email.ts';
 import { type Order, settle } from '../_shared/orders.ts';
 import { type Billing, CRYPTO_MIN_USD, MAX_EXTRA_SEATS, PACK, PRICE_USD, SEAT_USD, seatsForRest } from '../_shared/plans.ts';
 
@@ -20,7 +18,7 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 
 const API = 'https://api.nowpayments.io/v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// The coins our checkout page offers (NOWPayments' codes); anything else goes through 'invoice'.
+// The coins our checkout page offers (NOWPayments' codes): USDT only, whose sending fees fit SHORT_OK_USD.
 const COINS = ['usdttrc20', 'usdtbsc'];
 
 function json(body: unknown, status = 200): Response {
@@ -75,7 +73,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: 'Sign in first.' }, 401);
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const action = String(body.action ?? 'invoice');
+    const action = String(body.action ?? '');
 
     if (action === 'status') {
       const id = String(body.order ?? '');
@@ -93,7 +91,7 @@ Deno.serve(async (req) => {
       }
       return json({ order: view(o) });
     }
-    if (action !== 'start' && action !== 'invoice') return json({ error: 'Unknown request.' }, 400);
+    if (action !== 'start') return json({ error: 'Unknown request.' }, 400);
 
     // Members of a team whose owner has Studio use the owner's plan; only the owner buys. (A team whose owner's
     // Studio has ended doesn't count, as in workspace_of.)
@@ -156,7 +154,7 @@ Deno.serve(async (req) => {
       };
     }
     const coin = String(body.coin ?? '');
-    if (action === 'start' && !COINS.includes(coin)) return json({ error: 'Choose how to pay.' }, 400);
+    if (!COINS.includes(coin)) return json({ error: 'Choose how to pay.' }, 400);
 
     const { data: row, error } = await admin
       .from('crypto_orders')
@@ -172,22 +170,6 @@ Deno.serve(async (req) => {
       ipn_callback_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/nowpayments-webhook`,
       // No fixed rate: NOWPayments' minimum with a fixed rate (about $20 in USDT) is above our $14–15 prices.
     };
-
-    if (action === 'invoice') {
-      const res = await fetch(`${API}/invoice`, {
-        method: 'POST',
-        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...common, success_url: `${SITE}/pay?order=${row.id}`, cancel_url: `${SITE}/pricing` }),
-      });
-      const invoice = (await res.json().catch(() => ({}))) as { id?: string | number; invoice_url?: string };
-      if (!res.ok || !invoice.invoice_url) {
-        console.error('NOWPayments invoice', res.status, invoice);
-        await admin.from('crypto_orders').update({ status: 'failed' }).eq('id', row.id);
-        return json({ error: "Couldn't start the payment. Try again in a minute." }, 502);
-      }
-      await admin.from('crypto_orders').update({ invoice_id: String(invoice.id ?? '') }).eq('id', row.id);
-      return json({ url: invoice.invoice_url, order: row.id });
-    }
 
     const res = await fetch(`${API}/payment`, {
       method: 'POST',

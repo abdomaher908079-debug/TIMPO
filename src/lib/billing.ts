@@ -75,12 +75,6 @@ export async function paymentStatus(order: string): Promise<PayOrder> {
   return (await payApi<{ order: PayOrder }>({ action: 'status', order })).order;
 }
 
-/** Any other coin: NOWPayments' own payment page, which comes back to /pay?order=… afterwards. */
-export async function openOtherCoins(purchase: Purchase): Promise<void> {
-  const { url } = await payApi<{ url: string }>({ action: 'invoice', ...purchase });
-  window.location.assign(url);
-}
-
 /** Our checkout page for a plan (a month or a year, paid upfront) or an hour pack. */
 export function checkoutPath(purchase: Purchase): string {
   if (purchase.kind === 'pack') return '/pay?pack=1';
