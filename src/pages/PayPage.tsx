@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
-import { checkoutPath, openOtherCoins, paymentsReady, paymentStatus, startPayment, type PayOrder, type Purchase } from '../lib/billing';
+import { checkoutPath, paymentsReady, paymentStatus, startPayment, type PayOrder, type Purchase } from '../lib/billing';
 import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { planById } from '../lib/plans';
 import { CRYPTO_MIN_USD, MAX_EXTRA_SEATS, PACK, paidEnough, PRICE_USD, receivedUsd, SEAT_USD, seatsForRest, TEAM_INCLUDED } from '../../supabase/functions/_shared/plans';
@@ -296,16 +296,6 @@ export default function PayPage() {
     }
   }
 
-  async function otherCoins() {
-    if (!purchase) return;
-    setBusy(true);
-    setError(null);
-    openOtherCoins(purchase).catch((e: Error) => {
-      setError(e.message);
-      setBusy(false);
-    });
-  }
-
   function startOver() {
     setOrder(null);
     setError(null);
@@ -408,11 +398,6 @@ export default function PayPage() {
           <p className="pay-aside">
             <button type="button" className="link-button" onClick={() => setStep('learn')}>
               New to crypto? How to get USDT
-            </button>
-          </p>
-          <p className="pay-aside">
-            <button type="button" className="link-button" disabled={busy} onClick={() => void otherCoins()}>
-              Pay with another coin
             </button>
           </p>
           {error && <p className="error">{error}</p>}
