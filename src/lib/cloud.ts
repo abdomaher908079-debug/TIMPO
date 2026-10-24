@@ -1,5 +1,5 @@
 import { ALL_FORMATS, AdtsOutputFormat, BlobSource, BufferTarget, Conversion, getFirstEncodableAudioCodec, Input, OggOutputFormat, Output } from 'mediabunny';
-import { isPhone } from './device';
+import { isPhone, speechGpu } from './device';
 import type { Moment } from './moments';
 import type { Segment } from './speech';
 import { ApiError, getAccessToken, supabase } from './supabase';
@@ -18,12 +18,7 @@ const PARALLEL = 3;
  */
 export async function deviceLooksSlow(): Promise<boolean> {
   if (isPhone) return true;
-  try {
-    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
-    return !(await gpu?.requestAdapter());
-  } catch {
-    return true;
-  }
+  return !(await speechGpu());
 }
 
 export interface CloudJob {
