@@ -15,6 +15,8 @@ export const CAPTION_STYLES: { id: CaptionStyleId; name: string }[] = [
 export const MIN_CLIP_SECONDS = 5;
 // YouTube Shorts allows up to 3 minutes; TikTok and Reels allow more.
 export const MAX_CLIP_SECONDS = 180;
+// When a clip ends in the middle of a sentence, the export looks this far past its end for the sentence's end.
+export const FINISH_SECONDS = 4;
 
 /**
  * How a clip fills the vertical frame:

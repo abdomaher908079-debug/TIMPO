@@ -1,7 +1,7 @@
 // A clip's sound, made ready to post: as loud as TikTok, Reels and Shorts expect, without distortion,
 // with no click where it's cut, and fading with the picture when the clip fades in or out.
 import { AudioSample, AudioSampleSink, type Input } from 'mediabunny';
-import type { CaptionGroup } from './clips';
+import { FINISH_SECONDS, MAX_CLIP_SECONDS, type CaptionGroup } from './clips';
 
 // Social platforms play everything at about -14 LUFS; quieter clips sound weak next to other posts.
 const TARGET_DB = -14;
@@ -93,19 +93,42 @@ export function processSound(sample: AudioSample, gain: number, duration: number
   return out;
 }
 
+// A word that ends a sentence, even with a closing quote or bracket after it (also Arabic, Chinese and Japanese marks).
+const SENTENCE_END = /[.?!…؟。！？]["'”’)\]]*$/;
+// Words further apart than this aren't one sentence any more (another speaker, or a pause).
+const SENTENCE_GAP = 1.2;
+
 /**
  * The clip's start and end, tidied with the exact word times: dead air before the first word and after
- * the last one is cut (keeping a breath), and a last word running to the very end gets room to finish.
+ * the last one is cut (keeping a breath), a last word running to the very end gets room to finish, and a
+ * sentence still going at the end is finished when it ends within a few seconds (the speaker's last words
+ * must not be cut off). `captions` should reach a few seconds past the clip's end for that.
  */
 export function cleanEdges(start: number, end: number, captions: CaptionGroup[], videoEnd: number): { start: number; end: number } {
-  const words = captions.flatMap((g) => g.words).filter((w) => w.end > start && w.start < end);
+  const all = captions.flatMap((g) => g.words);
+  const words = all.filter((w) => w.end > start && w.start < end);
   if (!words.length) return { start, end };
   const first = words[0]!;
   const last = words[words.length - 1]!;
   let s = start;
   let e = end;
   if (first.start - start > 0.6) s = first.start - 0.15;
-  if (end - last.end > 0.8) e = last.end + 0.35;
+  const finish = SENTENCE_END.test(last.text) ? null : sentenceEnd(all, last, end, s);
+  if (finish) e = Math.min(videoEnd, finish.end + 0.35);
+  else if (end - last.end > 0.8) e = last.end + 0.35;
   else if (last.end > end - 0.12) e = Math.min(videoEnd, Math.max(end, last.end + 0.25));
   return e - s >= 3 ? { start: s, end: e } : { start, end };
+}
+
+/** The word that ends the sentence `last` is in, if it follows without a break within FINISH_SECONDS of `end`. */
+function sentenceEnd(all: CaptionGroup['words'], last: CaptionGroup['words'][number], end: number, start: number) {
+  let prev = last;
+  for (const w of all) {
+    if (w.start < last.end - 1e-6 || w === last) continue;
+    if (w.start - prev.end > SENTENCE_GAP || w.start > end + FINISH_SECONDS) return null;
+    if (w.end - start > MAX_CLIP_SECONDS) return null;
+    if (SENTENCE_END.test(w.text)) return w;
+    prev = w;
+  }
+  return null;
 }

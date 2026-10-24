@@ -5,7 +5,7 @@ import { useAccount } from '../lib/account';
 import { useAuth } from '../lib/auth';
 import { useWakeLock } from '../lib/wakeLock';
 import { ensureFont, KIT_LIMITS, listKits, type BrandKit } from '../lib/brandKits';
-import { alignWords, captionLook, cropAt, proParts, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
+import { alignWords, captionLook, cropAt, FINISH_SECONDS, proParts, clock, estimateWords, groupWords, rangeKey, type CaptionGroup, type Clip } from '../lib/clips';
 import type { Segment, WordTimer } from '../lib/speech';
 
 interface Props {
@@ -249,8 +249,10 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       setStatus(i, { state: 'timing' });
       try {
         if (!timerRef.current) timerRef.current = (await import('../lib/speech')).createWordTimer(quality);
-        const timedWords = await timerRef.current.words(file, clip.start, clip.end);
-        const exact = groupWords(alignWords(estimateWords(segments, clip.start, clip.end), timedWords));
+        // A few seconds past the end too, so a sentence still going there can be finished (see cleanEdges).
+        const until = clip.end + FINISH_SECONDS;
+        const timedWords = await timerRef.current.words(file, clip.start, until);
+        const exact = groupWords(alignWords(estimateWords(segments, clip.start, until), timedWords));
         groups = exact;
         setTimed((t) => ({ ...t, [key]: exact }));
       } catch (err) {

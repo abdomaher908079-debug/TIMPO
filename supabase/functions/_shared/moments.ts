@@ -35,6 +35,8 @@ export interface PickMomentsRequest {
 
 export const MIN_CLIP_SECONDS = 15;
 export const MAX_CLIP_SECONDS = 90;
+// A line that ends a sentence (also Arabic, Chinese and Japanese marks), with an optional closing quote or bracket.
+const SENTENCE_END = /[.?!…؟。！？]["'”’)\]]*$/;
 export const MAX_COUNT = 30;
 // About 4 hours of speech. Keeps a single request well inside the free tier's token limits.
 export const MAX_TRANSCRIPT_CHARS = 400_000;
@@ -350,6 +352,12 @@ export function toMoments(raw: unknown[], segments: Segment[], count: number): M
     while (span() > MAX_CLIP_SECONDS && b > a) b--;
     while (span() < MIN_CLIP_SECONDS && b < last && segments[b + 1]!.end - segments[a]!.start <= MAX_CLIP_SECONDS) b++;
     while (span() < MIN_CLIP_SECONDS && a > 0 && segments[b]!.end - segments[a - 1]!.start <= MAX_CLIP_SECONDS) a--;
+    // Whisper's lines can break in the middle of a sentence: take the next line (or two) so the speaker finishes.
+    for (let more = 0; more < 2 && b < last && !SENTENCE_END.test(segments[b]!.text.trim()); more++) {
+      const next = segments[b + 1]!;
+      if (next.start - segments[b]!.end > 1.2 || next.end - segments[b]!.end > 12 || next.end - segments[a]!.start > MAX_CLIP_SECONDS) break;
+      b++;
+    }
     // A single Whisper line can be up to 30 s, so trimming by lines can't always reach the range.
     if (span() < MIN_CLIP_SECONDS) continue;
     const start = segments[a]!.start;
