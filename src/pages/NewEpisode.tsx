@@ -33,7 +33,8 @@ type State =
   // `notice`: why cloud listening wasn't possible (e.g. the plan's limit).
   | { kind: 'ready'; file: File; info: EpisodeInfo; notice?: string }
   // `detail`: the technical reason, shown small so people can send it to us.
-  | { kind: 'error'; message: string; detail?: string };
+  // `retry`: listening on this device failed, so the same episode can go to the cloud instead.
+  | { kind: 'error'; message: string; detail?: string; retry?: { file: File; info: EpisodeInfo } };
 
 function restored(project: Project, file: File): State {
   const { info, segments, clips } = project;
@@ -316,8 +317,11 @@ export default function NewEpisode() {
       console.error(err);
       setState({
         kind: 'error',
-        message: "We couldn't listen to this episode. Try the latest Chrome or Edge, or export the episode again as MP4 (H.264 + AAC).",
+        message: cloudAvailable
+          ? "This device couldn't listen to the episode. Let our cloud listen instead, it only takes the audio."
+          : "We couldn't listen to this episode. Try the latest Chrome or Edge, or export the episode again as MP4 (H.264 + AAC).",
         detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+        retry: cloudAvailable ? { file, info } : undefined,
       });
       return;
     }
@@ -627,6 +631,11 @@ export default function NewEpisode() {
             </small>
           )}
         </p>
+      )}
+      {state.kind === 'error' && state.retry && (
+        <button type="button" className="btn btn-primary" onClick={() => void findClipsInCloud(state.retry!.file, state.retry!.info)}>
+          Find my best clips in the cloud
+        </button>
       )}
 
       {ready && (

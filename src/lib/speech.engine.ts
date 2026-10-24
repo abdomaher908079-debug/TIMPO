@@ -4,7 +4,6 @@ import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from '@hugging
 import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import type { Word, WorkerRequest, WorkerResponse } from './speech';
-import { isPhone } from './device';
 
 // English-only Whisper: more accurate on English than the multilingual models of the same size.
 // The "timestamped" builds have the extra outputs needed for exact word times (clip captions), so
@@ -73,7 +72,7 @@ async function gpuAdapter(): Promise<GpuAdapter | null> {
   }
 }
 
-async function load(quality: 'quick' | 'best', safe = false, timingOnly = false) {
+async function load(quality: 'quick' | 'best', safe = false, timingOnly = false, isPhone = false) {
   let downloaded = false;
   const progress_callback = (p: { status: string; loaded?: number; total?: number }) => {
     if (p.status !== 'progress_total' || !p.total) return;
@@ -183,7 +182,7 @@ const round = (t: number) => Math.round(t * 100) / 100;
 export async function handle(e: MessageEvent<WorkerRequest>) {
   const msg = e.data;
   try {
-    if (msg.type === 'load') await load(msg.quality, msg.safe, msg.timingOnly);
+    if (msg.type === 'load') await load(msg.quality, msg.safe, msg.timingOnly, msg.phone);
     else if (msg.type === 'words') await words(msg);
     else await transcribe(msg);
   } catch (err) {

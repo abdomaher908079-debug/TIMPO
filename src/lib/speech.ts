@@ -1,5 +1,6 @@
 import type { Segment } from '../../supabase/functions/_shared/moments';
 import { speechChunks, SPEECH_SAMPLE_RATE, type SpeechChunk } from './audio';
+import { isPhone } from './device';
 import { LoudnessTrack, markEnergy } from './energy';
 
 export type { Segment };
@@ -14,7 +15,8 @@ export interface Word {
 export type WorkerRequest =
   // `safe`: processor only, one thread. Used after the recognizer crashed on this device (e.g. a phone).
   // `timingOnly`: only word times are needed (captions), so phones can use a smaller model.
-  | { type: 'load'; quality: 'quick' | 'best'; safe?: boolean; timingOnly?: boolean }
+  // `phone`: the page's isPhone, which also catches phones in "desktop site" mode.
+  | { type: 'load'; quality: 'quick' | 'best'; safe?: boolean; timingOnly?: boolean; phone: boolean }
   | { type: 'transcribe'; id: number; start: number; samples: Float32Array; final: boolean }
   | { type: 'words'; id: number; samples: Float32Array };
 
@@ -89,7 +91,7 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     };
     // An error with no message usually means the worker's own file failed to load.
     w.onerror = (e) => crashed(w, e.message || `Speech recognition stopped unexpectedly [${e.type}${e.filename ? ` ${e.filename.split('/').pop()}:${e.lineno}` : ''}]`);
-    w.postMessage({ type: 'load', quality, safe: safeMode } satisfies WorkerRequest);
+    w.postMessage({ type: 'load', quality, safe: safeMode, phone: isPhone } satisfies WorkerRequest);
     return w;
   };
   let worker = startWorker();
@@ -190,7 +192,7 @@ export function createWordTimer(quality: 'quick' | 'best'): WordTimer {
       };
     });
     loaded.catch(() => {});
-    w.postMessage({ type: 'load', quality, safe: safeMode, timingOnly: true } satisfies WorkerRequest);
+    w.postMessage({ type: 'load', quality, safe: safeMode, timingOnly: true, phone: isPhone } satisfies WorkerRequest);
     worker = w;
   };
 
