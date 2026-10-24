@@ -36,6 +36,28 @@ const PIECE_SECONDS = 60;
 // Set once the recognizer has crashed while loading on this device; later loads go straight to safe mode.
 let safeMode = false;
 
+// A recognizer started before an episode is chosen, so its download (the slowest part of the first episode)
+// happens while people pick their file. transcribeEpisode takes it over.
+let spare: { worker: Worker; quality: 'quick' | 'best'; messages: WorkerResponse[] } | null = null;
+
+/** Starts downloading and loading the speech model now, for the episode about to be chosen on this device. */
+export function warmSpeech(quality: 'quick' | 'best') {
+  if (safeMode || spare?.quality === quality) return;
+  spare?.worker.terminate();
+  const worker = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
+  const messages: WorkerResponse[] = [];
+  worker.onmessage = (e: MessageEvent<WorkerResponse>) => messages.push(e.data);
+  worker.onerror = (e) => messages.push({ type: 'error', message: e.message || 'Speech recognition stopped unexpectedly' });
+  worker.postMessage({ type: 'load', quality, safe: false, phone: isPhone } satisfies WorkerRequest);
+  spare = { worker, quality, messages };
+}
+
+/** Frees the recognizer warmSpeech started, if no episode took it. */
+export function releaseSpeech() {
+  spare?.worker.terminate();
+  spare = null;
+}
+
 export interface TranscribeOptions {
   signal: AbortSignal;
   // The plan's AI quality.
@@ -77,7 +99,11 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     fail(new Error(`${message} (while ${stage}${safeMode ? ', safe mode' : ''})`));
   };
   const startWorker = () => {
-    const w = new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
+    // A recognizer already loading since the page opened (warmSpeech) saves the wait; it can't be reused in safe mode.
+    const warm = spare && spare.quality === quality && !safeMode ? spare : null;
+    if (!warm) releaseSpeech();
+    spare = null;
+    const w = warm?.worker ?? new Worker(new URL('./speech.worker.ts', import.meta.url), { type: 'module' });
     w.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const msg = e.data;
       if (msg.type === 'loading') onLoading?.(msg.loaded, msg.total);
@@ -91,7 +117,12 @@ export async function transcribeEpisode(file: File, { signal, quality, onLoading
     };
     // An error with no message usually means the worker's own file failed to load.
     w.onerror = (e) => crashed(w, e.message || `Speech recognition stopped unexpectedly [${e.type}${e.filename ? ` ${e.filename.split('/').pop()}:${e.lineno}` : ''}]`);
-    w.postMessage({ type: 'load', quality, safe: safeMode, phone: isPhone } satisfies WorkerRequest);
+    if (warm) {
+      // What it said before we took it over: download progress, ready, or a crash. Replayed once `worker` is
+      // this one, so a crash is handled like any other.
+      const replay = w.onmessage;
+      queueMicrotask(() => warm.messages.forEach((msg) => replay.call(w, new MessageEvent('message', { data: msg }))));
+    } else w.postMessage({ type: 'load', quality, safe: safeMode, phone: isPhone } satisfies WorkerRequest);
     return w;
   };
   let worker = startWorker();
