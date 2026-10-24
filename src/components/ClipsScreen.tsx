@@ -448,8 +448,9 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
       </div>
       {quality === 'quick' && (
         <p className="quality-note">
-          <b>Found by our Quick AI.</b> The 🔒 clips show the <b>Pro edit</b>: an AI headline, zoom-ins on the best lines,
-          highlighted key words and framing that follows the speaker. Pro also gets our Best AI and exports all {clips.length}{' '}
+          <b>Found by our Quick AI on the Free plan: good clips, but not our best picks.</b> Pro and Studio use our Best AI,
+          which picks more carefully and checks every clip twice. The 🔒 clips show the <b>Pro edit</b>: an AI headline, zoom-ins on the best lines,
+          highlighted key words and framing that follows the speaker. Pro also exports all {clips.length}{' '}
           clips without a watermark. <Link to="/pricing">Upgrade to Pro</Link>
         </p>
       )}

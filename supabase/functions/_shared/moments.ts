@@ -78,6 +78,9 @@ export interface GeminiChoice {
   paid?: boolean;
   // Tried when every model on the first key is busy or out of quota.
   backup?: GeminiChoice;
+  // Quick AI (Free): one pass that suggests just the clips wanted, without the second "head editor" review,
+  // to use as little of the AI as possible. Paid plans get both passes.
+  light?: boolean;
 }
 
 /**
@@ -94,8 +97,8 @@ export function geminiFor(quality: 'quick' | 'best', env: (name: string) => stri
   const paidKey = env('GEMINI_PAID_API_KEY');
   if (quality === 'quick') {
     const model = env('GEMINI_MODEL_QUICK') || 'gemini-flash-lite-latest';
-    const paid = paidKey ? { apiKey: paidKey, model, paid: true } : undefined;
-    return freeKey ? { apiKey: freeKey, model, backup: paid } : (paid ?? null);
+    const paid = paidKey ? { apiKey: paidKey, model, paid: true, light: true } : undefined;
+    return freeKey ? { apiKey: freeKey, model, backup: paid, light: true } : (paid ?? null);
   }
   if (paidKey) return { apiKey: paidKey, model: env('GEMINI_MODEL_BEST') || 'gemini-pro-latest', paid: true };
   return freeKey ? { apiKey: freeKey, model: DEFAULT_GEMINI_MODEL } : null;
@@ -242,9 +245,14 @@ export interface AiUsage {
 /**
  * The episode's best moments: a first pass suggests twice as many as wanted, then a stricter review keeps
  * and re-scores the best (see reviewMoments). If the review can't run in time, the first pass's best are used.
+ * Quick AI (`choice.light`) is the first pass alone, suggesting just the clips wanted.
  */
 export async function pickMoments(request: PickMomentsRequest, choice: GeminiChoice): Promise<{ moments: Moment[]; usage: AiUsage }> {
   const started = Date.now();
+  if (choice.light) {
+    const only = await firstPass(request, choice);
+    return { moments: only.moments.slice(0, request.count), usage: only.usage };
+  }
   const candidates = Math.min(MAX_CANDIDATES, Math.max(request.count, request.count * CANDIDATES_PER_CLIP));
   const first = await firstPass({ ...request, count: candidates }, choice);
   // The whole request must answer within the server's limit (about 150 s): review only with time to spare.
