@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Isla Wordmark Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Sora:wght@700;800&family=Fredoka:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg: #f6eadf; --surface: #fbf2e9; --border: #e6cfba; --text: #3a2a1e; --muted: #8a7262; --title: #23170e; --green: #3f8f14; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--text); font: 16px/1.5 Inter, system-ui, sans-serif; padding: 24px 16px 48px;
+    background: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(255,122,40,.3), rgba(255,150,70,.1) 45%, transparent 75%), var(--bg); }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--title); }
+  .lead { color: var(--muted); margin: 0 0 22px; }
+  .opt { max-width: 420px; margin: 0 auto 26px; }
+  .opt h2 { font-size: 1.05rem; margin: 0 0 2px; color: var(--title); }
+  .opt p { color: var(--muted); margin: 0 0 10px; font-size: .92rem; }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 16px; background: rgba(251,242,233,.7); border: 1px solid var(--border); }
+  .big { display: grid; place-items: center; padding: 22px 0 6px; }
+  .nav { display: flex; gap: 12px; align-items: center; font-size: .9rem; color: var(--muted); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--green); color: var(--green); display: grid; place-items: center; font-size: .72rem; font-weight: 700; }
+  .badge { font: 800 .6rem/1.5 Inter, system-ui, sans-serif; letter-spacing: .08em; padding: 2px 7px; border-radius: 99px; background: linear-gradient(135deg, #f4f6f8, #c9ced4 45%, #eef0f3 60%, #b8bec6); color: #0d0f12; }
+  .mark { display: inline-flex; align-items: center; gap: 8px; color: var(--title); text-decoration: none; }
+  /* the i with Isla as its dot */
+  .i { position: relative; display: inline-block; }
+  .i .dot { position: absolute; left: 50%; transform: translateX(-50%); border-radius: 50%; background: linear-gradient(135deg, #9dff3c, #e0b51e 50%, #ff6a13); box-shadow: 0 0 10px rgba(255,122,40,.55); }
+  .i .orbdot { position: absolute; left: 50%; transform: translateX(-50%); }
+  /* A */
+  .a { font: 700 1.6rem/1 Outfit, system-ui, sans-serif; letter-spacing: -.02em; }
+  .a .dot { width: .3em; height: .3em; top: -.02em; }
+  /* B */
+  .b { font: 800 1.7rem/1 Outfit, system-ui, sans-serif; letter-spacing: -.02em; }
+  .b .orbdot { top: -.42em; width: .52em; height: .52em; }
+  .b { padding-top: .35em; }
+  /* C */
+  .c { font: 800 1.45rem/1 Sora, system-ui, sans-serif; letter-spacing: -.03em; }
+  /* D */
+  .d { font: 700 1.6rem/1 Fredoka, system-ui, sans-serif; letter-spacing: -.01em; }
+  .d .dot { width: .28em; height: .28em; top: .02em; }
+  .scale2 { transform: scale(1.9); transform-origin: center; margin: 14px 0; }
+</style>
+</head>
+<body>
+  <h1>Isla: name in the top bar</h1>
+  <p class="lead">Four versions, each in the real top bar and bigger below it.</p>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <linearGradient id="ob" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9dff3c"/><stop offset=".5" stop-color="#e0b51e"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
+    <symbol id="orb" viewBox="0 0 160 160"><circle cx="80" cy="80" r="58" fill="url(#ob)"/><ellipse cx="60" cy="46" rx="14" ry="6" fill="#fff" opacity=".3" transform="rotate(-25 60 46)"/><rect x="42" y="62" width="76" height="30" rx="15" fill="#10151b"/><rect x="61" y="70" width="12" height="14" rx="6" fill="#9dff3c"/><rect x="87" y="70" width="12" height="14" rx="6" fill="#9dff3c"/></symbol>
+  </defs></svg>
+
+  <template id="A"><span class="mark a"><svg width="34" height="34"><use href="#orb"/></svg><span><span class="i">ı<span class="dot"></span></span>sla</span></span></template>
+  <template id="B"><span class="mark b"><span><span class="i">ı<svg class="orbdot"><use href="#orb"/></svg></span>sla</span></span></template>
+  <template id="C"><span class="mark c"><svg width="34" height="34"><use href="#orb"/></svg>Isla</span></template>
+  <template id="D"><span class="mark d"><svg width="34" height="34"><use href="#orb"/></svg><span><span class="i">ı<span class="dot"></span></span>sla</span></span></template>
+
+  <section class="opt">
+    <h2>A. Round and friendly</h2>
+    <p>A bigger Isla, then "isla" in lowercase, in a round modern font (Outfit). The dot on the i is a glowing green-to-orange dot, like her light.</p>
+    <div class="bar"><span data-t="A"></span><span class="badge">STUDIO</span><span class="nav">Pricing <span class="avatar">AM</span></span></div>
+    <div class="big"><div class="scale2" data-t="A"></div></div>
+  </section>
+
+  <section class="opt">
+    <h2>B. Isla is the dot</h2>
+    <p>Just the word, and Isla herself sits on top of the i as its dot. One single mark: the name and the character are the same thing.</p>
+    <div class="bar"><span data-t="B"></span><span class="badge">STUDIO</span><span class="nav">Pricing <span class="avatar">AM</span></span></div>
+    <div class="big"><div class="scale2" data-t="B"></div></div>
+  </section>
+
+  <section class="opt">
+    <h2>C. Strong and techy</h2>
+    <p>A bigger Isla, and "Isla" with a capital I in a bold, tight tech font (Sora). Confident, like a serious product.</p>
+    <div class="bar"><span data-t="C"></span><span class="badge">STUDIO</span><span class="nav">Pricing <span class="avatar">AM</span></span></div>
+    <div class="big"><div class="scale2" data-t="C"></div></div>
+  </section>
+
+  <section class="opt">
+    <h2>D. Soft and playful</h2>
+    <p>A bigger Isla and "isla" in a very soft, rounded font (Fredoka), with the glowing dot. The friendliest of the four.</p>
+    <div class="bar"><span data-t="D"></span><span class="badge">STUDIO</span><span class="nav">Pricing <span class="avatar">AM</span></span></div>
+    <div class="big"><div class="scale2" data-t="D"></div></div>
+  </section>
+
+  <script>
+    document.querySelectorAll('[data-t]').forEach((el) => {
+      const t = document.getElementById(el.dataset.t).content.cloneNode(true);
+      el.appendChild(t);
+    });
+    // The badge sits right after the name.
+    document.querySelectorAll('.bar').forEach((bar) => {
+      const left = document.createElement('span');
+      left.style.cssText = 'display:flex;align-items:center;gap:8px';
+      const [name, badge] = bar.children;
+      left.append(name, badge);
+      bar.prepend(left);
+    });
+  </script>
+</body>
+</html>

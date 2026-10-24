@@ -1,13 +1,51 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // The old address moves to the real domain, keeping the page and any sign-in details.
+      if (location.hostname === "hookcut.pages.dev") location.replace("https://islaclips.com" + location.pathname + location.search + location.hash);
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tempo - Your day, under control</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="theme-color" content="#f6eadf" />
+    <title>Isla: AI podcast clips for TikTok, Reels and Shorts</title>
+    <meta
+      name="description"
+      content="Isla finds the best moments in your podcast episode and turns them into vertical clips with captions for TikTok, Reels and Shorts. Free to start; your video stays on your device."
+    />
+    <link rel="canonical" href="https://islaclips.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Isla" />
+    <meta property="og:title" content="Isla: AI podcast clips for TikTok, Reels and Shorts" />
+    <meta property="og:description" content="Isla finds the best moments in your podcast episode and turns them into vertical clips with captions for TikTok, Reels and Shorts." />
+    <meta property="og:url" content="https://islaclips.com/" />
+    <meta property="og:image" content="https://islaclips.com/brand/isla-logo-1024.png?v=3" />
+    <meta name="twitter:card" content="summary" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Isla",
+        "alternateName": ["Isla Clips", "islaclips"],
+        "url": "https://islaclips.com/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Web browser",
+        "description": "AI that finds the best moments in podcast episodes and turns them into vertical clips with captions for TikTok, Reels and Shorts.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="icon" href="/favicon.ico?v=3" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png?v=3" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png?v=3" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/brand/isla-logo-512.png?v=3" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Share+Tech+Mono&family=Fredoka:wght@700&display=swap" rel="stylesheet" crossorigin />
   </head>
-  <body class="bg-slate-950 text-slate-100">
+  <body>
     <div id="root"></div>
-    <script type="module" src="/main.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

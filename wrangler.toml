@@ -1,0 +1,7 @@
+# Cloudflare Pages (free plan). Connect the GitHub repo in Cloudflare → Workers & Pages → Create → Pages,
+# with build command "npm run build" and output directory "dist". Or deploy from a computer:
+#   npx wrangler pages deploy
+# Unknown paths load the app (no 404.html), and public/_headers sets the headers.
+name = "hookcut"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"
