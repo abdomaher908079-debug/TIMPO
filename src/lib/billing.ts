@@ -40,6 +40,8 @@ export interface PayOrder {
   seats: number;
   status: string;
   applied: boolean;
+  // Paid but couldn't be applied, so it's refunded: 'studio-ended' (people paid for after Studio ended).
+  problem?: string | null;
 }
 
 /**

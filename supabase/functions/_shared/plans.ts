@@ -269,12 +269,16 @@ export interface WorkspaceRow {
 
 /**
  * The plan a profile is entitled to. A subscription canceled by the user stays `active` until its
- * paid period ends (with `cancel_at` set); `canceled` and `paused` mean it has ended.
+ * paid period ends (with `cancel_at` set); `canceled` and `paused` mean it has ended. A plan paid upfront
+ * or given (no Paddle subscription) stops at its end date, even before the clean-up job resets it.
+ * Keep in sync with effective_plan in the database.
  */
-export function effectivePlan(profile: ProfileRow | null): PlanId {
+export function effectivePlan(profile: ProfileRow | null, now = new Date()): PlanId {
   if (!profile || profile.plan === 'free') return 'free';
   const status = profile.subscription_status;
-  return status === 'active' || status === 'trialing' || status === 'past_due' ? profile.plan : 'free';
+  if (status !== 'active' && status !== 'trialing' && status !== 'past_due') return 'free';
+  const ended = !profile.paddle_subscription_id && !!profile.current_period_end && new Date(profile.current_period_end) <= now;
+  return ended ? 'free' : profile.plan;
 }
 
 /**

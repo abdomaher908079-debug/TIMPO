@@ -11,6 +11,13 @@ export const PAID = ['confirmed', 'finished'];
 // Final states a later, older notice must not overwrite.
 const SETTLED = [...PAID, 'refunded'];
 
+/** A paid order that can't be applied any more (it's closed and refunded by hand). */
+class CantApply extends Error {
+  constructor(readonly problem: 'studio-ended') {
+    super(problem);
+  }
+}
+
 export interface Order {
   status: string;
   id: string;
@@ -117,16 +124,21 @@ async function applyPlan(order: Order): Promise<Date> {
   throw new Error('Profile kept changing; try again.');
 }
 
-/** Adds the bought people to the running Studio team, for the rest of the plan. Returns the plan's end. */
+/**
+ * Adds the bought people to the running Studio team, for the rest of the plan. Returns the plan's end.
+ * The Studio may have ended (or changed) between ordering and the payment arriving: then nothing is added.
+ */
 async function applySeats(order: Order): Promise<Date> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: p, error: readError } = await admin
       .from('profiles')
-      .select('extra_seats, current_period_end, updated_at')
+      .select('plan, subscription_status, extra_seats, current_period_end, updated_at')
       .eq('id', order.user_id)
-      .single<{ extra_seats: number; current_period_end: string | null; updated_at: string }>();
+      .single<{ plan: string; subscription_status: string | null; extra_seats: number; current_period_end: string | null; updated_at: string }>();
     if (readError || !p) throw readError ?? new Error('Profile not found.');
     const now = new Date();
+    const studio = p.plan === 'studio' && p.subscription_status === 'active' && !!p.current_period_end && new Date(p.current_period_end) > now;
+    if (!studio) throw new CantApply('studio-ended');
     const { data: written, error } = await admin
       .from('profiles')
       .update({ extra_seats: Math.min(MAX_EXTRA_SEATS, p.extra_seats + order.extra_seats), updated_at: now.toISOString() })
@@ -191,6 +203,28 @@ async function receipt(order: Order, until: Date) {
   });
 }
 
+/** Tells the buyer, and us, that a paid order couldn't be applied and will be refunded. */
+async function refundNotice(order: Order) {
+  const { data } = await admin.auth.admin.getUserById(order.user_id);
+  const email = data.user?.email;
+  console.error('Refund due', order.id, email, order.price_usd);
+  const people = `${order.extra_seats} more ${order.extra_seats === 1 ? 'person' : 'people'}`;
+  if (email) {
+    await send(email, {
+      subject: 'Your Isla payment: we’ll refund it',
+      html:
+        p('Hi,') +
+        p(`We received your payment of $${order.price_usd} for ${people} on your Studio team, but your Studio plan had ended before it arrived, so we couldn’t add them.`) +
+        p('We’ll send the money back. Reply to this email with the wallet address (and network) to refund to, or tell us if you’d rather use it towards a new Studio plan.') +
+        sign,
+    });
+  }
+  await send('support@islaclips.com', {
+    subject: `Refund due: order ${order.id}`,
+    html: p(`A seats order was paid after the buyer’s Studio plan ended. Refund $${order.price_usd} to ${email ?? order.user_id}.`) + p(`Order: ${order.id}`),
+  });
+}
+
 /**
  * Records a payment's status on its order and, once paid in full, applies the order: claimed first so it
  * applies only once however many notices arrive, released again if applying fails so a retry can finish it.
@@ -229,6 +263,12 @@ export async function settle(order: Order, payment: PaymentInfo): Promise<string
   try {
     until = order.kind === 'pack' ? await applyPack(order) : order.kind === 'seats' ? await applySeats(order) : await applyPlan(order);
   } catch (err) {
+    if (err instanceof CantApply) {
+      // Closed for good (no retry), and both the buyer and we are told, so the money goes back.
+      await admin.from('crypto_orders').update({ done_at: new Date().toISOString(), problem: err.problem }).eq('id', order.id);
+      await refundNotice(order).catch((e) => console.error('Refund notice', order.id, e));
+      return status;
+    }
     // Not applied: the next notice (or status check) tries again.
     await admin.from('crypto_orders').update({ applied_at: null }).eq('id', order.id);
     throw err;

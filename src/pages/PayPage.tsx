@@ -477,12 +477,15 @@ export default function PayPage() {
           </div>
           <h1 className="page-title">Payment received</h1>
           <p>
-            {order.kind === 'pack'
-              ? `Your extra ${PACK.hours} hours and ${PACK.episodes} episodes are ready.`
-              : order.kind === 'seats'
-                ? `Your team now has room for ${order.seats} more ${order.seats === 1 ? 'person' : 'people'}. Invite them in Plan & settings.`
-                : `Isla ${planById(order.plan!).name} is on${account.profile?.current_period_end ? ` until ${new Date(account.profile.current_period_end).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`}{' '}
-            We've emailed you a receipt.
+            {order.problem === 'studio-ended'
+              ? "Your Studio plan ended before the payment arrived, so we couldn't add the people. We'll refund you: we've emailed you about it."
+              : `${
+                  order.kind === 'pack'
+                    ? `Your extra ${PACK.hours} hours and ${PACK.episodes} episodes are ready.`
+                    : order.kind === 'seats'
+                      ? `Your team now has room for ${order.seats} more ${order.seats === 1 ? 'person' : 'people'}. Invite them in Plan & settings.`
+                      : `Isla ${planById(order.plan!).name} is on${account.profile?.current_period_end ? ` until ${new Date(account.profile.current_period_end).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`
+                } We've emailed you a receipt.`}
           </p>
           <button type="button" className="btn btn-primary pay-next" onClick={() => navigate('/new')}>
             Make clips

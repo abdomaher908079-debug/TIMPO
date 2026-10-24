@@ -35,6 +35,7 @@ interface OrderRow extends Order {
   price_expires_at: string | null;
   actually_paid: number | null;
   payment_id: string | null;
+  problem: string | null;
 }
 
 /** What the checkout page shows of an order. */
@@ -54,6 +55,7 @@ function view(o: OrderRow, status = o.status) {
     seats: o.extra_seats ?? 0,
     status,
     applied: !!o.done_at,
+    problem: o.problem,
   };
 }
 
@@ -129,7 +131,7 @@ Deno.serve(async (req) => {
       order = { kind: 'seats', plan: null, billing: null, price, seats: count, description: `Isla Studio: ${count} more ${count === 1 ? 'person' : 'people'} until your plan renews` };
     } else if (body.kind === 'pack') {
       // Bought hour packs work only on Pro or Studio, so they're sold only there.
-      if (!profile || profile.plan === 'free' || profile.subscription_status !== 'active') return json({ error: 'Extra hours are for Pro and Studio.' }, 400);
+      if (!running) return json({ error: 'Extra hours are for Pro and Studio.' }, 400);
       order = { kind: 'pack', plan: null, billing: null, price: PACK.price, seats: 0, description: `Isla extra hours: +${PACK.hours} hours, +${PACK.episodes} episodes` };
     } else {
       const plan = body.plan === 'pro' || body.plan === 'studio' ? body.plan : null;
