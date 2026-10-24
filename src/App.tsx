@@ -10,6 +10,7 @@ import Account from './pages/Account';
 import Footer from './components/Footer';
 import { Sidebar, TabBar } from './components/AppNav';
 import { Privacy, Refunds, Terms } from './pages/Legal';
+import About from './pages/About';
 import Diagnose from './pages/Diagnose';
 import Library from './pages/Library';
 import PricingPage from './pages/PricingPage';
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/brand-kits" element={<RequireAuth><BrandKitsPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/pay" element={<RequireAuth><PayPage /></RequireAuth>} />
+          <Route path="/about" element={<About />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/refunds" element={<Refunds />} />

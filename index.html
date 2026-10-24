@@ -24,14 +24,37 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Isla",
-        "alternateName": ["Isla Clips", "islaclips"],
-        "url": "https://islaclips.com/",
-        "applicationCategory": "MultimediaApplication",
-        "operatingSystem": "Web browser",
-        "description": "AI that finds the best moments in podcast episodes and turns them into vertical clips with captions for TikTok, Reels and Shorts.",
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+        "@graph": [
+          {
+            "@type": "Person",
+            "@id": "https://islaclips.com/about#founder",
+            "name": "Abdullah Mohamed Maher Hassan Elewa",
+            "jobTitle": "Founder of Isla",
+            "worksFor": { "@id": "https://islaclips.com/#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://islaclips.com/#organization",
+            "name": "Isla",
+            "alternateName": ["Isla Clips", "islaclips"],
+            "url": "https://islaclips.com/",
+            "logo": "https://islaclips.com/brand/isla-logo-512.png",
+            "email": "support@islaclips.com",
+            "founder": { "@id": "https://islaclips.com/about#founder" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Isla",
+            "alternateName": ["Isla Clips", "islaclips"],
+            "url": "https://islaclips.com/",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Web browser",
+            "description": "AI that finds the best moments in podcast episodes and turns them into vertical clips with captions for TikTok, Reels and Shorts.",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "publisher": { "@id": "https://islaclips.com/#organization" },
+            "author": { "@id": "https://islaclips.com/about#founder" }
+          }
+        ]
       }
     </script>
     <link rel="icon" href="/favicon.ico?v=3" sizes="48x48" />
