@@ -49,6 +49,17 @@ const SIZE_OPTIONS: { id: Size; name: string; note: string }[] = [
 // Frames are taken a moment in, past any cut at the very start of the clip.
 const thumbTime = (c: Clip) => c.start + Math.min(1, (c.end - c.start) / 4);
 
+/** A brand kit's logo, decoded for drawing (null without one, or if it can't be read). */
+async function loadLogo(kit: BrandKit | null) {
+  if (!kit?.logo) return null;
+  try {
+    return { image: await createImageBitmap(await (await fetch(kit.logo)).blob()), corner: kit.logo_corner };
+  } catch (err) {
+    console.warn('Logo unavailable', err);
+    return null;
+  }
+}
+
 function fileName(clip: Clip, n: number, extension: string) {
   const slug = clip.title
     .toLowerCase()
@@ -268,14 +279,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     const { renderClip } = await import('../lib/render');
     const clipSize = sizeRef.current;
     const { look, kit } = captionLook(clip, kitsRef.current);
-    let logo = null;
-    if (kit?.logo) {
-      try {
-        logo = { image: await createImageBitmap(await (await fetch(kit.logo)).blob()), corner: kit.logo_corner };
-      } catch (err) {
-        console.warn('Logo unavailable', err);
-      }
-    }
+    const logo = await loadLogo(kit);
     // Progress redraws this whole screen, so at most about 5 times a second rather than every frame.
     let shown = 0;
     const { blob, extension } = await renderClip(file, clip, groups, {
@@ -343,6 +347,23 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
     );
   }
 
+  /** Makes and downloads clip `i`'s cover image (editor → Post). */
+  async function makeCover(i: number) {
+    const clip = clipsRef.current[i]!;
+    const groups = timedRef.current[rangeKey(clip)] ?? groupWords(estimateWords(segments, clip.start, clip.end));
+    const { look, kit } = captionLook(clip, kitsRef.current);
+    const logo = await loadLogo(kit);
+    try {
+      const { renderCover } = await import('../lib/render');
+      const blob = await renderCover(file, clip, groups, { look, logo, watermark, pro: paid });
+      const url = URL.createObjectURL(blob);
+      download(url, fileName(clip, i + 1, '-cover.jpg'));
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } finally {
+      logo?.image.close();
+    }
+  }
+
   if (editing !== null && videoUrl) {
     const clip = clips[editing]!;
     return (
@@ -365,6 +386,7 @@ export default function ClipsScreen({ file, duration, segments, clips, onChange,
         sizeLabel={SIZE_LABELS[exportSize]}
         busy={busy}
         onExport={() => void runExports([editing])}
+        onCover={() => makeCover(editing)}
         onCancelExport={cancelExports}
         onChange={(c) => onChange(clips.map((old, i) => (i === editing ? c : old)))}
         onApplyProToAll={(off) => onChange(clips.map((c) => ({ ...c, proEdit: undefined, proOff: off })))}

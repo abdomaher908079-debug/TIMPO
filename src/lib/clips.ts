@@ -96,6 +96,13 @@ export interface Clip {
   edit?: ClipEdit;
   // Their verdict on the moment (editor), noted to learn which picks work (feedback.ts).
   vote?: 'up' | 'down';
+  // The upload kit (editor → Post): what to write when posting it.
+  description?: string;
+  hashtags?: string[];
+  // Other openings to post the moment again with (editor → Post): the headlines to choose from (the AI's first
+  // one included, kept as written so switching back works), and a later, stronger first line.
+  headlineOptions?: string[];
+  altStart?: number;
 }
 
 /** The person's own touches on a clip. Everything optional: absent means the default. */
@@ -254,8 +261,9 @@ export function captionLook(clip: Pick<Clip, 'captionStyle' | 'brandKitId'>, kit
 }
 
 export function clipsFromMoments(moments: Moment[]): Clip[] {
-  return moments.map((m) => ({
+  return moments.map(({ altHeadlines, ...m }) => ({
     ...m,
+    ...(m.headline && altHeadlines?.length ? { headlineOptions: [m.headline, ...altHeadlines] } : {}),
     original: { start: m.start, end: m.end, ...(m.skips ? { skips: m.skips } : {}) },
     cropX: 50,
     // The whole picture until auto framing finds a face to follow: a crop of slides or a screen
