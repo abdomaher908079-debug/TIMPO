@@ -166,6 +166,11 @@ Deno.serve(async (req) => {
     if (!me || !OWNERS.includes(myEmail) || !me.email_confirmed_at) return json({ error: 'Not allowed.' }, 403);
     // The session must have passed two-step verification (the code from the authenticator app).
     if (claim(token, 'aal') !== 'aal2') return json({ error: 'Enter the code from your authenticator app first.' }, 403);
+    // And it must have been signed in with email and password: the owner page has no other way in.
+    const ways = claim(token, 'amr');
+    if (!Array.isArray(ways) || !ways.some((w) => (w as { method?: string })?.method === 'password')) {
+      return json({ error: 'Sign in to the owner page with your email and password.' }, 403);
+    }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const action = String(body.action ?? '');

@@ -1,8 +1,24 @@
 // The owners' dashboard (owner.html): sign in, then see how many people use Isla. Only the owners' emails
 // get in; the server checks it again before sending any numbers (owner_stats in the database).
-import { supabase } from './lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Its own sign-in, apart from the app's: being signed in to Isla (with Google, say) doesn't open this page.
+const supabase = url && anonKey ? createClient(url, anonKey, { auth: { storageKey: 'isla-owner-auth', detectSessionInUrl: false } }) : null;
 
 const OWNERS = ['abdomaher908079@gmail.com', 'islaclipsofficial@gmail.com'];
+
+/** Whether the session was signed in with email and password, the only way into this page. */
+function signedInWithPassword(token: string): boolean {
+  try {
+    const part = token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const { amr } = JSON.parse(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), '='))) as { amr?: { method?: string }[] };
+    return !!amr?.some((w) => w.method === 'password');
+  } catch {
+    return false;
+  }
+}
 
 // Sections of "name: number" (or a plain list), worded on the server (owner_stats).
 type Section = { title: string; rows?: [string, number][]; list?: string[] };
@@ -22,9 +38,9 @@ async function main() {
   const { data } = await supabase.auth.getSession();
   const email = data.session?.user.email?.toLowerCase();
   if (!email) return showSignIn();
-  if (!OWNERS.includes(email)) {
+  if (!OWNERS.includes(email) || !signedInWithPassword(data.session!.access_token)) {
     await supabase.auth.signOut();
-    return showSignIn('This page is private.');
+    return showSignIn(OWNERS.includes(email) ? 'Sign in with your email and password.' : 'This page is private.');
   }
   // Two-step verification: the page (and the server) need the code from an authenticator app too.
   const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -120,9 +136,7 @@ function showSignIn(message?: string) {
   app.innerHTML = `
     <div class="card signin">
       <h1>Isla owner</h1>
-      <p class="muted">Private. Sign in with an owner account.</p>
-      <button class="wide" id="google">Continue with Google</button>
-      <p class="or">or</p>
+      <p class="muted">Private. Sign in with an owner account's email and password.</p>
       <form id="form">
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="email" required />
@@ -133,9 +147,6 @@ function showSignIn(message?: string) {
       <p class="error" id="error">${esc(message ?? '')}</p>
     </div>`;
   const error = document.getElementById('error')!;
-  document.getElementById('google')!.addEventListener('click', () => {
-    void supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}/owner` } });
-  });
   document.getElementById('form')!.addEventListener('submit', async (e) => {
     e.preventDefault();
     error.textContent = '';
