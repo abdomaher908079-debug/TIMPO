@@ -439,8 +439,7 @@ export default function PayPage() {
               your identity; the app guides you.
             </li>
             <li>
-              <b>Buy USDT with your card.</b> In the app, tap Buy, choose USDT, and buy a little more than ${item.price} (about $
-              {Math.ceil(item.price + 2)}).
+              <b>Buy USDT with your card.</b> In the app, tap Buy, choose USDT, and buy ${item.price} of USDT.
             </li>
             <li>
               <b>Come back here.</b> Choose "USDT · Tron (TRC20)" and follow the steps. We'll show you exactly what to send and
