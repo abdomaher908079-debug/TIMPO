@@ -437,11 +437,13 @@ export default function PayPage() {
         <Send
           coin={coin}
           order={order}
+          busy={busy}
+          error={error}
+          onRenew={() => void begin()}
           onSent={() => {
             remember(order.id);
             setStep('wait');
           }}
-          onRestart={() => setStep('ready')}
         />
       )}
 
@@ -476,7 +478,8 @@ export default function PayPage() {
       )}
 
       {step === 'problem' && (
-        <Problem order={order} error={error} onRestart={startOver} />
+        // A payment that simply ran out of time: straight to a new one, same order and coin.
+        <Problem order={order} error={error} onRestart={order?.status === 'expired' && coin ? () => void begin() : startOver} />
       )}
     </Shell>
   );
@@ -569,41 +572,69 @@ function CopyRow({ label, value, mono }: { label: string; value: string; mono?: 
   );
 }
 
-function minutesLeft(until: string | null): number | null {
+/** Seconds left until `until` (0 when it's passed), or null without a deadline. */
+function secondsLeft(until: string | null): number | null {
   if (!until) return null;
-  return Math.max(0, Math.ceil((new Date(until).getTime() - Date.now()) / 60_000));
+  return Math.max(0, Math.ceil((new Date(until).getTime() - Date.now()) / 1000));
 }
 
-/** Step 4: exactly what to send, and where. */
-function Send({ coin, order, onSent, onRestart }: { coin: Coin; order: PayOrder; onSent: () => void; onRestart: () => void }) {
+const mmss = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+
+/**
+ * Step 4: exactly what to send, and where, with the time left to pay counting down. When it's up, the amount and
+ * address go away and one tap starts a new payment for the same order and coin at the current price.
+ */
+function Send({
+  coin,
+  order,
+  busy,
+  error,
+  onSent,
+  onRenew,
+}: {
+  coin: Coin;
+  order: PayOrder;
+  busy: boolean;
+  error: string | null;
+  onSent: () => void;
+  onRenew: () => void;
+}) {
   const [showQr, setShowQr] = useState(false);
-  const [left, setLeft] = useState(() => minutesLeft(order.priceUntil));
+  const [left, setLeft] = useState(() => secondsLeft(order.priceUntil));
   useEffect(() => {
-    const t = setInterval(() => setLeft(minutesLeft(order.priceUntil)), 15_000);
+    setLeft(secondsLeft(order.priceUntil));
+    const t = setInterval(() => setLeft(secondsLeft(order.priceUntil)), 1000);
     return () => clearInterval(t);
   }, [order.priceUntil]);
   const amount = String(order.amount ?? '');
   const address = order.address ?? '';
   const qr = showQr ? qrImage(coin.uri(address, order.amount ?? 0)) : null;
-  const expired = left === 0;
+  if (left === 0) {
+    return (
+      <div className="pay-expired">
+        <h1 className="page-title">Time to pay is up</h1>
+        <p className="muted">This payment closed after 30 minutes. Start a new one: same order, same coin, today's price.</p>
+        <button type="button" className="btn btn-primary pay-renew" disabled={busy} onClick={onRenew}>
+          {busy ? 'Getting your new payment…' : 'Start a new payment'}
+        </button>
+        {error && <p className="error">{error}</p>}
+        <p className="pay-aside">
+          <button type="button" className="link-button" onClick={onSent}>
+            Already sent it? Check it
+          </button>
+        </p>
+      </div>
+    );
+  }
   return (
     <>
       <h1 className="page-title">Send your payment</h1>
-      {expired ? (
-        <div className="notice">
-          <p>The price was held for 20 minutes and that time is up, because crypto prices move.</p>
-          <p>
-            <b>Already sent it?</b> Tap "I've sent it" below and we'll check it. <b>Not yet?</b> Get a fresh amount:
-          </p>
-          <button type="button" className="btn btn-outline btn-inline" onClick={onRestart}>
-            Get a new amount
-          </button>
-        </div>
-      ) : (
-        <p className="muted">
-          In your app, send exactly this. {left !== null && <>The price is held for <b>{left} more minute{left === 1 ? '' : 's'}</b>.</>}
+      {left !== null && (
+        <p className={`pay-timer ${left < 5 * 60 ? 'pay-timer-low' : ''}`} role="timer" aria-live="off">
+          <span aria-hidden="true">⏱</span> <b>{mmss(left)}</b> left to pay
         </p>
       )}
+      <p className="muted">In your app, send exactly this.</p>
       <div className="card pay-send">
         <div className="pay-send-row">
           <span className="pay-num">1</span>
