@@ -44,15 +44,6 @@ const COINS: Coin[] = [
     minutes: 'usually 1–5 minutes',
     uri: (address) => address,
   },
-  {
-    id: 'btc',
-    name: 'Bitcoin',
-    network: 'Bitcoin',
-    networkShort: 'BTC',
-    note: 'Higher fees and slower.',
-    minutes: 'usually 10–60 minutes',
-    uri: (address, amount) => `bitcoin:${address}?amount=${amount}`,
-  },
 ];
 
 const coinById = (id: string | null) => COINS.find((c) => c.id === id) ?? null;
