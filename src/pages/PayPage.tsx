@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth';
 import { checkoutPath, openOtherCoins, paymentsReady, paymentStatus, startPayment, type PayOrder, type Purchase } from '../lib/billing';
 import { NOT_SOLD_HERE, useCanPay } from '../lib/country';
 import { planById } from '../lib/plans';
-import { CRYPTO_MIN_USD, MAX_EXTRA_SEATS, PACK, PRICE_USD, SEAT_USD, seatsForRest, TEAM_INCLUDED } from '../../supabase/functions/_shared/plans';
+import { CRYPTO_MIN_USD, MAX_EXTRA_SEATS, PACK, paidEnough, PRICE_USD, receivedUsd, SEAT_USD, seatsForRest, TEAM_INCLUDED } from '../../supabase/functions/_shared/plans';
 import type { ProfileRow } from '../../supabase/functions/_shared/plans';
 
 // Our checkout: one small step per screen, so paying with crypto feels as simple as it can.
@@ -62,6 +62,10 @@ type Step = 'order' | 'coin' | 'learn' | 'ready' | 'send' | 'wait' | 'done' | 'p
 const NUMBERED: Step[] = ['order', 'coin', 'ready', 'send', 'wait'];
 // NOWPayments statuses that need the buyer (or us) to do something.
 const FAILED = ['failed', 'refunded', 'expired', 'partially_paid'];
+
+/** Whether an order has gone wrong. A payment only a little short counts as paid and is being turned on. */
+const failed = (o: PayOrder) =>
+  FAILED.includes(o.status) && !(o.status === 'partially_paid' && paidEnough(receivedUsd(o.received, o.amount ?? 0, o.price), o.price));
 
 /** What's being bought, from the address: ?plan=pro&billing=monthly or ?pack=1. */
 function purchaseFrom(params: URLSearchParams): Purchase | null {
@@ -151,7 +155,7 @@ const orderPurchase = (o: PayOrder): Purchase =>
 /** The step an order belongs on, from its status. */
 function stepFor(o: PayOrder): Step {
   if (o.applied) return 'done';
-  if (FAILED.includes(o.status)) return 'problem';
+  if (failed(o)) return 'problem';
   if (o.status === 'waiting' && o.address && !sentBefore(o.id)) return 'send';
   return 'wait';
 }
@@ -197,7 +201,7 @@ export default function PayPage() {
     if (o.applied) {
       void refreshAccount();
       setStep('done');
-    } else if (FAILED.includes(o.status)) setStep('problem');
+    } else if (failed(o)) setStep('problem');
   }, [orderKey, refreshAccount]);
 
   // While waiting: ask every 10 seconds for 5 minutes, then every 30. Keyed on the order's id (not the order
@@ -435,8 +439,7 @@ export default function PayPage() {
               your identity; the app guides you.
             </li>
             <li>
-              <b>Buy USDT with your card.</b> In the app, tap Buy, choose USDT, and buy a little more than ${item.price} (about $
-              {Math.ceil(item.price + 2)}), to cover the app's small sending fee.
+              <b>Buy USDT with your card.</b> In the app, tap Buy, choose USDT, and buy ${item.price} of USDT.
             </li>
             <li>
               <b>Come back here.</b> Choose "USDT · Tron (TRC20)" and follow the steps. We'll show you exactly what to send and
@@ -451,7 +454,7 @@ export default function PayPage() {
       )}
 
       {step === 'ready' && coin && (
-        <Ready coin={coin} price={item.price} busy={busy} error={error} onBack={() => setStep('coin')} onGo={() => void begin()} />
+        <Ready coin={coin} busy={busy} error={error} onBack={() => setStep('coin')} onGo={() => void begin()} />
       )}
 
       {step === 'send' && order && coin && (
@@ -533,13 +536,13 @@ function BackLink({ onClick }: { onClick: () => void }) {
 }
 
 /** Step 3: what's about to happen, for the chosen coin. */
-function Ready({ coin, price, busy, error, onBack, onGo }: { coin: Coin; price: number; busy: boolean; error: string | null; onBack: () => void; onGo: () => void }) {
+function Ready({ coin, busy, error, onBack, onGo }: { coin: Coin; busy: boolean; error: string | null; onBack: () => void; onGo: () => void }) {
   const [sure, setSure] = useState(false);
   const usdt = coin.name === 'USDT';
   return (
     <>
       <h1 className="page-title">Before you send</h1>
-      <p className="muted">Three things to know. Next, we'll show you the exact amount and address.</p>
+      <p className="muted">Two things to know. Next, we'll show you the exact amount and address.</p>
       <ol className="pay-guide">
         <li>
           <b>Open the app that holds your {coin.name}</b>, like Binance, Bybit or Trust Wallet, and find <b>Send</b> or{' '}
@@ -548,10 +551,6 @@ function Ready({ coin, price, busy, error, onBack, onGo }: { coin: Coin; price: 
         <li>
           <b>Choose the network {coin.network}.</b> This matters: sent on another network, the money can't arrive.
           {usdt && ` In some apps it's called "${coin.networkShort === 'TRC20' ? 'TRX' : 'BSC'}".`}
-        </li>
-        <li>
-          <b>Watch the fee.</b> Most apps take their sending fee from the amount. Make sure the amount that <i>arrives</i>{' '}
-          ("you will receive") is at least what we show, about {usdt ? `${price} USDT` : `$${price}`}. A little more is fine.
         </li>
       </ol>
       <label className="pay-check">
@@ -632,7 +631,7 @@ function Send({ coin, order, onSent, onRestart }: { coin: Coin; order: PayOrder;
       <div className="card pay-send">
         <div className="pay-send-row">
           <span className="pay-num">1</span>
-          <CopyRow label={`Amount (${coin.name}) — make sure at least this arrives`} value={amount} />
+          <CopyRow label={`Amount (${coin.name})`} value={amount} />
         </div>
         <div className="pay-send-row">
           <span className="pay-num">2</span>
@@ -716,18 +715,19 @@ function Wait({ coin, order, onCheck, onBack, error }: { coin: Coin | null; orde
 function Problem({ order, error, onRestart }: { order: PayOrder | null; error: string | null; onRestart: () => void }) {
   const coin = coinById(order?.coin ?? null);
   if (order?.status === 'partially_paid') {
-    const missing = order.amount != null ? Math.max(0, order.amount - order.received) : null;
+    // In dollars, at the payment's own rate.
+    const got = receivedUsd(order.received, order.amount ?? 0, order.price);
+    const missing = Math.max(0, order.price - got);
     return (
       <>
         <h1 className="page-title">Part of the payment arrived</h1>
         <p>
-          We received {order.received} {coin?.name ?? ''} of {order.amount} {coin?.name ?? ''}
-          {missing ? `, so ${Number(missing.toFixed(6))} ${coin?.name ?? ''} is missing` : ''}. This usually happens when the app's
-          sending fee was taken from the amount.
+          We received <b>${got.toFixed(2)}</b> from you ({order.received} {coin?.name ?? ''}).{' '}
+          <b>${missing.toFixed(2)}</b> is still missing to complete your order of ${order.price}.
         </p>
         <p>
           Email <a href={`mailto:support@islaclips.com?subject=Order ${order.id}`}>support@islaclips.com</a> with your order number{' '}
-          <b>{order.id.slice(0, 8)}</b> and we'll sort it out. Please don't send more before we reply.
+          <b>{order.id.slice(0, 8)}</b> and we'll complete your order. Please don't send more before we reply.
         </p>
       </>
     );
