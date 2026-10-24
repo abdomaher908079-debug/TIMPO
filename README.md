@@ -39,7 +39,7 @@ pricing buttons switch plans for free so you can try what each plan unlocks.
    check your country is supported for payouts.
 2. **Catalog → Products:** create Pro and Studio, each with a monthly and a yearly price
    ($15 / $144 and $29 / $288). Also "Hookcut extra hours" (one-time $8, quantity 1) and "Hookcut Studio extra seat"
-   ($8 a month and $80 a year). Put the price IDs in `.env.local` (see `.env.example`) and as Supabase secrets.
+   ($8 a month and $50 a year). Put the price IDs in `.env.local` (see `.env.example`) and as Supabase secrets.
 3. **Developer tools → Authentication:** create a client-side token (`VITE_PADDLE_CLIENT_TOKEN`) and an API key.
 4. **Checkout → Checkout settings:** set the default payment link to `https://your-site/checkout.html`, and add your
    domain under approved domains.

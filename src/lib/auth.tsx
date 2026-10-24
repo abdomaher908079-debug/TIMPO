@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import { pendingInvite } from './invite';
+import { refForSignup } from './source';
 
 export interface User {
   id: string;
@@ -118,8 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          // The invite code goes with the account too, in case the confirmation link opens in another browser.
-          options: { emailRedirectTo: `${window.location.origin}/`, data: pendingInvite() ? { invite: pendingInvite() } : undefined },
+          // The invite code and the link they came from go with the account too, in case the confirmation link
+          // opens in another browser.
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: pendingInvite() || refForSignup() ? { invite: pendingInvite() ?? undefined, ref: refForSignup() } : undefined,
+          },
         });
         if (error) throw error;
         // With email confirmation on (Supabase's default), there's no session until they click the link.

@@ -18,6 +18,7 @@ import BrandKitsPage from './pages/BrandKitsPage';
 import ResetPassword from './pages/ResetPassword';
 import StatusPage from './pages/StatusPage';
 import { useClaimInvite } from './lib/invite';
+import { useRecordRef } from './lib/source';
 import { usePageMeta } from './lib/seo';
 import SourceQuestion from './components/SourceQuestion';
 
@@ -63,6 +64,7 @@ function ScrollOnNavigate() {
   const { pathname, hash } = useLocation();
   usePageMeta();
   useClaimInvite();
+  useRecordRef();
   useEffect(() => {
     // Not `return window.scrollTo(...)`: some browsers (e.g. Brave) return a Promise from it, and React
     // would then try to call that as the effect's cleanup and crash.

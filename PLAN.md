@@ -86,7 +86,7 @@ Turn a long podcast episode into ready-to-post vertical clips for TikTok, Reels 
 ## Plans
 |                     | Free            | Pro $15/mo ($12/mo yearly) | Studio $29/mo ($24/mo yearly) |
 |---------------------|-----------------|----------------------------|-------------------------------|
-| Episode hours       | **1 episode per week, up to 30 min** (4/month) | 20 per month               | 60 per month                  |
+| Episode hours       | **1 episode per week, up to 30 min** (4/month) | 20 per month               | 40 per month                  |
 | AI quality          | Quick AI        | Best AI                    | Best AI                       |
 | Longest episode     | 30 minutes      | Any                        | Any                           |
 | Clips per episode   | 10 found, **3 exportable** (7 shown locked) | 20 | 30                  |

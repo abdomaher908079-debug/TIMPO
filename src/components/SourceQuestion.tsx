@@ -21,8 +21,9 @@ export default function SourceQuestion() {
       const { data: me } = await db.auth.getUser();
       const created = me.user?.created_at ? new Date(me.user.created_at).getTime() : 0;
       if (Date.now() - created > ASK_FOR_DAYS * 86_400_000) return;
-      const { data } = await db.from('signup_sources').select('user_id').eq('user_id', user.id).maybeSingle();
-      if (live && !data) setShow(true);
+      // A row with only the link (saved at sign-up) hasn't been asked yet.
+      const { data } = await db.from('signup_sources').select('answer').eq('user_id', user.id).maybeSingle();
+      if (live && !data?.answer) setShow(true);
     })();
     return () => {
       live = false;
@@ -34,7 +35,9 @@ export default function SourceQuestion() {
   async function save(answer: string, detail?: string) {
     if (!user || !supabase) return;
     setBusy(true);
-    await supabase.from('signup_sources').upsert({ user_id: user.id, answer, detail: detail?.trim().slice(0, 200) || null, ref: storedRef() });
+    // Without `ref` when this browser doesn't know it, so the link saved at sign-up isn't wiped.
+    const ref = storedRef();
+    await supabase.from('signup_sources').upsert({ user_id: user.id, answer, detail: detail?.trim().slice(0, 200) || null, ...(ref ? { ref } : {}) });
     setShow(false);
   }
 
