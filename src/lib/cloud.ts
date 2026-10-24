@@ -1,4 +1,5 @@
 import { ALL_FORMATS, AdtsOutputFormat, BlobSource, BufferTarget, Conversion, getFirstEncodableAudioCodec, Input, OggOutputFormat, Output } from 'mediabunny';
+import { isPhone } from './device';
 import type { Moment } from './moments';
 import type { Segment } from './speech';
 import { ApiError, getAccessToken, supabase } from './supabase';
@@ -16,7 +17,7 @@ const PARALLEL = 3;
  * speech recognition, or a phone or tablet.
  */
 export async function deviceLooksSlow(): Promise<boolean> {
-  if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) return true;
+  if (isPhone) return true;
   try {
     const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
     return !(await gpu?.requestAdapter());
